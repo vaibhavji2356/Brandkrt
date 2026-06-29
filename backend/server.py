@@ -195,12 +195,27 @@ async def get_current_user(request: Request) -> dict:
 # -----------------------------------------------------------------------------
 # Brute-force helpers
 # -----------------------------------------------------------------------------
+def _aware(dt):
+    if dt is None:
+        return None
+    if isinstance(dt, datetime) and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 async def _is_locked(identifier: str) -> bool:
     rec = await db.login_attempts.find_one({"identifier": identifier})
     if not rec:
         return False
     if rec.get("count", 0) >= LOCKOUT_THRESHOLD:
-        locked_until = rec.get("locked_until")
+        locked_until = _aware(rec.get("locked_until"))
         if locked_until and locked_until > datetime.now(timezone.utc):
             return True
         await db.login_attempts.delete_one({"identifier": identifier})
@@ -265,7 +280,7 @@ async def register(payload: RegisterIn, response: Response):
 @auth_router.post("/login")
 async def login(payload: LoginIn, request: Request, response: Response):
     email = payload.email.lower().strip()
-    ip = request.client.host if request.client else "unknown"
+    ip = _client_ip(request)
     identifier = f"{ip}:{email}"
 
     if await _is_locked(identifier):
@@ -337,7 +352,7 @@ async def reset_password(payload: ResetPasswordIn):
     rec = await db.password_reset_tokens.find_one({"token": payload.token})
     if not rec or rec.get("used"):
         raise HTTPException(status_code=400, detail="Invalid or used token")
-    if rec["expires_at"] < datetime.now(timezone.utc):
+    if _aware(rec["expires_at"]) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Reset token has expired")
     await db.users.update_one(
         {"_id": ObjectId(rec["user_id"])},
@@ -352,7 +367,7 @@ async def verify_email(payload: VerifyEmailIn):
     rec = await db.verification_tokens.find_one({"token": payload.token})
     if not rec or rec.get("used"):
         raise HTTPException(status_code=400, detail="Invalid or used verification token")
-    if rec["expires_at"] < datetime.now(timezone.utc):
+    if _aware(rec["expires_at"]) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Verification token has expired")
     await db.users.update_one({"_id": ObjectId(rec["user_id"])}, {"$set": {"email_verified": True}})
     await db.verification_tokens.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
@@ -443,6 +458,7 @@ async def on_startup():
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.verification_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("identifier")
+    await domain.setup_indexes(db)
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@brandkrt.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
@@ -469,7 +485,22 @@ async def on_shutdown():
 # Register routers + CORS
 # -----------------------------------------------------------------------------
 api_router.include_router(auth_router)
+
+# Part 1B: domain routes
+import domain  # noqa: E402
+
+domain.init(db, get_current_user)
+domain.register_handlers()
+for r in domain.ALL_ROUTERS:
+    api_router.include_router(r)
 app.include_router(api_router)
+
+# Static mount for uploaded files (Part 1B)
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+import os as _os
+_uploads_dir = _os.environ.get("UPLOAD_ROOT", "/app/backend/uploads")
+_os.makedirs(_uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(

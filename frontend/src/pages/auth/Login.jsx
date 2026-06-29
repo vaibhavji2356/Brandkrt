@@ -25,9 +25,10 @@ export default function Login() {
     setError("");
     setSubmitting(true);
     try {
-      await login(email, password, remember);
+      const u = await login(email, password, remember);
       toast.success("Welcome back!");
-      navigate(from, { replace: true });
+      const dest = u.role === "admin" ? "/admin" : (from === "/profile" ? "/profile" : from);
+      navigate(dest, { replace: true });
     } catch (err) {
       setError(formatApiError(err));
     } finally {

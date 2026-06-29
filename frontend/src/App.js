@@ -20,6 +20,9 @@ import VerifyEmail from "@/pages/auth/VerifyEmail";
 
 import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
+import AdminLayout from "@/pages/admin/AdminLayout";
+import AdminOverview from "@/pages/admin/AdminOverview";
+import { AdminUsers, AdminVerification, AdminWithdrawals, AdminReports, AdminLogs } from "@/pages/admin/AdminSections";
 
 function WithLayout({ children }) {
   return <SiteLayout>{children}</SiteLayout>;
@@ -47,6 +50,15 @@ export default function App() {
 
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+
+            <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+              <Route index element={<AdminOverview />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="verification" element={<AdminVerification />} />
+              <Route path="withdrawals" element={<AdminWithdrawals />} />
+              <Route path="reports" element={<AdminReports />} />
+              <Route path="logs" element={<AdminLogs />} />
+            </Route>
 
             <Route path="/dashboard" element={<Navigate to="/profile" replace />} />
             <Route path="*" element={<NotFound />} />
