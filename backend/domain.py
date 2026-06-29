@@ -530,7 +530,7 @@ def register_handlers():
         return {"report": doc_out(await db.reports.find_one({"_id": res.inserted_id}))}
 
     # ----- UPLOADS (local storage stub) -----
-    UPLOAD_ROOT = os.environ.get("UPLOAD_ROOT", "/app/backend/uploads")
+    UPLOAD_ROOT = os.environ.get("UPLOAD_ROOT", "./uploads")
     FOLDERS = ["profiles", "brand_logos", "products", "verification", "contracts", "invoices"]
     for f in FOLDERS:
         os.makedirs(os.path.join(UPLOAD_ROOT, f), exist_ok=True)

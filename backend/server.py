@@ -502,7 +502,7 @@ app.include_router(api_router)
 # Static mount for uploaded files (Part 1B)
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 import os as _os
-_uploads_dir = _os.environ.get("UPLOAD_ROOT", "/app/backend/uploads")
+_uploads_dir = _os.environ.get("UPLOAD_ROOT", "./uploads")
 _os.makedirs(_uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
