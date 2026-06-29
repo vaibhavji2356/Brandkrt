@@ -1,0 +1,58 @@
+{
+  "summary": "First-finish smoke test for BrandKrt Part 1A. Backend health, admin login, register validations, duplicate-email guard, logout cookie-clear, forgot-password (no enumeration), contact endpoint, profile cookie session, and refresh all PASS. Landing page renders all sections; theme toggle flips html.dark; protected route /profile redirects to /login; admin login + post-login user menu work. Two backend issues block full email flows: verify-email and reset-password both return 500 due to a naive/aware datetime comparison bug. Brute-force lockout does not fire on the public URL because identifier uses request.client.host which varies across proxy upstream IPs (e.g. 10.219.2.4 vs 10.219.2.7), splitting the failure counter.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "GET /api/health -> 200 {status: ok}",
+    "POST /api/auth/login admin -> 200, sets access_token + refresh_token cookies",
+    "GET /api/auth/me with cookies -> 200 admin user",
+    "POST /api/auth/register valid influencer -> 200, sets cookies, returns user",
+    "POST /api/auth/register duplicate email -> 409",
+    "POST /api/auth/register role=admin -> 400 'Admin accounts cannot be self-registered'",
+    "POST /api/auth/register accept_terms=false -> 400",
+    "POST /api/auth/register short password -> 422",
+    "POST /api/auth/refresh -> 200 with new access token",
+    "POST /api/auth/logout -> 200, Set-Cookie Max-Age=0 for both tokens",
+    "POST /api/auth/forgot-password (existing + non-existent) -> 200 generic message (no enumeration)",
+    "POST /api/contact -> 200",
+    "Email tokens (verify + reset) logged to backend stdout as expected (EMAIL_PROVIDER=console)",
+    "Frontend / landing page renders navbar + Features/Pricing/FAQ/Contact sections",
+    "Theme toggle flips html.dark class",
+    "Protected /profile redirects unauthenticated users to /login?from=/profile",
+    "Admin login on /login redirects to /profile and navbar-user-menu appears"
+  ],
+  "failed": [
+    {
+      "area": "backend /api/auth/verify-email",
+      "issue": "Returns 500 Internal Server Error for any valid token. Endpoint completely broken.",
+      "evidence": "server.py:355  TypeError: can't compare offset-naive and offset-aware datetimes (rec['expires_at'] from Mongo is naive UTC, compared against datetime.now(timezone.utc)).",
+      "priority": "HIGH"
+    },
+    {
+      "area": "backend /api/auth/reset-password",
+      "issue": "Returns 500 Internal Server Error for any valid token. Password reset flow completely broken; subsequent login with new password fails (401).",
+      "evidence": "server.py:340 same TypeError: can't compare offset-naive and offset-aware datetimes. Captured in /var/log/supervisor/backend.err.log.",
+      "priority": "HIGH"
+    },
+    {
+      "area": "backend brute-force lockout (POST /api/auth/login)",
+      "issue": "6th and 7th consecutive failed logins still return 401, never 429. Lockout does not engage end-to-end via the public URL.",
+      "evidence": "Mongo db.login_attempts shows the same email being counted under two different identifiers because request.client.host reports the proxy upstream IP (observed 10.219.2.4 and 10.219.2.7), splitting the counter below LOCKOUT_THRESHOLD. Also, once locked_until IS set, _is_locked will hit the same naive/aware datetime TypeError on the next attempt.",
+      "priority": "HIGH"
+    },
+    {
+      "area": "backend /api/auth/logout (token invalidation)",
+      "issue": "JWT access_token is not invalidated server-side after logout. Reusing a previously-issued access_token cookie still authenticates /api/auth/me with 200.",
+      "evidence": "Curl with the cookie value (not the cookie jar that the server cleared) still returns the user for /api/auth/me after POST /api/auth/logout. Acceptable for stateless JWT MVP, but worth noting since the spec asks that 'subsequent GET /api/auth/me returns 401' — in a browser this passes because the cookie is cleared; via raw token replay it does not.",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "Fix datetime tz mismatch in server.py for verify_email (line 355), reset_password (line 340), and _is_locked (line 204). Normalize by storing as aware UTC and comparing with datetime.now(timezone.utc), e.g. wrap reads: 'exp = rec[\\'expires_at\\']; if exp.tzinfo is None: exp = exp.replace(tzinfo=timezone.utc)'. Same fix needed wherever Mongo datetimes are compared.",
+    "Re-test verify-email (single-use + reuse 400), reset-password (and follow-up login with new password) after the tz fix.",
+    "Make brute-force identifier resilient to proxies: read X-Forwarded-For (left-most) or use only the email as the identifier, then re-test 5 failed attempts -> 429 on the 6th.",
+    "(Optional / out of scope for Part 1A) Add a token/jti denylist or short access-token TTL + refresh rotation to fully invalidate access_token on logout."
+  ],
+  "success_rate": {"backend": "70%", "frontend": "100%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}
