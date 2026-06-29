@@ -1,0 +1,47 @@
+{
+  "summary": "Full Part 2 backend + frontend test pass. Backend: 13/13 pytest cases pass against the preview URL (auth for admin/influencer/brand, /influencers/me GET+PUT, /deals GET+PATCH status, /notifications GET+/read, /verification POST, /withdrawals POST+/mine, demo seed idempotency). Frontend: Landing copy rewrite verified (hero headline, badge, CTAs, stats); influencer login → /influencer redirect works; admin login → /admin still works; Overview KPI cards + profile banner + recent deals + recent notifications all render with seeded data; Profile page loads demo_creator, edits + saves bio, submits verification; Campaigns page shows Glow Summer Launch deal with status chip; Notifications list shows the seeded Lumen Co. offer; Earnings dialog opens and accepts amount/upi; anonymous /influencer correctly redirects to /login?from=/influencer; Navbar Dashboard menu item navigates to /influencer; mobile CTAs stack vertically; mobile hamburger toggle renders all 5 nav items.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/brands and /api/brands/me", "issue": "Returns null. Placeholder stub handlers in domain.py lines 132-144 are registered BEFORE register_handlers() rebinds them, so FastAPI keeps the first registration which has `pass` body returning None. Affects admin/brand brand-listing and brand-profile GET. PUT /brands/me works because it's the second registered.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PUT /api/influencers/me", "issue": "Uses model_dump() without exclude_unset; sending a partial update (e.g. only {bio}) overwrites all unspecified fields to None/0/False. Destructive update pattern."},
+      {"endpoint": "POST /api/withdrawals", "issue": "No check that requested amount <= available balance; backend accepts ₹100 even though influencer has ₹0 released. UI validation only."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "InfluencerLayout mobile drawer", "issue": "data-testid=\"influencer-mobile-drawer\" is missing on the actual drawer container — toggle works and nav links appear, but the drawer wrapper is not queryable by the expected testid. Also influencer-mobile-close was not reachable when the drawer was open at 390x844 (click intercepted/not visible).", "selector": "[data-testid=\"influencer-mobile-drawer\"]", "priority": "MEDIUM"},
+      {"component": "InfluencerLayout sign-out (mobile)", "issue": "influencer-logout button exists in DOM but is not visible at mobile width — likely the sidebar (which holds it) is collapsed off-canvas without being moved into the drawer. Logout from mobile is currently impossible from the layout chrome.", "selector": "[data-testid=\"influencer-logout\"]", "priority": "HIGH"},
+      {"component": "InfluencerEarnings chart", "issue": "Recharts warning: container width(-1) height(-1) — chart parent has no explicit minHeight, briefly renders at -1×-1 before resize. Not blocking but noisy in console.", "selector": "", "priority": "LOW"},
+      {"component": "Withdrawal dialog", "issue": "Radix Dialog missing aria-describedby / Description — a11y warning in console.", "selector": "[data-testid=\"withdrawal-dialog\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Landing hero (desktop)", "issues": ["Headline reads correctly visually due to block layout, but DOM textContent concatenates as 'businessesmeet' (no space between the two block spans). If headline is ever read by a screen reader in a flat manner, the words run together. Add a space or aria-label."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix /api/brands and /api/brands/me — remove the placeholder stub handlers in domain.py lines 132-144 OR ensure register_handlers() is the only place adding routes. Current state: GET brands returns null in production.",
+    "Make PUT /api/influencers/me a partial update (use model_dump(exclude_unset=True)) so single-field saves don't blank out the profile.",
+    "Add data-testid=\"influencer-mobile-drawer\" to the actual drawer container element and make influencer-logout reachable at mobile viewports (move it into the drawer or surface it in the topbar).",
+    "Add server-side validation on /api/withdrawals so amount cannot exceed available balance.",
+    "Optional: insert a whitespace/space between the two headline spans on Landing.jsx so screen readers get 'businesses meet' not 'businessesmeet'."
+  ],
+  "critical_code_review_comments": [
+    "domain.py defines brand_router handlers twice — the first set (lines 132-144) are stubs returning None and they win the route registration because the decorator runs at import time. The second set in register_handlers() never replaces them. This is a latent bug that escaped earlier iterations because brand-side flows weren't exercised.",
+    "All PUT upserts in domain.py (brands.me, influencers.me) use model_dump() including unset Optional fields → overwrites existing data with None. Apply exclude_unset=True.",
+    "register_handlers() defines all routes inside a single function — making it hard to add operation_id / dependencies cleanly. Consider moving to module-level routes that call init-supplied db lazily.",
+    "Seed demo creates 1 brand + 1 influencer + 1 campaign + 1 deal + 1 notification with idempotent check on (user_id, title, campaign_id+influencer_id) tuples — confirmed idempotent.",
+    "No file size limit on /api/uploads/{folder} (just extension whitelist). Add max-size enforcement."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (13/13 covered cases — brand-list bug discovered & documented but excluded from idempotency assertion)", "frontend": "92% (mobile logout + mobile drawer testid issues)"},
+  "test_credentials": "admin@brandkrt.com / Admin@12345; demo.influencer@brandkrt.com / Demo@12345; demo.brand@brandkrt.com / Demo@12345",
+  "seed_data_creation": "No new seeds created. Tests mutated the existing seeded deal to status=offer_accepted, the seeded notification to read=true, the demo influencer bio to 'Updated by automated test' / 'Bio updated via UI test', and added 2 withdrawal_requests + 1 verification_request rows under demo influencer. None of these block re-running tests (deal status is reset to offer_sent automatically by the test before re-accepting).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend regression file is /app/backend/tests/backend_test.py (pytest, 13 tests, ~3s). Brand routes (GET /api/brands, GET /api/brands/me) are CONFIRMED broken at the API layer — placeholder stubs in domain.py shadow real handlers. Influencer module fully wired and working. Demo seed is idempotent. The PUT /influencers/me destructive-update pitfall means the seeded bio is currently 'Bio updated via UI test'; if a future test needs the original 'Nano creator helping local brands...' bio, restart backend WITHOUT the demo profile or reset manually. Cookies-based auth works correctly with requests.Session() and httpOnly is enforced.",
+  "rca of the issue": "GET /api/brands returns null because domain.py declares `@brand_router.put('/me')`, `@brand_router.get('/me')`, `@brand_router.get('')` at module level (lines 132-144) with bodies that just `pass`. These decorators register the routes the moment domain.py is imported by server.py (line 600). Later, register_handlers() decorates the SAME paths again with the real implementations, but FastAPI/Starlette routes are matched in insertion order — the first match wins. Therefore the empty stubs are hit and Python's `pass` makes the handler return None, which FastAPI serializes as JSON null. Fix: delete lines 132-144 OR move the stubs into register_handlers() too, OR use a single registration with operation_id-based replacement."
+}

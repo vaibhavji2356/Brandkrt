@@ -11,7 +11,7 @@ export default function Login() {
   const { login, formatApiError } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const from = params.get("from") || "/profile";
+  const from = params.get("from");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,8 +27,13 @@ export default function Login() {
     try {
       const u = await login(email, password, remember);
       toast.success("Welcome back!");
-      const dest = u.role === "admin" ? "/admin" : (from === "/profile" ? "/profile" : from);
-      navigate(dest, { replace: true });
+      const roleHome =
+        u.role === "admin"
+          ? "/admin"
+          : u.role === "influencer"
+          ? "/influencer"
+          : "/profile";
+      navigate(from || roleHome, { replace: true });
     } catch (err) {
       setError(formatApiError(err));
     } finally {

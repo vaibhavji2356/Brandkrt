@@ -26,6 +26,13 @@ import AdminLayout from "@/pages/admin/AdminLayout";
 import AdminOverview from "@/pages/admin/AdminOverview";
 import { AdminUsers, AdminVerification, AdminWithdrawals, AdminReports, AdminLogs } from "@/pages/admin/AdminSections";
 
+import InfluencerLayout from "@/pages/influencer/InfluencerLayout";
+import InfluencerOverview from "@/pages/influencer/InfluencerOverview";
+import InfluencerProfile from "@/pages/influencer/InfluencerProfile";
+import InfluencerCampaigns from "@/pages/influencer/InfluencerCampaigns";
+import InfluencerEarnings from "@/pages/influencer/InfluencerEarnings";
+import InfluencerNotifications from "@/pages/influencer/InfluencerNotifications";
+
 function WithLayout({ children }) {
   return <SiteLayout>{children}</SiteLayout>;
 }
@@ -62,6 +69,14 @@ export default function App() {
               <Route path="withdrawals" element={<AdminWithdrawals />} />
               <Route path="reports" element={<AdminReports />} />
               <Route path="logs" element={<AdminLogs />} />
+            </Route>
+
+            <Route path="/influencer" element={<ProtectedRoute><InfluencerLayout /></ProtectedRoute>}>
+              <Route index element={<InfluencerOverview />} />
+              <Route path="profile" element={<InfluencerProfile />} />
+              <Route path="campaigns" element={<InfluencerCampaigns />} />
+              <Route path="earnings" element={<InfluencerEarnings />} />
+              <Route path="notifications" element={<InfluencerNotifications />} />
             </Route>
 
             <Route path="/dashboard" element={<Navigate to="/profile" replace />} />

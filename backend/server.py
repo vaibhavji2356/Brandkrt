@@ -479,6 +479,112 @@ async def on_startup():
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
         logger.info("Updated admin password for %s", admin_email)
 
+    # Optional: idempotent demo seed for Part 2 testing (controlled by SEED_DEMO=true).
+    if os.environ.get("SEED_DEMO", "false").lower() == "true":
+        try:
+            await _seed_demo_data()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Demo seed skipped: %s", e)
+
+
+async def _ensure_demo_user(email: str, name: str, role: str, password: str) -> dict:
+    """Create the user if missing; always return a fresh doc."""
+    email = email.lower().strip()
+    existing = await db.users.find_one({"email": email})
+    now = datetime.now(timezone.utc)
+    if existing:
+        return existing
+    await db.users.insert_one({
+        "email": email, "name": name, "role": role,
+        "password_hash": hash_password(password), "email_verified": True,
+        "avatar_url": None, "cover_url": None,
+        "created_at": now, "updated_at": now,
+    })
+    return await db.users.find_one({"email": email})
+
+
+async def _seed_demo_data() -> None:
+    """Create one demo brand, one demo influencer, one campaign, one deal, one notification.
+    Idempotent — re-running does nothing destructive.
+    """
+    inf_email = os.environ.get("DEMO_INFLUENCER_EMAIL", "demo.influencer@brandkrt.com")
+    inf_pwd = os.environ.get("DEMO_INFLUENCER_PASSWORD", "Demo@12345")
+    brand_email = os.environ.get("DEMO_BRAND_EMAIL", "demo.brand@brandkrt.com")
+    brand_pwd = os.environ.get("DEMO_BRAND_PASSWORD", "Demo@12345")
+
+    inf_user = await _ensure_demo_user(inf_email, "Demo Influencer", "influencer", inf_pwd)
+    brand_user = await _ensure_demo_user(brand_email, "Demo Brand", "brand", brand_pwd)
+    now = datetime.now(timezone.utc)
+
+    # Brand profile
+    brand_doc = await db.brands.find_one({"user_id": str(brand_user["_id"])})
+    if not brand_doc:
+        res = await db.brands.insert_one({
+            "user_id": str(brand_user["_id"]),
+            "company_name": "Lumen Co.", "owner_name": "Demo Brand",
+            "industry": "Beauty & Wellness", "website": "https://lumen.example",
+            "logo_url": None, "product_categories": ["skincare", "wellness"],
+            "status": "active", "verification_status": "approved",
+            "created_at": now, "updated_at": now,
+        })
+        brand_doc = await db.brands.find_one({"_id": res.inserted_id})
+
+    # Influencer profile
+    inf_doc = await db.influencers.find_one({"user_id": str(inf_user["_id"])})
+    if not inf_doc:
+        res = await db.influencers.insert_one({
+            "user_id": str(inf_user["_id"]),
+            "username": "demo_creator", "bio": "Nano creator helping local brands tell their story.",
+            "country": "India", "state": "Maharashtra", "city": "Mumbai",
+            "instagram": "@demo_creator", "youtube": "", "facebook": "", "linkedin": "", "website": "",
+            "category": "Lifestyle", "followers": 8500, "avg_reel_views": 4200, "monthly_reach": 60000,
+            "collab_price": 4500, "premium_plan": False,
+            "bank_details": None, "upi": "demo@upi", "gst": "",
+            "portfolio": [], "status": "active", "verification_status": "approved",
+            "created_at": now, "updated_at": now,
+        })
+        inf_doc = await db.influencers.find_one({"_id": res.inserted_id})
+
+    # Campaign
+    camp_doc = await db.campaigns.find_one({"brand_id": str(brand_doc["_id"]), "title": "Glow Summer Launch"})
+    if not camp_doc:
+        res = await db.campaigns.insert_one({
+            "title": "Glow Summer Launch", "platform": "instagram", "budget": 5000.0,
+            "deadline": None, "deliverables": ["1 Reel", "3 Stories"],
+            "product_details": "New SPF50 serum — natural daylight shots preferred.",
+            "promotion_links": [], "brand_id": str(brand_doc["_id"]),
+            "status": "active", "progress": 25, "analytics": {},
+            "created_at": now, "updated_at": now,
+        })
+        camp_doc = await db.campaigns.find_one({"_id": res.inserted_id})
+
+    # Deal
+    deal_doc = await db.deals.find_one({
+        "campaign_id": str(camp_doc["_id"]), "influencer_id": str(inf_doc["_id"])
+    })
+    if not deal_doc:
+        await db.deals.insert_one({
+            "campaign_id": str(camp_doc["_id"]),
+            "brand_id": str(brand_doc["_id"]),
+            "influencer_id": str(inf_doc["_id"]),
+            "amount": 4500.0,
+            "note": "We love your tone — would you partner on this drop?",
+            "status": "offer_sent",
+            "created_at": now, "updated_at": now,
+        })
+        # Notify the influencer user
+        await db.notifications.insert_one({
+            "user_id": str(inf_user["_id"]),
+            "type": "deal.offer",
+            "title": "New campaign offer from Lumen Co.",
+            "body": "Glow Summer Launch — review the offer in your Campaigns.",
+            "meta": {"campaign": "Glow Summer Launch"},
+            "read": False, "status": "active",
+            "created_at": now, "updated_at": now,
+        })
+    logger.info("Demo seed ensured: brand=%s influencer=%s campaign=%s",
+                brand_email, inf_email, "Glow Summer Launch")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():

@@ -24,14 +24,14 @@ function Hero() {
           className="max-w-4xl"
         >
           <span className="inline-flex items-center gap-2 rounded-full border border-secondary/30 bg-accent px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-secondary" data-testid="hero-badge">
-            <Sparkles className="h-3.5 w-3.5" /> The premium creator marketplace
+            <Sparkles className="h-3.5 w-3.5" /> Built for SMBs &amp; nano creators
           </span>
           <h1 className="mt-8 text-5xl sm:text-6xl lg:text-7xl font-light tracking-tighter text-primary dark:text-white leading-[1.02]" data-testid="hero-headline">
-            Where ambitious brands<br />
-            meet <span className="gold-text font-semibold">extraordinary</span> creators.
+            Where small businesses<br />
+            meet <span className="gold-text font-semibold">nano &amp; micro</span> creators.
           </h1>
           <p className="mt-7 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed" data-testid="hero-subtitle">
-            BrandKrt is the end-to-end marketplace handling verification, contracts, payments and analytics — so every collaboration ships on time, on brand, and on budget.
+            BrandKrt is the affordable creator marketplace built for small and medium businesses and nano/micro influencers — verification, contracts, escrow and reporting, with no minimum budgets and no agency middlemen.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-3">
             <Link
@@ -39,18 +39,18 @@ function Hero() {
               data-testid="hero-cta-influencer"
               className="inline-flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-7 py-3.5 text-sm font-semibold transition-colors"
             >
-              Join as Influencer <ArrowRight className="h-4 w-4" />
+              Join as Creator <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               to="/register?role=brand"
               data-testid="hero-cta-brand"
               className="inline-flex items-center justify-center gap-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/90 px-7 py-3.5 text-sm font-semibold transition-colors"
             >
-              Register a Brand <ArrowRight className="h-4 w-4" />
+              Sign up as Business <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-4 text-sm text-muted-foreground">
-            {["KYC-verified creators", "Escrow-secured payments", "Real-time analytics"].map((t) => (
+            {["KYC-verified nano creators", "Escrow from ₹500", "Made for local SMBs"].map((t) => (
               <div key={t} className="flex items-center gap-2"><Check className="h-4 w-4 text-secondary" /> {t}</div>
             ))}
           </div>
@@ -62,9 +62,9 @@ function Hero() {
           data-testid="hero-stats"
         >
           {[
-            { v: "12K+", l: "Verified Creators" },
-            { v: "850+", l: "Active Brands" },
-            { v: "$24M", l: "Paid to Creators" },
+            { v: "8K+", l: "Nano & Micro Creators" },
+            { v: "1.2K+", l: "Small Businesses" },
+            { v: "₹4.6Cr", l: "Paid to Creators" },
             { v: "4.9★", l: "Average Rating" },
           ].map((s) => (
             <div key={s.l} className="rounded-2xl border border-border bg-card p-6">
@@ -95,9 +95,9 @@ function Features() {
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary" data-testid="features-overline">Features</p>
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white" data-testid="features-heading">
-            Everything you need to run<br /> creator campaigns end-to-end.
+            Everything an SMB needs<br /> to run creator campaigns.
           </h2>
-          <p className="mt-5 text-lg text-muted-foreground">A platform engineered to remove friction at every step — discover, contract, deliver, measure, pay.</p>
+          <p className="mt-5 text-lg text-muted-foreground">Designed for small businesses with small budgets and big ambition — discover, brief, ship, measure, pay. No agency. No spreadsheets.</p>
         </div>
         <div className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f, i) => (
@@ -122,11 +122,11 @@ function Features() {
 
 /* ---------- How it works ---------- */
 const STEPS = [
-  { n: "01", t: "Create Account", d: "Sign up in under 60 seconds as a brand or creator." },
-  { n: "02", t: "Verification", d: "Pass KYC and connect your social handles for trust badges." },
-  { n: "03", t: "Connect", d: "Discover and shortlist via deep filters, audience insights, and AI matchmaking." },
-  { n: "04", t: "Campaign", d: "Brief, contract, deliver and revise — all inside BrandKrt." },
-  { n: "05", t: "Payment", d: "Escrow releases funds the moment deliverables go live." },
+  { n: "01", t: "Sign up free", d: "Small businesses or nano creators — get started in 60 seconds." },
+  { n: "02", t: "Get verified", d: "Quick KYC + social check builds trust on both sides." },
+  { n: "03", t: "Match locally", d: "Discover creators by city, niche and budget — or get matched automatically." },
+  { n: "04", t: "Run the collab", d: "Brief, ship product, approve content — all in one place." },
+  { n: "05", t: "Pay on delivery", d: "Escrow releases the moment the post goes live. Done." },
 ];
 
 function HowItWorks() {
@@ -136,7 +136,7 @@ function HowItWorks() {
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Process</p>
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            From discovery to payout in five steps.
+            From shop to social post in five steps.
           </h2>
         </div>
         <div className="mt-16 grid gap-8 lg:grid-cols-5">
@@ -164,10 +164,10 @@ function HowItWorks() {
 /* ---------- Benefits / Why Choose ---------- */
 function WhyChoose() {
   const items = [
-    { t: "Built for both sides", d: "Tools designed equally for brand marketers and creator businesses — not retrofitted from a vendor portal." },
-    { t: "Premium curation", d: "We turn down 7 out of 10 applicants. The roster you see has been earned." },
-    { t: "Transparent economics", d: "Flat 8% platform fee. No hidden spreads, no surprise FX, no upsells." },
-    { t: "Global, multi-currency", d: "Pay creators across 40+ countries in their local currency with one click." },
+    { t: "Built for small budgets", d: "Run a real campaign for ₹500 — no minimum spend, no annual contracts, no agency retainer." },
+    { t: "Nano & micro creators win", d: "Authentic local creators with 1K–100K followers — the audience that actually converts for SMBs." },
+    { t: "Transparent 8% fee", d: "Flat platform fee. No hidden agency commissions, no FX spreads, no upsells." },
+    { t: "Local-first matching", d: "Find creators in your city or pin code who genuinely care about your category." },
   ];
   return (
     <section className="section-y">
@@ -175,9 +175,9 @@ function WhyChoose() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Why BrandKrt</p>
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            A platform built for partnerships that actually perform.
+            The marketplace SMBs and nano creators can actually afford.
           </h2>
-          <p className="mt-6 text-lg text-muted-foreground">We replaced the spreadsheets, DMs and invoice chasing with a single, premium workflow trusted by leading brands and elite creators.</p>
+          <p className="mt-6 text-lg text-muted-foreground">We replaced agency markups, copy-paste DMs and missed payments with one simple workspace — priced for businesses that count every rupee.</p>
           <div className="mt-8">
             <Link to="/register" data-testid="why-cta" className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 text-sm font-semibold">
               Create your account <ArrowRight className="h-4 w-4" />
@@ -205,9 +205,9 @@ function WhyChoose() {
 
 /* ---------- Testimonials ---------- */
 const TESTIMONIALS = [
-  { name: "Aanya Mehta", role: "Lifestyle Creator — 480K followers", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "BrandKrt is the only platform where I actually get paid on time. The contracts are clean and the brands are serious." },
-  { name: "Rohan Verma", role: "Marketing Director, Lumen Co.", img: "https://images.pexels.com/photos/29086752/pexels-photo-29086752.jpeg", q: "We replaced three agencies and an entire shared inbox with BrandKrt. ROI tracking alone paid for the platform in week one." },
-  { name: "Sara Iqbal", role: "Beauty Creator — 1.2M followers", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "From brief to payout in a single tab. Every other tool feels archaic after this." },
+  { name: "Priya Kulkarni", role: "Nano Creator — 9.4K followers", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "I never imagined getting paid for collabs at 9K followers. BrandKrt makes it normal — and I always get paid on time." },
+  { name: "Rohit Shah", role: "Founder, Café Mocha Pune", img: "https://images.pexels.com/photos/29086752/pexels-photo-29086752.jpeg", q: "We ran four nano-creator campaigns for under ₹20K total. Footfall doubled on weekends. No agency could have given us this ROI." },
+  { name: "Anjali Rao", role: "Micro Creator — 42K followers", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "Clean contracts, fast escrow, real local brands. Finally a platform that treats small creators like real partners." },
 ];
 
 function Testimonials() {
@@ -217,7 +217,7 @@ function Testimonials() {
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Loved by both sides</p>
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight">
-            Trusted by brands and creators who lead culture.
+            Trusted by local businesses and the creators who serve them.
           </h2>
         </div>
         <div className="mt-16 grid gap-6 md:grid-cols-3">
@@ -249,9 +249,9 @@ function Testimonials() {
 
 /* ---------- Pricing ---------- */
 const PLANS = [
-  { name: "Starter", price: "Free", per: "forever", features: ["Up to 3 active campaigns", "Verified creator search", "Standard contracts", "Email support"], cta: "Start free", testId: "pricing-starter", highlight: false },
-  { name: "Growth", price: "$199", per: "/ month", features: ["Unlimited campaigns", "Priority creator matchmaking", "Escrow + multi-currency payouts", "Advanced analytics", "Dedicated success manager"], cta: "Start 14-day trial", testId: "pricing-growth", highlight: true },
-  { name: "Enterprise", price: "Custom", per: "billed annually", features: ["SSO + custom workflows", "API & integrations", "Bespoke contracts", "24/7 white-glove support", "SLA & uptime guarantees"], cta: "Talk to sales", testId: "pricing-enterprise", highlight: false },
+  { name: "Starter", price: "Free", per: "forever", features: ["Up to 3 active campaigns", "Local creator search", "1-click contract templates", "Email support"], cta: "Start free", testId: "pricing-starter", highlight: false },
+  { name: "SMB", price: "₹999", per: "/ month", features: ["Unlimited campaigns", "Priority creator matching", "Escrow + UPI / bank payouts", "Performance reporting", "Chat support"], cta: "Start 14-day trial", testId: "pricing-growth", highlight: true },
+  { name: "Pro / Agency", price: "Custom", per: "billed annually", features: ["Multi-brand workspaces", "Bulk campaign tools", "Custom contracts", "Dedicated success manager", "API access"], cta: "Talk to us", testId: "pricing-enterprise", highlight: false },
 ];
 
 function Pricing() {
@@ -261,9 +261,9 @@ function Pricing() {
         <div className="max-w-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Pricing</p>
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            Honest pricing. No hidden spreads.
+            Affordable for SMBs. Fair for creators.
           </h2>
-          <p className="mt-5 text-lg text-muted-foreground">Flat 8% platform fee on transactions. Choose the plan that fits how you run partnerships.</p>
+          <p className="mt-5 text-lg text-muted-foreground">Flat 8% platform fee on payouts. Pick a plan that fits your stage — no annual lock-in, no hidden charges.</p>
         </div>
         <div className="mt-16 grid gap-6 lg:grid-cols-3">
           {PLANS.map((p) => (
@@ -308,11 +308,11 @@ function Pricing() {
 
 /* ---------- FAQ ---------- */
 const FAQS = [
-  { q: "How does BrandKrt verify creators?", a: "Every creator passes a multi-step verification: government-ID KYC, social handle ownership check, and audience-quality scoring. Top accounts also receive a manual editorial review." },
-  { q: "How are payments handled?", a: "Funds are held in escrow and released milestone-by-milestone once deliverables are approved. We support 40+ currencies and most popular local payout methods." },
-  { q: "What does the platform fee cover?", a: "Verification, contracts, escrow, analytics and dispute resolution. Flat 8% — no spreads, no upsells." },
-  { q: "Can I cancel anytime?", a: "Yes. Growth plans are month-to-month and can be cancelled from your billing settings at any time." },
-  { q: "Do you support agencies?", a: "Absolutely. Agencies can manage multiple brand workspaces, invite team members, and bill clients directly through BrandKrt." },
+  { q: "Can I run a campaign with a small budget?", a: "Yes — that's exactly who BrandKrt is built for. You can escrow as little as ₹500 and pair with nano creators (1K–10K followers) at affordable rates. No minimum spends, no annual contracts." },
+  { q: "Why nano and micro creators?", a: "Smaller creators have higher trust and 3–5× the engagement of celebrity influencers — and they're far more affordable for local businesses. Perfect for cafés, salons, D2C launches, kirana shops, and emerging brands." },
+  { q: "How do payments work for creators?", a: "Brands escrow the agreed amount upfront. Once your deliverable goes live and is approved, funds are released to your UPI or bank account. You can withdraw any time from the Earnings page." },
+  { q: "What's the platform fee?", a: "A flat 8% on the deal amount — covers verification, contracts, escrow and dispute support. There are no hidden charges, no FX spreads, and no agency commissions." },
+  { q: "Can I cancel anytime?", a: "Absolutely. Paid plans are month-to-month and can be cancelled from your settings at any time. The free Starter plan never expires." },
 ];
 
 function FAQ() {
@@ -324,7 +324,7 @@ function FAQ() {
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
             Questions, answered.
           </h2>
-          <p className="mt-6 text-muted-foreground">Can't find what you need? <Link to="/contact" className="text-secondary underline-offset-4 hover:underline">Talk to our team.</Link></p>
+          <p className="mt-6 text-muted-foreground">Can&apos;t find what you need? <Link to="/contact" className="text-secondary underline-offset-4 hover:underline">Talk to our team.</Link></p>
         </div>
         <Accordion type="single" collapsible className="space-y-3">
           {FAQS.map((f, i) => (
@@ -364,9 +364,9 @@ function ContactSection() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Contact</p>
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            Tell us about your next campaign.
+            Tell us about your business.
           </h2>
-          <p className="mt-6 text-lg text-muted-foreground">For brands launching campaigns, creators with questions, or partnership enquiries — we typically reply within 24 hours.</p>
+          <p className="mt-6 text-lg text-muted-foreground">For small businesses planning their first creator campaign, nano creators with questions, or anything in between — we usually reply within a day.</p>
           <div className="mt-8 space-y-3 text-sm text-muted-foreground">
             <a href="mailto:support@brandkrt.com" className="flex items-center gap-3 hover:text-secondary"><Mail className="h-4 w-4" /> support@brandkrt.com</a>
             <a href="mailto:vaibhav@brandkrt.com" className="flex items-center gap-3 hover:text-secondary"><Mail className="h-4 w-4" /> vaibhav@brandkrt.com</a>

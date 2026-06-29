@@ -33,9 +33,15 @@ export default function Register() {
     if (!accept) { setError("Please accept the terms and privacy policy."); return; }
     setSubmitting(true);
     try {
-      await register({ name, email, password, role, accept_terms: true });
+      const u = await register({ name, email, password, role, accept_terms: true });
       toast.success("Account created — check your inbox to verify your email.");
-      navigate("/profile", { replace: true });
+      const dest =
+        u.role === "admin"
+          ? "/admin"
+          : u.role === "influencer"
+          ? "/influencer"
+          : "/profile";
+      navigate(dest, { replace: true });
     } catch (err) {
       setError(formatApiError(err));
     } finally {
