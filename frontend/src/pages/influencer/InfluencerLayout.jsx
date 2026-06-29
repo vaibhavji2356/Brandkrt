@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -27,12 +27,25 @@ export default function InfluencerLayout() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const signingOutRef = useRef(false);
 
   useEffect(() => {
-    if (!loading && (!user || user.role !== "influencer")) {
+    if (loading) return;
+    if (signingOutRef.current) return; // explicit logout handles its own nav
+    if (!user || user.role !== "influencer") {
       navigate("/login", { replace: true });
     }
   }, [user, loading, navigate]);
+
+  const handleSignOut = async () => {
+    signingOutRef.current = true;
+    setMobileOpen(false);
+    try {
+      await logout();
+    } finally {
+      navigate("/", { replace: true });
+    }
+  };
 
   if (loading || !user) {
     return (
@@ -57,7 +70,7 @@ export default function InfluencerLayout() {
         className="hidden lg:flex w-64 shrink-0 border-r border-border bg-card flex-col"
         data-testid="influencer-sidebar"
       >
-        <SidebarInner user={user} onLogout={async () => { await logout(); navigate("/"); }} />
+        <SidebarInner user={user} onLogout={handleSignOut} />
       </aside>
 
       {/* Mobile drawer */}
@@ -84,7 +97,7 @@ export default function InfluencerLayout() {
             </button>
             <SidebarInner
               user={user}
-              onLogout={async () => { closeMobile(); await logout(); navigate("/"); }}
+              onLogout={handleSignOut}
               onNavigate={closeMobile}
             />
           </aside>
@@ -114,7 +127,7 @@ export default function InfluencerLayout() {
             <ThemeToggle />
             <button
               type="button"
-              onClick={async () => { await logout(); navigate("/"); }}
+              onClick={handleSignOut}
               data-testid="influencer-topbar-logout"
               aria-label="Sign out"
               className="lg:hidden h-9 w-9 rounded-md border border-border flex items-center justify-center"

@@ -1,0 +1,35 @@
+{
+  "summary": "Final re-verification of 2 unresolved fixes from iteration_6. Fix 5 (Recharts warnings) PASSES on both mobile 390x844 and desktop 1280x800. Fix 1 (logout → '/') STILL FAILS on both viewports — URL ends at /login?from=%2Finfluencer instead of '/'. Root cause is NOT InfluencerLayout; it is ProtectedRoute.jsx wrapping the layout and rendering <Navigate to=`/login?from=...`/> synchronously the moment user becomes null. The signingOutRef inside InfluencerLayout never gets a chance to take effect because ProtectedRoute unmounts the layout first.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ProtectedRoute.jsx (line 15-17) + InfluencerLayout signingOutRef interaction",
+        "issue": "After logout, URL is '/login?from=%2Finfluencer' on BOTH desktop sidebar logout ([data-testid='influencer-logout']) and mobile topbar logout ([data-testid='influencer-topbar-logout']). The landing hero h1 is NOT visible — instead the login page h1 'Welcome back' is shown. The fix added a signingOutRef inside InfluencerLayout, but InfluencerLayout is rendered as a child of <ProtectedRoute>. ProtectedRoute reads `user` from useAuth() and on null synchronously returns <Navigate to={`/login?from=${encodeURIComponent(location.pathname)}`} replace />. So when logout() sets user=null and React re-renders, ProtectedRoute returns Navigate first — the layout (and its signingOutRef + navigate('/')) never run.",
+        "selector": "[data-testid=\"influencer-logout\"], [data-testid=\"influencer-topbar-logout\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_7.json"],
+  "action_items": [
+    "Move the logout-redirect logic OUT of the layout and into a place that fires BEFORE ProtectedRoute can intercept. Direct fix: in AuthContext.logout, accept an optional redirect target and call window.location.replace('/') (or navigate('/', {replace:true}) via a stored navigator) BEFORE clearing the user state. Alternative: in ProtectedRoute.jsx, check a module-level `isSigningOut` flag (or sessionStorage key 'brandkrt:signingOut') and, when true, return <Navigate to='/' replace /> instead of '/login?from=...'. Set the flag in the influencer logout handler BEFORE await logout() and clear it after the navigation completes."
+  ],
+  "critical_code_review_comments": [
+    "ProtectedRoute.jsx unconditionally redirects unauthenticated users to /login?from=<path>. This is correct for direct URL hits but wrong during an explicit logout flow. Add a logout-aware bypass (module-level flag or context property like isSigningOut).",
+    "InfluencerLayout.jsx still contains the (now ineffective) signingOutRef + useEffect bypass. Once the ProtectedRoute fix lands, decide whether to keep this as defense-in-depth or remove for clarity. The same pattern likely needs to be applied to BrandLayout and AdminLayout if they share ProtectedRoute."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "50% (Fix 5 PASS on both viewports; Fix 1 FAIL on both viewports)"},
+  "test_credentials": "demo.influencer@brandkrt.com / Demo@12345 (verified working)",
+  "seed_data_creation": "none",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fix 5 (Recharts) is DONE — width(-1) height(-1) warning is gone on both mobile and desktop /influencer/earnings after the ResponsiveContainer was given a numeric height={280} prop directly. Fix 1 (logout → /) is still broken because the redirect is owned by /app/frontend/src/components/ProtectedRoute.jsx, not InfluencerLayout. Any patch must touch ProtectedRoute or AuthContext so it knows about explicit logouts. Verified logout DOES log the user out (token cleared, /login shown) — only the destination URL is wrong.",
+  "rca of the issue": {
+    "fix1_logout_redirect": "ROOT CAUSE: /app/frontend/src/components/ProtectedRoute.jsx wraps InfluencerLayout. Lines 15-17 return <Navigate to={`/login?from=${encodeURIComponent(location.pathname)}`} replace /> whenever `user` is null. When the logout handler calls `await logout()`, AuthContext sets user=null → React re-renders the ProtectedRoute → ProtectedRoute returns the Navigate component → React Router commits the URL change to /login?from=%2Finfluencer → InfluencerLayout (and its signingOutRef.current=true + navigate('/')) is UNMOUNTED before its finally block can navigate. REPRO: login as demo.influencer / Demo@12345, click [data-testid='influencer-logout'] (desktop) or [data-testid='influencer-topbar-logout'] (mobile@390x844), observe URL → /login?from=%2Finfluencer (FAILS — should be '/'). MITIGATION (recommended): add a top-level signingOut flag in AuthContext: `const signingOutRef = useRef(false); const logout = async (redirectTo='/') => { signingOutRef.current = true; ...clear state; window.location.replace(redirectTo); };` — using window.location.replace bypasses React Router entirely so ProtectedRoute never gets to render Navigate. Alternative: expose `signingOut` from AuthContext and have ProtectedRoute check it before issuing the /login redirect.",
+    "fix5_recharts_warning": "RESOLVED. Switching from <div style='width:100% height:280'><ResponsiveContainer width='100%' height='100%'></div> to a direct <ResponsiveContainer width='100%' height={280}> eliminated the width(-1) height(-1) warning. Verified zero matching console warnings on both 390x844 and 1280x800 after fresh page load + 3s settle."
+  }
+}
