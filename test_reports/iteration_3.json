@@ -1,0 +1,25 @@
+{
+  "summary": "Validated Vercel deployment config fix: both vercel.json files are valid JSON, contain framework=create-react-app, installCommand uses yarn (not npm), buildCommand=yarn build, outputDirectory=build, and neither contains 'cd frontend' (the prior root cause). yarn.lock exists at /app/frontend, package-lock.json does NOT exist (so Vercel will auto-detect yarn). package.json has react/react-dom ^19.2.7 and resolutions glob=10.4.5, rimraf=5.0.10. Local smoke test of the exact command Vercel will execute ('yarn install --frozen-lockfile && yarn build' in /app/frontend) succeeded — produced /app/frontend/build with index.html and static/{js,css}/. Backend /api/health returns {status:ok}. Public frontend URL returns HTTP 200.",
+  "tested_scope": ["backend", "integration"],
+  "passed": [
+    "/app/vercel.json is valid JSON",
+    "/app/frontend/vercel.json is valid JSON",
+    "Neither vercel.json contains 'cd frontend'",
+    "Both vercel.json use framework=create-react-app, installCommand=yarn install --frozen-lockfile, buildCommand=yarn build, outputDirectory=build",
+    "/app/frontend/yarn.lock exists",
+    "/app/frontend/package-lock.json does NOT exist (Vercel will pick yarn)",
+    "package.json react=^19.2.7, react-dom=^19.2.7, resolutions.glob=10.4.5, resolutions.rimraf=5.0.10",
+    "yarn install --frozen-lockfile succeeds in /app/frontend",
+    "yarn build succeeds in /app/frontend and produces build/index.html + build/static/{js,css}",
+    "Backend GET /api/health returns 200 {status:ok,service:brandkrt-api}",
+    "Public frontend URL https://krt-staging.preview.emergentagent.com/ returns HTTP 200"
+  ],
+  "failed": [],
+  "action_items": [
+    "No fixes needed. User must still replace 'YOUR-RENDER-BACKEND.onrender.com' placeholders in vercel.json rewrites with their actual Render backend URL post-deploy (intentional per problem statement).",
+    "Minor (non-blocking): Vercel build log will show several yarn 'Resolution field incompatible with requested version' warnings (e.g. glob, rimraf, nth-check). These are expected from the resolutions block forcing newer versions and do not fail the build."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100% (build smoke test)"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
