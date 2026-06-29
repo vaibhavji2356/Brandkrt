@@ -110,17 +110,21 @@ class EmailService:
         self.frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
     async def send_verification(self, to: str, token: str) -> None:
+        from email_templates import verify_email as tpl  # lazy import
         link = f"{self.frontend_url}/verify-email?token={token}"
-        await self._send(to, "Verify your BrandKrt email", f"Welcome to BrandKrt! Verify your email: {link}")
+        msg = tpl(link)
+        await self._send(to, msg["subject"], msg["text"], msg.get("html"))
 
     async def send_password_reset(self, to: str, token: str) -> None:
+        from email_templates import reset_password as tpl
         link = f"{self.frontend_url}/reset-password?token={token}"
-        await self._send(to, "Reset your BrandKrt password", f"Reset link (expires in 1 hour): {link}")
+        msg = tpl(link)
+        await self._send(to, msg["subject"], msg["text"], msg.get("html"))
 
-    async def _send(self, to: str, subject: str, body: str) -> None:
+    async def _send(self, to: str, subject: str, body: str, html: str = None) -> None:
         if self.provider == "console":
             logger.info("[EMAIL:%s] to=%s subject=%s\n%s", self.provider, to, subject, body)
-        # NOTE: Resend / SendGrid providers can be plugged in here in Part 1B.
+        # NOTE: Resend / SendGrid providers can be plugged in here in Part 2.
 
 
 email_service = EmailService()

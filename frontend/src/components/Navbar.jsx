@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Menu, X, LogOut, User as UserIcon, Settings as SettingsIcon } from "lucide-react";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
+import NotificationBell from "./NotificationBell";
 import { useAuth } from "@/context/AuthContext";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -61,7 +62,9 @@ export default function Navbar() {
         <div className="hidden md:flex items-center gap-3">
           <ThemeToggle />
           {user ? (
-            <DropdownMenu>
+            <>
+              <NotificationBell />
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button data-testid="navbar-user-menu" className="h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center">
                   {initials}
@@ -85,6 +88,7 @@ export default function Navbar() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </>
           ) : (
             <>
               <Link

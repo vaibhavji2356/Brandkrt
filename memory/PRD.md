@@ -24,7 +24,15 @@ Build BrandKrt — a premium SaaS influencer marketing marketplace connecting br
 - Modular EmailService (console provider); admin user seeded from env
 - SEO: title, description, Open Graph, Twitter cards, favicon
 
-## Implemented — Part 1B (Feb 2026)
+## Implemented — Part 1C (Feb 2026)
+- Shared UI primitives: NotificationBell (live unread count, mark-read), Empty/Error/Success states, StatusChip, ErrorBoundary
+- Notification Center wired into Navbar (auto-polls /api/notifications every 30s)
+- HelpCenter page at /help (topics grid + FAQ)
+- Email template system: `backend/email_templates.py` — Welcome, Verify, Reset, Verification Approved/Rejected, Campaign Invitation/Accepted/Completed, Payment Released, Deadline Reminder (HTML + text, brand-styled, Resend-ready)
+- PWA-ready: manifest.json (navy theme + icon), branded splash colors
+- SEO: robots.txt, sitemap.xml, OG/Twitter meta, canonical-ready
+- Production setup: README.md (folder structure, API surface, deployment guide), .env.example, vercel.json (rewrites + security headers)
+- ErrorBoundary wraps the entire app; 404 already present
 - Collections + indexes: users, brands, influencers, social_accounts (planned), products (planned), campaigns, deals, contracts (planned), transactions, payments, notifications, messages, verification_requests, withdrawal_requests, reviews, reports, activity_logs, admin_logs
 - REST APIs (all under /api):
   - /brands, /influencers (upsert/me, list, get)

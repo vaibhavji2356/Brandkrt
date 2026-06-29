@@ -11,6 +11,8 @@ import Landing from "@/pages/Landing";
 import About from "@/pages/About";
 import { Privacy, Terms, Refund } from "@/pages/legal/Legal";
 import NotFound from "@/pages/NotFound";
+import HelpCenter from "@/pages/HelpCenter";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
@@ -30,6 +32,7 @@ function WithLayout({ children }) {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
@@ -41,6 +44,7 @@ export default function App() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/refund" element={<Refund />} />
+            <Route path="/help" element={<HelpCenter />} />
 
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -66,5 +70,6 @@ export default function App() {
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   );
 }
