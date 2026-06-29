@@ -18,7 +18,8 @@ export function AdminUsers() {
     const r = await api.get("/admin/users", { params: { q: q || undefined, role: role || undefined } });
     setRows(r.data.users);
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []);
   return (
     <Section title="Users">
       <div className="flex gap-3">
@@ -56,6 +57,7 @@ export function AdminVerification() {
   const [rows, setRows] = useState([]); const [active, setActive] = useState(null);
   const [notes, setNotes] = useState(""); const [callAt, setCallAt] = useState("");
   const load = async (s = tab) => { const r = await api.get("/admin/verification", { params: { status: s } }); setRows(r.data.requests); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(tab); }, [tab]);
 
   const decide = async (decision) => {
