@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -194,6 +195,9 @@ export default function InfluencerEarnings() {
           <DialogContent data-testid="withdrawal-dialog">
             <DialogHeader>
               <DialogTitle>Request a withdrawal</DialogTitle>
+              <DialogDescription>
+                Funds are paid out within 2 business days after admin review.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="text-xs text-muted-foreground">
@@ -295,7 +299,7 @@ export default function InfluencerEarnings() {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-4 sm:p-6">
-        <div className="h-56 sm:h-72">
+        <div style={{ width: "100%", height: 280 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData}>
               <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />

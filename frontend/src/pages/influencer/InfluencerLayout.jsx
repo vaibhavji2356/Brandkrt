@@ -10,8 +10,7 @@ import {
   ChevronRight,
   Menu,
   X,
-} from "lucide-react";
-import Logo from "@/components/Logo";
+} from "lucide-react";import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
 import { useAuth } from "@/context/AuthContext";
@@ -63,16 +62,21 @@ export default function InfluencerLayout() {
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex" data-testid="influencer-mobile-drawer">
+        <div
+          className="lg:hidden fixed inset-0 z-50 flex"
+          data-testid="influencer-mobile-drawer"
+          role="dialog"
+          aria-modal="true"
+        >
           <div
             className="absolute inset-0 bg-black/40"
             onClick={closeMobile}
             aria-hidden
           />
-          <aside className="relative w-72 max-w-[80vw] bg-card border-r border-border flex flex-col">
+          <aside className="relative h-full w-72 max-w-[80vw] bg-card border-r border-border flex flex-col z-10">
             <button
               onClick={closeMobile}
-              className="absolute right-3 top-3 h-9 w-9 rounded-full bg-background/80 flex items-center justify-center"
+              className="absolute right-3 top-3 h-9 w-9 rounded-full bg-background/80 flex items-center justify-center z-20"
               data-testid="influencer-mobile-close"
               aria-label="Close menu"
             >
@@ -80,7 +84,7 @@ export default function InfluencerLayout() {
             </button>
             <SidebarInner
               user={user}
-              onLogout={async () => { await logout(); navigate("/"); }}
+              onLogout={async () => { closeMobile(); await logout(); navigate("/"); }}
               onNavigate={closeMobile}
             />
           </aside>
@@ -108,6 +112,15 @@ export default function InfluencerLayout() {
           <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
             <ThemeToggle />
+            <button
+              type="button"
+              onClick={async () => { await logout(); navigate("/"); }}
+              data-testid="influencer-topbar-logout"
+              aria-label="Sign out"
+              className="lg:hidden h-9 w-9 rounded-md border border-border flex items-center justify-center"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
           </div>
         </div>
 

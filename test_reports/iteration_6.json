@@ -1,0 +1,42 @@
+{
+  "summary": "Re-tested 5 fix-verifications + 2 regression smokes from iteration_5 review at preview URL. 5 of 7 PASS. Fix 1 partially passes (logout works but lands on /login?from=/influencer instead of /). Fix 5 FAILS — Recharts still emits 'width(-1) height(-1)' warnings on first paint of /influencer/earnings.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "InfluencerLayout.jsx (topbar logout & drawer logout)",
+        "issue": "Logout routes to /login?from=%2Finfluencer instead of '/'. Race condition: after `await logout()` sets user=null, the InfluencerLayout useEffect (line 33) fires `navigate('/login', { replace: true })` before the explicit `navigate('/')` on line 117/87 can run. User IS logged out (token cleared, sign-in form shown), but final URL is wrong.",
+        "selector": "[data-testid=\"influencer-topbar-logout\"], [data-testid=\"influencer-logout\"]",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "InfluencerEarnings.jsx (Recharts ResponsiveContainer)",
+        "issue": "Browser console still emits 2× 'The width(-1) and height(-1) of chart should be greater than 0' warnings on first paint. Inline style width:100% height:280 on the parent did NOT eliminate the warning. Likely the immediate parent of ResponsiveContainer (the Card/CardContent) still has 0 dimensions during the first render frame, or ResponsiveContainer itself still uses width=\"100%\" height=\"100%\" props (which Recharts warns about when parent is briefly 0). Recommendation: pass explicit numeric width/height to ResponsiveContainer (e.g., width=\"100%\" height={280}) AND ensure the closest ancestor has a determinable size, OR use the `<LineChart width=... height=... />` directly without ResponsiveContainer for a fixed-height chart.",
+        "selector": ".recharts-responsive-container, [data-testid*=\"earnings-chart\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_6.json"],
+  "action_items": [
+    "Fix 1 routing: change influencer logout handler so the post-logout redirect to '/' wins over InfluencerLayout's auth-guard redirect. Options: (a) call navigate('/', { replace: true }) BEFORE await logout(); (b) gate the useEffect with a `signingOut` ref so it doesn't fire navigate('/login') during an explicit logout; (c) make the auth context expose a logout(redirectTo) helper that performs the navigation atomically.",
+    "Fix 5 chart: pass explicit height to <ResponsiveContainer> (e.g., height={280}) instead of relying on parent style, or replace ResponsiveContainer with fixed-size LineChart since the height is already fixed at 280px."
+  ],
+  "critical_code_review_comments": [
+    "InfluencerLayout.jsx has THREE separate inline logout handlers (lines 60, 87, 117) each calling `await logout(); navigate('/')`. Extract into a single `handleSignOut` callback to avoid drift and to centralize the redirect-race fix.",
+    "The drawer renders `<SidebarInner>` twice (desktop sidebar at line 60 + mobile drawer at line 85), which means both copies share the same `data-testid='influencer-logout'` and `influencer-nav-*` ids — unscoped Playwright queries match the hidden desktop copy first. Not a runtime bug, but a testability smell; consider suffixing mobile testids (e.g., `influencer-mobile-logout`)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "71% (5/7 fully PASS, 1 PARTIAL, 1 FAIL)"},
+  "test_credentials": "admin@brandkrt.com / Admin@12345 (admin), demo.influencer@brandkrt.com / Demo@12345 (influencer). Both verified working.",
+  "seed_data_creation": "none",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Only Fix 1 (logout redirect destination) and Fix 5 (Recharts warnings) are unresolved from iteration_5 review. Fixes 2/3/4 + both regression smokes are GREEN — no need to re-test. Mobile viewport is 390x844. Influencer drawer items render only when drawer is open (count=0 when closed, that is correct). When testing the drawer, scope selectors with `[data-testid=\"influencer-mobile-drawer\"] [data-testid=\"...\"]` to avoid matching the hidden desktop sidebar copy. Also wait ~5s after influencer login before clicking the mobile toggle to let the 'Welcome back!' toast auto-dismiss, otherwise it can intercept clicks.",
+  "rca of the issue": {
+    "fix1_logout_redirect": "ROOT CAUSE: in InfluencerLayout.jsx line 27-35, a useEffect watches `user` and on null calls `navigate('/login', { replace: true })`. The logout button handler is `async () => { await logout(); navigate('/'); }`. After `await logout()` resolves, React state updates set user=null, React schedules a re-render, the useEffect runs (synchronously after commit) and calls navigate('/login') — this happens BEFORE the next line `navigate('/')` because navigate('/') is queued after the microtask returns. Result: final URL = /login?from=/influencer. REPRO: login as demo.influencer, click [data-testid='influencer-topbar-logout'] on mobile/desktop, observe URL. MITIGATION: use a `signingOut` ref guarded by useEffect, or call `navigate('/', { replace: true })` BEFORE `await logout()`, or have the AuthContext.logout accept a redirect target and perform navigation itself.",
+    "fix5_recharts_warning": "ROOT CAUSE: ResponsiveContainer measures its parent on mount via ResizeObserver. On the very first paint, the parent div (now styled width:100% height:280px inline) may still be reporting 0 dimensions before layout settles — Recharts then warns once with width(-1) height(-1). The fix needs either (a) explicit numeric width/height props on ResponsiveContainer, (b) using a fixed-size LineChart (since height is already known to be 280), or (c) setting `aspect` prop. Inline style on parent alone is not always sufficient."
+  }
+}

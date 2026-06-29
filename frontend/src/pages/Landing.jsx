@@ -27,7 +27,8 @@ function Hero() {
             <Sparkles className="h-3.5 w-3.5" /> Built for SMBs &amp; nano creators
           </span>
           <h1 className="mt-8 text-5xl sm:text-6xl lg:text-7xl font-light tracking-tighter text-primary dark:text-white leading-[1.02]" data-testid="hero-headline">
-            Where small businesses<br />
+            Where small businesses{" "}
+            <br className="hidden sm:block" />
             meet <span className="gold-text font-semibold">nano &amp; micro</span> creators.
           </h1>
           <p className="mt-7 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed" data-testid="hero-subtitle">
