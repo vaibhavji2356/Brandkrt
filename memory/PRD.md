@@ -1,79 +1,77 @@
 # BrandKrt — PRD & Status
 
-## Original problem statement
-Build BrandKrt — a premium SaaS influencer marketing marketplace connecting brands and creators. Manages verification, contracts, payments, collaboration, analytics, campaign tracking. Premium Stripe/Linear/Apple/Notion aesthetic. Brand palette: Royal Navy #0A1F44, Gold #D4AF37, white.
+A creator marketplace where small/medium businesses meet nano & micro creators (1K–100K).
+Stack: React (CRA + CRACO) + FastAPI + MongoDB Atlas. Frontend on Vercel, backend on Render.
 
-## Tech stack actually used (Emergent env)
-- React 19 + Tailwind + shadcn/ui + framer-motion + recharts (frontend)
-- FastAPI + Motor + MongoDB (backend)
-- JWT auth (httpOnly cookies) + bcrypt
-- Email service abstraction: console-only for now (Resend pluggable in 1B+)
+---
 
 ## User personas
-- **Influencer** — creator monetizing via brand campaigns
-- **Brand** — company running creator campaigns
-- **Admin** — BrandKrt operator (verification, payouts, moderation)
+- **SMB / Small Business** — local shop, café, salon, D2C founder. Limited budget, needs reach via authentic local voices.
+- **Nano / Micro Creator** — 1K–100K followers, lifestyle/fashion/food/fitness/etc., wants reliable paid collabs.
+- **Admin / Operator** — BrandKrt internal staff approving verifications, withdrawals, moderating reports.
 
-## Core requirements (static)
-- Premium landing, role-aware auth, KYC/verification, escrow payments, contracts, real-time analytics, in-app messaging gated by payment, admin moderation.
+## Core requirements (stable)
+- Verified two-sided marketplace (KYC + handle ownership)
+- Flat 8% platform fee on every deal
+- Escrow-style payment hold + release on delivery (PSP integration deferred — currently stub)
+- Role-based dashboards (Influencer, Brand, Admin)
+- In-app notifications + email
+- Rupee-first (₹), India primary geo
 
-## Implemented — Part 1A (Feb 2026)
-- Landing page (Hero, Features, How-it-Works, Why-Choose, Testimonials, Pricing, FAQ, Contact)
-- Auth: register (role select), login, forgot/reset, verify email, refresh, brute-force lockout (IP+email, X-Forwarded-For), logout
-- Sticky navbar + dark-mode toggle, footer, profile, settings (account/password/notifications/appearance + delete account), legal (Privacy/Terms/Refund), 404
-- Modular EmailService (console provider); admin user seeded from env
-- SEO: title, description, Open Graph, Twitter cards, favicon
+---
 
-## Implemented — Part 1C (Feb 2026)
-- Shared UI primitives: NotificationBell (live unread count, mark-read), Empty/Error/Success states, StatusChip, ErrorBoundary
-- Notification Center wired into Navbar (auto-polls /api/notifications every 30s)
-- HelpCenter page at /help (topics grid + FAQ)
-- Email template system: `backend/email_templates.py` — Welcome, Verify, Reset, Verification Approved/Rejected, Campaign Invitation/Accepted/Completed, Payment Released, Deadline Reminder (HTML + text, brand-styled, Resend-ready)
-- PWA-ready: manifest.json (navy theme + icon), branded splash colors
-- SEO: robots.txt, sitemap.xml, OG/Twitter meta, canonical-ready
-- Production setup: README.md (folder structure, API surface, deployment guide), .env.example, vercel.json (rewrites + security headers)
-- ErrorBoundary wraps the entire app; 404 already present
-- Collections + indexes: users, brands, influencers, social_accounts (planned), products (planned), campaigns, deals, contracts (planned), transactions, payments, notifications, messages, verification_requests, withdrawal_requests, reviews, reports, activity_logs, admin_logs
-- REST APIs (all under /api):
-  - /brands, /influencers (upsert/me, list, get)
-  - /campaigns (CRUD + status)
-  - /deals (create, list, status with 7-state lifecycle)
-  - /payments (escrow create + release; 8% platform fee, txid generation)
-  - /notifications (list, mark read) — emitted on deal offer + verification decision
-  - /messages (gated: 403 until payment escrowed)
-  - /verification (submit, mine) + /admin/verification (review with notes + schedule call)
-  - /withdrawals (submit, mine) + admin approve/reject
-  - /reviews, /reports
-  - /uploads/{folder} — local storage stub (profiles/brand_logos/products/verification/contracts/invoices), served at /uploads
-  - /admin/overview (cards: users/brands/influencers/revenue/pending KYC/pending payouts/running/completed/cancelled + 12-week growth charts)
-  - /admin/users, /admin/withdrawals, /admin/reports, /admin/logs
-- RBAC: require_role() guards; admin-only endpoints; brand/influencer-scoped queries
-- Audit: activity_logs (user actions) + admin_logs (admin decisions)
-- Admin Console UI shell at /admin: sidebar nav, Overview (stat cards + line + bar charts), Users (search/filter), Verification (approve/reject dialog with notes + scheduled call), Withdrawals, Reports, Logs
-- Login auto-redirects admins to /admin
+## ✅ Implemented (Part 1 — pre-existing, untouched)
+- **Auth**: register/login/logout/refresh, JWT in httpOnly cookies, bcrypt, brute-force lockout, email verification, password reset.
+- **Profile & Settings** for all roles.
+- **Admin console** at `/admin/*`: Overview, Users, Verification, Withdrawals, Reports, Logs.
+- **Backend resources**: brands, influencers, campaigns, deals (7-state lifecycle), payments (escrow stub, 8% fee), notifications, messages (gated by escrow), verification requests, withdrawal requests, reviews, reports, uploads.
+- **Reusable UI**: Navbar, Footer, Logo, SiteLayout, ProtectedRoute, NotificationBell (30s polling), ThemeToggle, ErrorBoundary, State helpers (EmptyState, ErrorState, SuccessState, StatusChip), 46 shadcn primitives.
+- **Landing page** with Hero / Features / How-it-works / Why-choose / Testimonials / Pricing / FAQ / Contact (Part 1 UI structure).
 
-## Backlog — P0 (Part 1C)
-- Influencer dashboard (profile builder, social analytics, deals inbox, earnings, withdrawal)
-- Brand dashboard (campaign creator, influencer discovery, deals tracker, billing, escrow checkout)
-- Resend integration for transactional emails (brandkrt.com domain)
-- Stripe escrow integration (currently DB-stub)
-- WebSocket layer for real-time notifications + deal status
+## ✅ Implemented (Part 2 — this session, 2026-01-29)
+- **Landing copy rewrite** (UI structure untouched) — re-positioned for SMBs + nano/micro creators across Hero (badge, headline, subtitle, CTAs, stats), Features overline + copy, How-it-works steps, Why-choose blurbs, Testimonials, Pricing plan names (Starter/SMB/Pro-Agency), FAQ, Contact intro.
+- **Influencer Module** at `/influencer/*` with sidebar layout + mobile drawer:
+  - `InfluencerLayout` — desktop sidebar, mobile drawer with hamburger + close, topbar logout (mobile), centralised `handleSignOut` using `window.location.replace('/')` to bypass ProtectedRoute race.
+  - `InfluencerOverview` — KPI cards (Earned/Pending/Active Deals/Verification), profile-completion banner with progress bar, recent deals, recent activity.
+  - `InfluencerProfile` — full form (basics, bio, socials, reach & pricing, payouts), PUT /influencers/me on save, POST /verification on "Submit for verification".
+  - `InfluencerCampaigns` — tabbed by deal status, accept/decline + advance status, escrow-locked chat indicator.
+  - `InfluencerEarnings` — Total/Pending/Requested/Available stats, 12-week recharts line chart, Request Withdrawal dialog (UPI/Bank), payments + withdrawals history.
+  - `InfluencerNotifications` — full list, All/Unread tabs, per-row mark-read, mark-all-read.
+  - `lib/influencerApi.js` — thin axios wrapper.
+- **Role-based redirect after login/register** — admin → `/admin`, influencer → `/influencer`, brand → `/profile` (placeholder). Uses `requestAnimationFrame` to defer navigation one frame so AuthContext.setUser commits before ProtectedRoute mounts.
+- **Navbar Dashboard link** in user dropdown for influencer + admin roles.
+- **Mobile responsiveness** — hero headline collapses block on small screens, CTAs stack vertically, sidebar becomes drawer, KPI cards reflow 2-cols → 4-cols, charts pin explicit height, tabs wrap.
+- **Backend additions** (approved scope only):
+  - `JWT_SECRET` + `SEED_DEMO` + admin/demo credentials added to `/app/backend/.env` (dev only — production env on Render is untouched).
+  - Idempotent demo seed (`_seed_demo_data`) creating 1 demo brand, 1 demo influencer, 1 campaign ("Glow Summer Launch"), 1 deal in `offer_sent`, 1 unread notification. Controlled by `SEED_DEMO=true`.
+  - `CORS_ORIGINS` widened to include the preview URL so credentialed (cookie) requests succeed.
 
-## Backlog — P1
-- Social account verification (Instagram/YouTube OAuth)
-- Contract templates + e-signature
-- Multi-currency payout rails (Wise/Razorpay)
-- Object storage (S3/GCS) replacing local uploads
-- 2FA, audit log export, GDPR data export
+## 🧪 Verified
+- `CI=true yarn build` → green (multiple runs).
+- Backend pytest (testing agent ran): 13/13 PASS for Part 2 scope (auth, /influencers/me GET+PUT, /deals GET+PATCH, /notifications GET+/read, /verification POST, /withdrawals POST+/mine, seed idempotency).
+- Frontend testing agent: all 7 fix-verifications PASS in iteration_8 (login redirect, desktop+mobile logout to /, hero copy, drawer testids, drawer logout reachable, dialog a11y, Recharts warnings gone).
 
-## Backlog — P2
-- AI matchmaking (brand brief → creator shortlist)
-- Campaign performance attribution (UTM + pixel)
-- Agency multi-workspace
-- Mobile apps
+---
 
-## Known limitations (current build)
-- Email = console provider only (tokens in backend logs)
-- Google login is "coming soon" toast
-- Payments are escrow stub (no Stripe yet)
-- File uploads = local disk (ephemeral)
+## 🪲 Known pre-existing issues (out of Part 2 scope, deferred to Brand Module ticket)
+- `GET /api/brands` and `GET /api/brands/me` return `null` due to placeholder stub handlers in `domain.py` lines 132–144 that shadow the real handlers registered later. Brand-side discovery/listing broken.
+- `PUT /api/influencers/me` and `PUT /api/brands/me` use `model_dump()` without `exclude_unset=True` → partial updates overwrite unspecified fields. UI mitigates by sending the full profile.
+- `POST /api/withdrawals` does not server-side-validate `amount ≤ available_balance`. UI validates.
+- `/api/uploads/{folder}` has extension whitelist but no max-size enforcement.
+
+## 🗂️ Backlog (next sessions)
+- **P0** — Brand Module (Brand dashboard, Brand layout at `/brand`, campaign creation, deal management, escrow funding UI). Same role-based redirect pattern.
+- **P0** — Fix the 4 backend gaps above (single PR alongside Brand Module).
+- **P1** — Real payment provider (Stripe / Razorpay) replacing escrow stub; webhook handling.
+- **P1** — Messaging real-time (currently polled, gated by escrow).
+- **P2** — In-app email digest, analytics export for SMBs, agency multi-workspace.
+- **P2** — Search & matching (recommended creators per brand).
+
+---
+
+## Architecture notes
+- All backend routes prefixed with `/api`. Frontend uses `REACT_APP_BACKEND_URL` from `frontend/.env`.
+- Cookies: `access_token` (15 min), `refresh_token` (7 d), httpOnly, `sameSite=lax`. Axios uses `withCredentials: true`.
+- Notifications poll every 30 s via `NotificationBell`.
+- Demo seed is idempotent — restarts won't duplicate.
+- Logout uses `window.location.replace('/')` to perform a hard navigation that sidesteps `ProtectedRoute`'s synchronous `<Navigate to="/login?from=..." />` redirect. Same pattern recommended when Brand/Admin layouts add explicit logout buttons.
