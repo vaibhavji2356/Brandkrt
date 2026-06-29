@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "create-react-app",
+  "installCommand": "yarn install --frozen-lockfile",
+  "buildCommand": "yarn build",
+  "outputDirectory": "build",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://YOUR-RENDER-BACKEND.onrender.com/api/$1" },
+    { "source": "/uploads/(.*)", "destination": "https://YOUR-RENDER-BACKEND.onrender.com/uploads/$1" },
+    { "source": "/((?!api/|uploads/|static/|.*\\..*).*)", "destination": "/index.html" }
+  ]
+}

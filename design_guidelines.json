@@ -1,0 +1,114 @@
+{
+  "project_name": "BrandKrt",
+  "theme": "LIGHT (Dark Mode Supported)",
+  "archetype": "Archetype 5 (Luxury) + Archetype 4 (Swiss & High-Contrast)",
+  "vibe_and_tone": "Premium, luxurious, modern, trustworthy, and minimal. Enterprise-grade execution mimicking Stripe, Notion, Apple, and Linear. Clean structure, emotional depth through contrast.",
+  "colors": {
+    "light": {
+      "background": "#FFFFFF",
+      "surface": "#F8FAFC",
+      "primary": "#0A1F44",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#D4AF37",
+      "secondary_foreground": "#0A1F44",
+      "accent": "#FDFBF7",
+      "text_main": "#1F2937",
+      "text_muted": "#6B7280",
+      "border": "#E5E7EB",
+      "input": "#F3F4F6",
+      "ring": "#D4AF37"
+    },
+    "dark": {
+      "background": "#050B14",
+      "surface": "#0A1F44",
+      "primary": "#D4AF37",
+      "primary_foreground": "#050B14",
+      "secondary": "#1E3A8A",
+      "secondary_foreground": "#FFFFFF",
+      "accent": "#112A54",
+      "text_main": "#F8FAFC",
+      "text_muted": "#9CA3AF",
+      "border": "#1E3A8A",
+      "input": "#0A1F44",
+      "ring": "#D4AF37"
+    }
+  },
+  "typography": {
+    "heading_font": "'Outfit', sans-serif",
+    "body_font": "'Manrope', sans-serif",
+    "rules": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-light tracking-tighter text-primary dark:text-white leading-none",
+      "h2": "text-3xl sm:text-4xl font-normal tracking-tight text-primary dark:text-white",
+      "h3": "text-xl sm:text-2xl font-medium tracking-tight text-primary dark:text-white",
+      "body": "text-base text-gray-600 dark:text-gray-300 leading-relaxed",
+      "body_large": "text-lg text-gray-600 dark:text-gray-300 leading-relaxed",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-secondary"
+    }
+  },
+  "spacing_and_layout": {
+    "section_padding": "py-24 md:py-32",
+    "container": "max-w-7xl mx-auto px-6 md:px-12",
+    "generous_spacing": "gap-8 md:gap-12",
+    "bento_grid": {
+      "base": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "span_primary": "col-span-1 md:col-span-2 lg:col-span-2 row-span-2"
+    }
+  },
+  "surface_strategies": {
+    "navbar": "Crystal Glassmorphism: sticky top-0 z-50 backdrop-blur-xl bg-white/70 dark:bg-[#050B14]/70 border-b border-gray-200/50 dark:border-white/10 shadow-sm",
+    "cards": "Neumorphic/Flat: bg-surface dark:bg-surface border border-border dark:border-border rounded-2xl p-8 hover:-translate-y-1 hover:shadow-lg transition-all duration-300 ease-out",
+    "footer": "Solid Dark: bg-primary text-white py-24",
+    "radius": {
+      "button_primary": "rounded-full",
+      "button_secondary": "rounded-lg",
+      "cards": "rounded-2xl",
+      "inputs": "rounded-lg"
+    }
+  },
+  "motion_and_interaction": {
+    "page_transitions": "Fade-in with slight upward motion (framer-motion: initial={{ opacity: 0, y: 10 }}, animate={{ opacity: 1, y: 0 }}, transition={{ duration: 0.4 }})",
+    "hover_states": "Buttons and links MUST explicitly change text/bg color on hover. Elements lifting on hover should use transition-transform duration-300.",
+    "list_stagger": "framer-motion staggerChildren: 0.1 for features/testimonials grid items.",
+    "loading": "Use soft pulse skeleton loaders (bg-gray-200 dark:bg-[#112A54]). No heavy or chaotic animations."
+  },
+  "component_guidelines": {
+    "buttons": {
+      "primary": "bg-primary text-white hover:bg-primary/90 dark:bg-secondary dark:text-primary dark:hover:bg-secondary/90 px-8 py-3 rounded-full font-medium transition-colors",
+      "secondary": "bg-secondary text-primary hover:bg-secondary/90 px-8 py-3 rounded-full font-medium transition-colors border border-transparent",
+      "outline": "border border-border text-primary dark:text-white hover:bg-gray-50 dark:hover:bg-surface px-6 py-3 rounded-lg transition-colors"
+    },
+    "inputs": "Shadcn UI default inputs, heavily customized to match rounded-lg, subtle border focus:ring-secondary focus:border-secondary.",
+    "badges": "bg-accent text-secondary px-3 py-1 rounded-full text-xs font-semibold tracking-wide",
+    "icons": "Use lucide-react for UI interactions. Use @phosphor-icons/react (Duotone) for feature/marketing section graphics."
+  },
+  "media": {
+    "logos": {
+      "brand_full": "User uploaded lockup logo (Navy bg, Gold B mark, BrandKrt text). *Use local asset path or placeholder block if not provided directly, but ensure layout space accommodates a horizontal lockup.*",
+      "brand_icon": "User uploaded Gold 'B' mark. *Use for mobile nav and favicon.*",
+      "sponsor_logos": [
+        { "url": "https://images.unsplash.com/photo-1765448808249-a3610f38e612", "alt": "Kraft Logo" },
+        { "url": "https://images.unsplash.com/photo-1670139303429-9ecdfe5cf0fc", "alt": "Building Sign Logo" },
+        { "url": "https://images.unsplash.com/photo-1605514449453-c6ed5f1963e7", "alt": "Cafe Logo" }
+      ]
+    },
+    "images": {
+      "hero_background": "https://images.unsplash.com/photo-1561998338-13ad7883b20f (Use as a heavily darkened texture overlay: bg-black/50 or bg-primary/80 over the image to keep text readable).",
+      "testimonials": [
+        { "url": "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", "role": "Premium Influencer" },
+        { "url": "https://images.pexels.com/photos/29086752/pexels-photo-29086752.jpeg", "role": "Brand Marketing Director" }
+      ]
+    }
+  },
+  "instructions_to_main_agent": [
+    "INSTALL DEPENDENCIES: yarn add framer-motion @phosphor-icons/react lucide-react",
+    "FONTS: Import 'Outfit' and 'Manrope' via Google Fonts in index.html.",
+    "TAILWIND CONFIG: Extend colors with primary (#0A1F44) and secondary (#D4AF37) variables. Map them to CSS variables for dark mode support.",
+    "ACCESSIBILITY: Ensure all interactive elements include `data-testid` (e.g., `data-testid='hero-cta-influencer'`).",
+    "HERO LAYOUT: Use the abstract texture background with a deep navy/black overlay (`bg-primary/90`) so white text is highly legible. Do not leave the hero image transparent.",
+    "LOGO USAGE: Since the user has an uploaded logo, implement an `<img>` tag pointing to `/assets/logo.svg` or `/logo.png`. Do NOT use text-only logo replacements. Use the icon-only version on mobile if space is tight.",
+    "SHADCN: Install and use standard Shadcn components for forms, auth cards, and dropdowns, but override their default borders to match the `rounded-2xl` card and `rounded-lg` input specs.",
+    "DARK MODE: Implement next-themes. The transition must smoothly swap the white background for #050B14 and the surface cards to #0A1F44.",
+    "AUTH PAGES: Use a split layout for Login/Register. Left side: Marketing visual/testimonial. Right side: Clean, centered form.",
+    "PRICING: Implement the 'Three-Tier Standard' pattern. Highlight the middle Pro tier visually with a Gold border and a 'Most Popular' badge."
+  ]
+}

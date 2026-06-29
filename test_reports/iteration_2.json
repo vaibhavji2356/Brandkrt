@@ -1,0 +1,24 @@
+{
+  "summary": "Backend smoke after removing emergentintegrations and jq from requirements.txt. Backend boots cleanly with no ImportError. All 7 requested critical endpoints respond 200 with expected payloads. requirements.txt is clean of the offending lines and no .py file imports emergentintegrations.",
+  "tested_scope": ["backend", "auth", "integration"],
+  "passed": [
+    "grep -iE 'emergent|^jq' /app/backend/requirements.txt -> 0 matches",
+    "grep -r 'emergentintegrations' /app/backend/*.py -> 0 matches",
+    "Backend supervisor process up; latest reload shows 'Application startup complete' with no ImportError",
+    "GET /api/health -> 200 {status: ok, service: brandkrt-api}",
+    "POST /api/auth/login (admin@brandkrt.com) -> 200, returns user(role=admin) + access_token, sets cookies",
+    "GET /api/auth/me (admin cookies) -> 200, returns admin user",
+    "GET /api/admin/overview -> 200, returns cards + weekly charts arrays",
+    "POST /api/auth/register new influencer -> 200, user created, cookies set",
+    "PUT /api/influencers/me -> 200, profile upserted (bio/city/country persisted)",
+    "GET /api/notifications (new user) -> 200 {notifications: []}, no crash"
+  ],
+  "failed": [],
+  "action_items": [
+    "Safe to proceed with Render deploy; dependency cleanup did not break any backend functionality.",
+    "Note (informational only, not a blocker): backend.err.log contains an older traceback 'ImportError: attempted relative import with no known parent package' from a previous reload of server.py line 489 `from . import domain`. Current process is healthy and serving 200s, but main agent may want to verify that fallback path is reachable only when run as a package."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "skipped"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}

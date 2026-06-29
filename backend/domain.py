@@ -1,0 +1,681 @@
+"""BrandKrt domain models, services and routes - Part 1B foundation.
+
+Includes: Brand/Influencer profile docs, Campaigns, Deals, Payments (escrow),
+Notifications, Messages (gated), Verification, Withdrawal, Reviews, Reports,
+ActivityLogs, AdminLogs. Plus admin analytics & RBAC."""
+
+from __future__ import annotations
+
+import os
+import secrets
+from datetime import datetime, timezone
+from typing import Any, Optional, List, Literal
+
+from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
+
+# These are wired in server.py
+db = None  # type: ignore  # populated by init()
+get_current_user = None  # type: ignore
+
+
+def init(database, current_user_dep):
+    global db, get_current_user
+    db = database
+    get_current_user = current_user_dep
+
+
+# ---------------- helpers ----------------
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def oid(s: str) -> ObjectId:
+    try:
+        return ObjectId(s)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid id")
+
+
+def doc_out(doc: dict) -> dict:
+    if not doc:
+        return doc
+    d = dict(doc)
+    d["id"] = str(d.pop("_id"))
+    for k, v in list(d.items()):
+        if isinstance(v, ObjectId):
+            d[k] = str(v)
+        if isinstance(v, datetime):
+            d[k] = v.isoformat()
+    return d
+
+
+async def require_role(user: dict, *roles: str) -> None:
+    if user.get("role") not in roles:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+async def log_activity(user_id: Optional[str], action: str, entity: str, entity_id: Optional[str] = None, meta: Optional[dict] = None):
+    await db.activity_logs.insert_one({
+        "user_id": user_id, "action": action, "entity": entity, "entity_id": entity_id,
+        "meta": meta or {}, "created_at": now_utc(),
+    })
+
+
+async def log_admin(admin_id: str, action: str, target: str, meta: Optional[dict] = None):
+    await db.admin_logs.insert_one({
+        "admin_id": admin_id, "action": action, "target": target,
+        "meta": meta or {}, "created_at": now_utc(),
+    })
+
+
+async def notify(user_id: str, type_: str, title: str, body: str = "", meta: Optional[dict] = None):
+    await db.notifications.insert_one({
+        "user_id": user_id, "type": type_, "title": title, "body": body,
+        "meta": meta or {}, "read": False, "status": "active",
+        "created_at": now_utc(), "updated_at": now_utc(),
+    })
+
+
+async def setup_indexes(database):
+    await database.brands.create_index("user_id", unique=True)
+    await database.influencers.create_index("user_id", unique=True)
+    await database.influencers.create_index([("category", 1), ("country", 1)])
+    await database.campaigns.create_index([("brand_id", 1), ("status", 1)])
+    await database.deals.create_index([("campaign_id", 1), ("status", 1)])
+    await database.deals.create_index([("influencer_id", 1), ("status", 1)])
+    await database.payments.create_index([("deal_id", 1)])
+    await database.transactions.create_index([("user_id", 1), ("created_at", -1)])
+    await database.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
+    await database.messages.create_index([("deal_id", 1), ("created_at", 1)])
+    await database.verification_requests.create_index([("user_id", 1), ("status", 1)])
+    await database.withdrawal_requests.create_index([("user_id", 1), ("status", 1)])
+    await database.reviews.create_index([("target_user_id", 1)])
+    await database.reports.create_index([("reporter_id", 1), ("status", 1)])
+    await database.activity_logs.create_index([("user_id", 1), ("created_at", -1)])
+    await database.admin_logs.create_index([("created_at", -1)])
+
+
+# ---------------- routers ----------------
+brand_router = APIRouter(prefix="/brands", tags=["brands"])
+influencer_router = APIRouter(prefix="/influencers", tags=["influencers"])
+campaign_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+deal_router = APIRouter(prefix="/deals", tags=["deals"])
+payment_router = APIRouter(prefix="/payments", tags=["payments"])
+notif_router = APIRouter(prefix="/notifications", tags=["notifications"])
+msg_router = APIRouter(prefix="/messages", tags=["messages"])
+verify_router = APIRouter(prefix="/verification", tags=["verification"])
+withdraw_router = APIRouter(prefix="/withdrawals", tags=["withdrawals"])
+review_router = APIRouter(prefix="/reviews", tags=["reviews"])
+report_router = APIRouter(prefix="/reports", tags=["reports"])
+upload_router = APIRouter(prefix="/uploads", tags=["uploads"])
+admin_router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+# ============== BRAND PROFILE ==============
+class BrandProfileIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    company_name: str
+    owner_name: Optional[str] = None
+    phone: Optional[str] = None
+    gst_number: Optional[str] = None
+    registration_proof_url: Optional[str] = None
+    company_address: Optional[str] = None
+    industry: Optional[str] = None
+    website: Optional[str] = None
+    logo_url: Optional[str] = None
+    product_categories: List[str] = []
+    bank_details: Optional[dict] = None
+
+
+@brand_router.put("/me")
+async def upsert_my_brand(payload: BrandProfileIn, user: dict = Depends(lambda: None)):
+    pass  # bound below in init via closure
+
+
+@brand_router.get("/me")
+async def get_my_brand(user: dict = Depends(lambda: None)):
+    pass
+
+
+@brand_router.get("")
+async def list_brands(user: dict = Depends(lambda: None)):
+    pass
+
+
+# ============== INFLUENCER PROFILE ==============
+class InfluencerProfileIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    username: Optional[str] = None
+    phone: Optional[str] = None
+    country: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    profile_photo_url: Optional[str] = None
+    cover_photo_url: Optional[str] = None
+    bio: Optional[str] = None
+    instagram: Optional[str] = None
+    youtube: Optional[str] = None
+    facebook: Optional[str] = None
+    linkedin: Optional[str] = None
+    website: Optional[str] = None
+    category: Optional[str] = None
+    followers: Optional[int] = 0
+    avg_reel_views: Optional[int] = 0
+    monthly_reach: Optional[int] = 0
+    collab_price: Optional[float] = 0
+    premium_plan: bool = False
+    bank_details: Optional[dict] = None
+    upi: Optional[str] = None
+    gst: Optional[str] = None
+    portfolio: List[dict] = []
+
+
+# ============== CAMPAIGN ==============
+class CampaignIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    title: str
+    platform: Literal["instagram", "youtube", "facebook", "linkedin", "tiktok", "other"]
+    budget: float = Field(ge=0)
+    deadline: Optional[str] = None
+    deliverables: List[str] = []
+    product_details: Optional[str] = None
+    promotion_links: List[str] = []
+
+
+# ============== DEAL ==============
+DEAL_STATUSES = ["offer_sent", "offer_accepted", "product_shipped", "promotion_pending",
+                 "promotion_live", "completed", "cancelled"]
+
+
+class DealCreateIn(BaseModel):
+    campaign_id: str
+    influencer_id: str
+    amount: float = Field(ge=0)
+    note: Optional[str] = None
+
+
+class DealStatusIn(BaseModel):
+    status: Literal["offer_sent", "offer_accepted", "product_shipped", "promotion_pending",
+                    "promotion_live", "completed", "cancelled"]
+
+
+# ============== PAYMENT (escrow stub) ==============
+class PaymentCreateIn(BaseModel):
+    deal_id: str
+    amount: float = Field(ge=0)
+
+
+# ============== VERIFICATION ==============
+class VerificationIn(BaseModel):
+    kind: Literal["brand", "influencer"]
+    documents: List[str] = []
+    notes: Optional[str] = None
+
+
+class VerificationDecisionIn(BaseModel):
+    decision: Literal["approved", "rejected"]
+    notes: Optional[str] = None
+    schedule_call_at: Optional[str] = None
+
+
+# ============== WITHDRAWAL ==============
+class WithdrawalIn(BaseModel):
+    amount: float = Field(gt=0)
+    method: Literal["bank", "upi"]
+    details: dict
+
+
+class WithdrawalDecisionIn(BaseModel):
+    decision: Literal["approved", "rejected"]
+    note: Optional[str] = None
+
+
+# ============== REVIEW / REPORT ==============
+class ReviewIn(BaseModel):
+    target_user_id: str
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = None
+
+
+class ReportIn(BaseModel):
+    target_user_id: str
+    reason: str
+    details: Optional[str] = None
+
+
+# ============== MESSAGES ==============
+class MessageIn(BaseModel):
+    deal_id: str
+    body: str = Field(min_length=1, max_length=2000)
+
+
+# ============== Concrete handlers (registered after init) ==============
+def register_handlers():
+    """Bind handlers using db and get_current_user from init()."""
+
+    # ----- BRAND -----
+    @brand_router.put("/me", operation_id="upsert_my_brand")
+    async def _upsert_my_brand(payload: BrandProfileIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "brand", "admin")
+        now = now_utc()
+        data = payload.model_dump()
+        data.update({"user_id": str(user["_id"]), "status": "active", "updated_at": now})
+        existing = await db.brands.find_one({"user_id": str(user["_id"])})
+        if existing:
+            await db.brands.update_one({"_id": existing["_id"]}, {"$set": data})
+            doc = await db.brands.find_one({"_id": existing["_id"]})
+        else:
+            data["created_at"] = now
+            data["verification_status"] = "pending"
+            res = await db.brands.insert_one(data)
+            doc = await db.brands.find_one({"_id": res.inserted_id})
+        await log_activity(str(user["_id"]), "brand.upsert", "brand", str(doc["_id"]))
+        return {"brand": doc_out(doc)}
+
+    @brand_router.get("/me", operation_id="get_my_brand")
+    async def _get_my_brand(user: dict = Depends(get_current_user)):
+        doc = await db.brands.find_one({"user_id": str(user["_id"])})
+        return {"brand": doc_out(doc) if doc else None}
+
+    @brand_router.get("", operation_id="list_brands")
+    async def _list_brands(user: dict = Depends(get_current_user), q: Optional[str] = None, limit: int = 50):
+        query = {"status": "active"}
+        if q:
+            query["company_name"] = {"$regex": q, "$options": "i"}
+        cur = db.brands.find(query).limit(min(limit, 100))
+        return {"brands": [doc_out(x) async for x in cur]}
+
+    @brand_router.get("/{brand_id}", operation_id="get_brand")
+    async def _get_brand(brand_id: str, user: dict = Depends(get_current_user)):
+        doc = await db.brands.find_one({"_id": oid(brand_id)})
+        if not doc:
+            raise HTTPException(404, "Brand not found")
+        return {"brand": doc_out(doc)}
+
+    # ----- INFLUENCER -----
+    @influencer_router.put("/me")
+    async def _upsert_inf(payload: InfluencerProfileIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "influencer", "admin")
+        now = now_utc()
+        data = payload.model_dump()
+        data.update({"user_id": str(user["_id"]), "status": "active", "updated_at": now})
+        existing = await db.influencers.find_one({"user_id": str(user["_id"])})
+        if existing:
+            await db.influencers.update_one({"_id": existing["_id"]}, {"$set": data})
+            doc = await db.influencers.find_one({"_id": existing["_id"]})
+        else:
+            data["created_at"] = now
+            data["verification_status"] = "pending"
+            res = await db.influencers.insert_one(data)
+            doc = await db.influencers.find_one({"_id": res.inserted_id})
+        await log_activity(str(user["_id"]), "influencer.upsert", "influencer", str(doc["_id"]))
+        return {"influencer": doc_out(doc)}
+
+    @influencer_router.get("/me")
+    async def _get_my_inf(user: dict = Depends(get_current_user)):
+        doc = await db.influencers.find_one({"user_id": str(user["_id"])})
+        return {"influencer": doc_out(doc) if doc else None}
+
+    @influencer_router.get("")
+    async def _list_inf(user: dict = Depends(get_current_user), q: Optional[str] = None, category: Optional[str] = None, limit: int = 50):
+        query: dict = {"status": "active"}
+        if q:
+            query["username"] = {"$regex": q, "$options": "i"}
+        if category:
+            query["category"] = category
+        cur = db.influencers.find(query).limit(min(limit, 100))
+        return {"influencers": [doc_out(x) async for x in cur]}
+
+    @influencer_router.get("/{inf_id}")
+    async def _get_inf(inf_id: str, user: dict = Depends(get_current_user)):
+        doc = await db.influencers.find_one({"_id": oid(inf_id)})
+        if not doc:
+            raise HTTPException(404, "Influencer not found")
+        return {"influencer": doc_out(doc)}
+
+    # ----- CAMPAIGN -----
+    @campaign_router.post("")
+    async def _create_campaign(payload: CampaignIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "brand", "admin")
+        brand = await db.brands.find_one({"user_id": str(user["_id"])})
+        if not brand and user.get("role") != "admin":
+            raise HTTPException(400, "Create your brand profile first")
+        now = now_utc()
+        doc = {**payload.model_dump(), "brand_id": str(brand["_id"]) if brand else None,
+               "status": "draft", "progress": 0, "analytics": {}, "created_at": now, "updated_at": now}
+        res = await db.campaigns.insert_one(doc)
+        await log_activity(str(user["_id"]), "campaign.create", "campaign", str(res.inserted_id))
+        return {"campaign": doc_out(await db.campaigns.find_one({"_id": res.inserted_id}))}
+
+    @campaign_router.get("")
+    async def _list_campaigns(user: dict = Depends(get_current_user), status: Optional[str] = None, limit: int = 50):
+        query = {}
+        if user.get("role") == "brand":
+            brand = await db.brands.find_one({"user_id": str(user["_id"])})
+            query["brand_id"] = str(brand["_id"]) if brand else "__none__"
+        if status:
+            query["status"] = status
+        cur = db.campaigns.find(query).sort("created_at", -1).limit(min(limit, 100))
+        return {"campaigns": [doc_out(x) async for x in cur]}
+
+    @campaign_router.get("/{cid}")
+    async def _get_campaign(cid: str, user: dict = Depends(get_current_user)):
+        doc = await db.campaigns.find_one({"_id": oid(cid)})
+        if not doc:
+            raise HTTPException(404, "Campaign not found")
+        return {"campaign": doc_out(doc)}
+
+    @campaign_router.patch("/{cid}/status")
+    async def _campaign_status(cid: str, status: str, user: dict = Depends(get_current_user)):
+        if status not in ["draft", "active", "paused", "completed", "cancelled"]:
+            raise HTTPException(400, "Invalid status")
+        await db.campaigns.update_one({"_id": oid(cid)}, {"$set": {"status": status, "updated_at": now_utc()}})
+        return {"success": True}
+
+    # ----- DEALS -----
+    @deal_router.post("")
+    async def _create_deal(payload: DealCreateIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "brand", "admin")
+        campaign = await db.campaigns.find_one({"_id": oid(payload.campaign_id)})
+        if not campaign:
+            raise HTTPException(404, "Campaign not found")
+        now = now_utc()
+        doc = {"campaign_id": payload.campaign_id, "brand_id": campaign.get("brand_id"),
+               "influencer_id": payload.influencer_id, "amount": payload.amount,
+               "note": payload.note, "status": "offer_sent",
+               "created_at": now, "updated_at": now}
+        res = await db.deals.insert_one(doc)
+        # notify influencer (best-effort)
+        inf = await db.influencers.find_one({"_id": oid(payload.influencer_id)})
+        if inf:
+            await notify(inf["user_id"], "deal.offer", "New campaign offer", f"You received a new offer.", {"deal_id": str(res.inserted_id)})
+        await log_activity(str(user["_id"]), "deal.create", "deal", str(res.inserted_id))
+        return {"deal": doc_out(await db.deals.find_one({"_id": res.inserted_id}))}
+
+    @deal_router.get("")
+    async def _list_deals(user: dict = Depends(get_current_user), status: Optional[str] = None):
+        query = {}
+        if status:
+            query["status"] = status
+        if user.get("role") == "influencer":
+            inf = await db.influencers.find_one({"user_id": str(user["_id"])})
+            query["influencer_id"] = str(inf["_id"]) if inf else "__none__"
+        elif user.get("role") == "brand":
+            brand = await db.brands.find_one({"user_id": str(user["_id"])})
+            query["brand_id"] = str(brand["_id"]) if brand else "__none__"
+        cur = db.deals.find(query).sort("created_at", -1).limit(100)
+        return {"deals": [doc_out(x) async for x in cur]}
+
+    @deal_router.patch("/{did}/status")
+    async def _deal_status(did: str, payload: DealStatusIn, user: dict = Depends(get_current_user)):
+        deal = await db.deals.find_one({"_id": oid(did)})
+        if not deal:
+            raise HTTPException(404, "Deal not found")
+        await db.deals.update_one({"_id": oid(did)}, {"$set": {"status": payload.status, "updated_at": now_utc()}})
+        return {"success": True, "status": payload.status}
+
+    # ----- PAYMENTS (escrow stub) -----
+    @payment_router.post("/escrow")
+    async def _escrow(payload: PaymentCreateIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "brand", "admin")
+        deal = await db.deals.find_one({"_id": oid(payload.deal_id)})
+        if not deal:
+            raise HTTPException(404, "Deal not found")
+        now = now_utc()
+        platform_fee = round(payload.amount * 0.08, 2)
+        influencer_earning = round(payload.amount - platform_fee, 2)
+        txid = secrets.token_hex(8).upper()
+        doc = {"deal_id": payload.deal_id, "amount": payload.amount,
+               "platform_fee": platform_fee, "influencer_earning": influencer_earning,
+               "release_status": "held", "transaction_id": txid,
+               "status": "escrowed", "created_at": now, "updated_at": now}
+        res = await db.payments.insert_one(doc)
+        await db.transactions.insert_one({
+            "user_id": str(user["_id"]), "type": "escrow_in", "amount": payload.amount,
+            "ref": str(res.inserted_id), "status": "ok", "created_at": now,
+        })
+        return {"payment": doc_out(await db.payments.find_one({"_id": res.inserted_id}))}
+
+    @payment_router.post("/{pid}/release")
+    async def _release(pid: str, user: dict = Depends(get_current_user)):
+        await require_role(user, "admin", "brand")
+        await db.payments.update_one({"_id": oid(pid)},
+                                     {"$set": {"release_status": "released", "status": "released",
+                                               "updated_at": now_utc()}})
+        return {"success": True}
+
+    @payment_router.get("")
+    async def _list_payments(user: dict = Depends(get_current_user)):
+        cur = db.payments.find({}).sort("created_at", -1).limit(100)
+        return {"payments": [doc_out(x) async for x in cur]}
+
+    # ----- NOTIFICATIONS -----
+    @notif_router.get("")
+    async def _list_notifs(user: dict = Depends(get_current_user)):
+        cur = db.notifications.find({"user_id": str(user["_id"])}).sort("created_at", -1).limit(50)
+        return {"notifications": [doc_out(x) async for x in cur]}
+
+    @notif_router.post("/{nid}/read")
+    async def _read_notif(nid: str, user: dict = Depends(get_current_user)):
+        await db.notifications.update_one(
+            {"_id": oid(nid), "user_id": str(user["_id"])}, {"$set": {"read": True}}
+        )
+        return {"success": True}
+
+    # ----- MESSAGES (locked until payment) -----
+    @msg_router.get("/{deal_id}")
+    async def _list_msgs(deal_id: str, user: dict = Depends(get_current_user)):
+        pay = await db.payments.find_one({"deal_id": deal_id, "status": {"$in": ["escrowed", "released"]}})
+        if not pay:
+            raise HTTPException(403, "Messaging is locked until payment is completed")
+        cur = db.messages.find({"deal_id": deal_id}).sort("created_at", 1).limit(500)
+        return {"messages": [doc_out(x) async for x in cur]}
+
+    @msg_router.post("")
+    async def _send_msg(payload: MessageIn, user: dict = Depends(get_current_user)):
+        pay = await db.payments.find_one({"deal_id": payload.deal_id, "status": {"$in": ["escrowed", "released"]}})
+        if not pay:
+            raise HTTPException(403, "Messaging is locked until payment is completed")
+        doc = {"deal_id": payload.deal_id, "user_id": str(user["_id"]),
+               "body": payload.body, "status": "sent", "created_at": now_utc()}
+        res = await db.messages.insert_one(doc)
+        return {"message": doc_out(await db.messages.find_one({"_id": res.inserted_id}))}
+
+    # ----- VERIFICATION -----
+    @verify_router.post("")
+    async def _submit_verif(payload: VerificationIn, user: dict = Depends(get_current_user)):
+        now = now_utc()
+        doc = {"user_id": str(user["_id"]), "kind": payload.kind,
+               "documents": payload.documents, "notes": payload.notes,
+               "status": "pending", "created_at": now, "updated_at": now}
+        res = await db.verification_requests.insert_one(doc)
+        await log_activity(str(user["_id"]), "verification.submit", "verification", str(res.inserted_id))
+        return {"request": doc_out(await db.verification_requests.find_one({"_id": res.inserted_id}))}
+
+    @verify_router.get("/mine")
+    async def _my_verif(user: dict = Depends(get_current_user)):
+        cur = db.verification_requests.find({"user_id": str(user["_id"])}).sort("created_at", -1)
+        return {"requests": [doc_out(x) async for x in cur]}
+
+    # ----- WITHDRAWAL -----
+    @withdraw_router.post("")
+    async def _wd(payload: WithdrawalIn, user: dict = Depends(get_current_user)):
+        now = now_utc()
+        doc = {"user_id": str(user["_id"]), "amount": payload.amount,
+               "method": payload.method, "details": payload.details,
+               "status": "pending", "created_at": now, "updated_at": now}
+        res = await db.withdrawal_requests.insert_one(doc)
+        return {"request": doc_out(await db.withdrawal_requests.find_one({"_id": res.inserted_id}))}
+
+    @withdraw_router.get("/mine")
+    async def _my_wd(user: dict = Depends(get_current_user)):
+        cur = db.withdrawal_requests.find({"user_id": str(user["_id"])}).sort("created_at", -1)
+        return {"requests": [doc_out(x) async for x in cur]}
+
+    # ----- REVIEWS / REPORTS -----
+    @review_router.post("")
+    async def _review(payload: ReviewIn, user: dict = Depends(get_current_user)):
+        doc = {**payload.model_dump(), "reviewer_id": str(user["_id"]),
+               "status": "active", "created_at": now_utc(), "updated_at": now_utc()}
+        res = await db.reviews.insert_one(doc)
+        return {"review": doc_out(await db.reviews.find_one({"_id": res.inserted_id}))}
+
+    @report_router.post("")
+    async def _report(payload: ReportIn, user: dict = Depends(get_current_user)):
+        doc = {**payload.model_dump(), "reporter_id": str(user["_id"]),
+               "status": "open", "created_at": now_utc(), "updated_at": now_utc()}
+        res = await db.reports.insert_one(doc)
+        return {"report": doc_out(await db.reports.find_one({"_id": res.inserted_id}))}
+
+    # ----- UPLOADS (local storage stub) -----
+    UPLOAD_ROOT = os.environ.get("UPLOAD_ROOT", "./uploads")
+    FOLDERS = ["profiles", "brand_logos", "products", "verification", "contracts", "invoices"]
+    for f in FOLDERS:
+        os.makedirs(os.path.join(UPLOAD_ROOT, f), exist_ok=True)
+
+    @upload_router.post("/{folder}")
+    async def _upload(folder: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+        if folder not in FOLDERS:
+            raise HTTPException(400, "Unknown folder")
+        ext = (file.filename or "").rsplit(".", 1)[-1].lower()
+        if ext not in {"jpg", "jpeg", "png", "webp", "pdf"}:
+            raise HTTPException(400, "Unsupported file type")
+        name = f"{secrets.token_hex(12)}.{ext}"
+        path = os.path.join(UPLOAD_ROOT, folder, name)
+        with open(path, "wb") as out:
+            out.write(await file.read())
+        url = f"/uploads/{folder}/{name}"
+        return {"url": url, "folder": folder, "filename": name}
+
+    # ----- ADMIN -----
+    async def _ensure_admin(user: dict):
+        await require_role(user, "admin")
+
+    @admin_router.get("/overview")
+    async def _admin_overview(user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        from datetime import timedelta
+        now = now_utc()
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        month_start = today.replace(day=1)
+        users_total = await db.users.count_documents({})
+        brands_total = await db.brands.count_documents({})
+        infs_total = await db.influencers.count_documents({})
+        pending_verif = await db.verification_requests.count_documents({"status": "pending"})
+        pending_wd = await db.withdrawal_requests.count_documents({"status": "pending"})
+        running = await db.campaigns.count_documents({"status": "active"})
+        completed = await db.campaigns.count_documents({"status": "completed"})
+        cancelled = await db.campaigns.count_documents({"status": "cancelled"})
+
+        # revenue from platform_fee
+        pipeline_today = [{"$match": {"created_at": {"$gte": today}}},
+                          {"$group": {"_id": None, "rev": {"$sum": "$platform_fee"}}}]
+        pipeline_month = [{"$match": {"created_at": {"$gte": month_start}}},
+                          {"$group": {"_id": None, "rev": {"$sum": "$platform_fee"}}}]
+        td = await db.payments.aggregate(pipeline_today).to_list(1)
+        mo = await db.payments.aggregate(pipeline_month).to_list(1)
+        rev_today = (td[0]["rev"] if td else 0) or 0
+        rev_month = (mo[0]["rev"] if mo else 0) or 0
+
+        # 12-week growth charts
+        weeks = []
+        for i in range(11, -1, -1):
+            start = now - timedelta(weeks=i + 1)
+            end = now - timedelta(weeks=i)
+            uc = await db.users.count_documents({"created_at": {"$gte": start, "$lt": end}})
+            cc = await db.campaigns.count_documents({"created_at": {"$gte": start, "$lt": end}})
+            rp = await db.payments.aggregate([
+                {"$match": {"created_at": {"$gte": start, "$lt": end}}},
+                {"$group": {"_id": None, "rev": {"$sum": "$platform_fee"}}}
+            ]).to_list(1)
+            weeks.append({
+                "label": start.strftime("%b %d"),
+                "users": uc,
+                "campaigns": cc,
+                "revenue": (rp[0]["rev"] if rp else 0) or 0,
+            })
+
+        return {
+            "cards": {
+                "total_users": users_total, "total_brands": brands_total,
+                "total_influencers": infs_total,
+                "revenue_today": rev_today, "revenue_month": rev_month,
+                "pending_verification": pending_verif, "pending_withdrawals": pending_wd,
+                "running_campaigns": running, "completed_campaigns": completed,
+                "cancelled_campaigns": cancelled,
+            },
+            "charts": {"weekly": weeks},
+        }
+
+    @admin_router.get("/users")
+    async def _admin_users(user: dict = Depends(get_current_user), role: Optional[str] = None, q: Optional[str] = None, limit: int = 50):
+        await _ensure_admin(user)
+        query: dict = {}
+        if role:
+            query["role"] = role
+        if q:
+            query["$or"] = [{"email": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]
+        cur = db.users.find(query, {"password_hash": 0}).sort("created_at", -1).limit(min(limit, 200))
+        return {"users": [doc_out(x) async for x in cur]}
+
+    @admin_router.get("/verification")
+    async def _admin_verif(user: dict = Depends(get_current_user), status: str = "pending"):
+        await _ensure_admin(user)
+        cur = db.verification_requests.find({"status": status}).sort("created_at", -1).limit(100)
+        return {"requests": [doc_out(x) async for x in cur]}
+
+    @admin_router.post("/verification/{rid}/decision")
+    async def _admin_decide(rid: str, payload: VerificationDecisionIn, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        req = await db.verification_requests.find_one({"_id": oid(rid)})
+        if not req:
+            raise HTTPException(404, "Request not found")
+        update = {"status": payload.decision, "admin_notes": payload.notes,
+                  "schedule_call_at": payload.schedule_call_at, "updated_at": now_utc()}
+        await db.verification_requests.update_one({"_id": oid(rid)}, {"$set": update})
+        # propagate to brand/influencer collection
+        collection = db.brands if req["kind"] == "brand" else db.influencers
+        await collection.update_one({"user_id": req["user_id"]},
+                                    {"$set": {"verification_status": payload.decision, "updated_at": now_utc()}})
+        await notify(req["user_id"], "verification.decision",
+                     f"Verification {payload.decision}",
+                     payload.notes or "Your verification request has been reviewed.",
+                     {"request_id": rid})
+        await log_admin(str(user["_id"]), f"verification.{payload.decision}", rid, {"notes": payload.notes})
+        return {"success": True}
+
+    @admin_router.get("/withdrawals")
+    async def _admin_wd(user: dict = Depends(get_current_user), status: str = "pending"):
+        await _ensure_admin(user)
+        cur = db.withdrawal_requests.find({"status": status}).sort("created_at", -1).limit(100)
+        return {"requests": [doc_out(x) async for x in cur]}
+
+    @admin_router.post("/withdrawals/{rid}/decision")
+    async def _admin_wd_decide(rid: str, payload: WithdrawalDecisionIn, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        await db.withdrawal_requests.update_one({"_id": oid(rid)},
+                                                {"$set": {"status": payload.decision, "admin_note": payload.note, "updated_at": now_utc()}})
+        await log_admin(str(user["_id"]), f"withdrawal.{payload.decision}", rid)
+        return {"success": True}
+
+    @admin_router.get("/reports")
+    async def _admin_reports(user: dict = Depends(get_current_user), status: str = "open"):
+        await _ensure_admin(user)
+        cur = db.reports.find({"status": status}).sort("created_at", -1).limit(100)
+        return {"reports": [doc_out(x) async for x in cur]}
+
+    @admin_router.get("/logs")
+    async def _admin_logs(user: dict = Depends(get_current_user), kind: str = "admin", limit: int = 100):
+        await _ensure_admin(user)
+        col = db.admin_logs if kind == "admin" else db.activity_logs
+        cur = col.find({}).sort("created_at", -1).limit(min(limit, 500))
+        return {"logs": [doc_out(x) async for x in cur]}
+
+
+ALL_ROUTERS = [
+    brand_router, influencer_router, campaign_router, deal_router, payment_router,
+    notif_router, msg_router, verify_router, withdraw_router, review_router,
+    report_router, upload_router, admin_router,
+]
