@@ -43,7 +43,8 @@ export default function InfluencerLayout() {
     try {
       await logout();
     } finally {
-      navigate("/", { replace: true });
+      // Hard navigation bypasses ProtectedRoute's synchronous /login redirect.
+      window.location.replace("/");
     }
   };
 

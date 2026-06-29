@@ -41,7 +41,7 @@ export default function Register() {
           : u.role === "influencer"
           ? "/influencer"
           : "/profile";
-      navigate(dest, { replace: true });
+      requestAnimationFrame(() => navigate(dest, { replace: true }));
     } catch (err) {
       setError(formatApiError(err));
     } finally {

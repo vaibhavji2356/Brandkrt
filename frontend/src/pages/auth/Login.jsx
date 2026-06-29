@@ -33,7 +33,12 @@ export default function Login() {
           : u.role === "influencer"
           ? "/influencer"
           : "/profile";
-      navigate(from || roleHome, { replace: true });
+      // Defer one tick so AuthContext.setUser commits before the protected
+      // route mounts; avoids a race where ProtectedRoute sees user=null and
+      // bounces us to /login.
+      requestAnimationFrame(() =>
+        navigate(from || roleHome, { replace: true })
+      );
     } catch (err) {
       setError(formatApiError(err));
     } finally {
