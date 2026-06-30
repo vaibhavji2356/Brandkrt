@@ -41,6 +41,53 @@ app = FastAPI(title="BrandKrt API")
 api_router = APIRouter(prefix="/api")
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
+# -----------------------------------------------------------------------------
+# Middlewares — attached BEFORE any router is included.
+#
+# Order matters. In Starlette the LAST middleware added is the OUTERMOST layer
+# (first to see a request, last to touch a response). We therefore add custom
+# security layers FIRST and CORSMiddleware LAST so that every response — even
+# 403s emitted by the origin-CSRF guard — receives proper
+# Access-Control-Allow-Origin headers and OPTIONS preflight is short-circuited
+# by CORS before any other middleware sees it.
+#
+# Production origins are hard-coded as a safety net so a missing CORS_ORIGINS
+# env var on Render can never break the public frontend.
+# -----------------------------------------------------------------------------
+_DEFAULT_CORS_ORIGINS = [
+    "https://brandkrt.com",
+    "https://www.brandkrt.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+]
+_env_cors = [o.strip().rstrip("/") for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+_seen = set()
+cors_origins = []
+for _o in _env_cors + _DEFAULT_CORS_ORIGINS:
+    if _o and _o not in _seen:
+        _seen.add(_o)
+        cors_origins.append(_o)
+# Accept Vercel preview deployments and any *.brandkrt.com sub-domain via regex
+_cors_origin_regex = r"^https://([a-z0-9-]+\.)?brandkrt\.com$|^https://.*\.vercel\.app$"
+
+_is_prod = os.environ.get("APP_ENV", "development").lower() != "development"
+# 1) innermost — defence-in-depth headers
+app.add_middleware(_security.SecurityHeadersMiddleware, prod=_is_prod)
+# 2) origin-based CSRF guard for state-changing requests
+app.add_middleware(_security.OriginCSRFMiddleware, allow_origins=cors_origins)
+# 3) outermost — CORS (handles preflight + tags every response with ACAO)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=_cors_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
+)
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("brandkrt")
 
@@ -613,15 +660,5 @@ _uploads_dir = _os.environ.get("UPLOAD_ROOT", "./uploads")
 _os.makedirs(_uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
-cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-_is_prod = os.environ.get("APP_ENV", "development").lower() != "development"
-app.add_middleware(_security.SecurityHeadersMiddleware, prod=_is_prod)
-if cors_origins:
-    app.add_middleware(_security.OriginCSRFMiddleware, allow_origins=cors_origins)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins or ["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# (CORS, SecurityHeaders and OriginCSRF middlewares are attached at the top of
+# this file, immediately after `app = FastAPI(...)`, BEFORE any router include.)
