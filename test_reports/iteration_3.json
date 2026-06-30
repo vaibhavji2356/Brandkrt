@@ -12,7 +12,7 @@
     "yarn install --frozen-lockfile succeeds in /app/frontend",
     "yarn build succeeds in /app/frontend and produces build/index.html + build/static/{js,css}",
     "Backend GET /api/health returns 200 {status:ok,service:brandkrt-api}",
-    "Public frontend URL https://krt-staging.preview.emergentagent.com/ returns HTTP 200"
+    "Public frontend URL https://brandkrt-review.preview.emergentagent.com/ returns HTTP 200"
   ],
   "failed": [],
   "action_items": [
