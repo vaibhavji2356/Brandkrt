@@ -497,6 +497,15 @@ domain.init(db, get_current_user)
 domain.register_handlers()
 for r in domain.ALL_ROUTERS:
     api_router.include_router(r)
+
+# Part 4B: collaborations, chat, agreements
+import part4b  # noqa: E402
+
+part4b.init(db, get_current_user)
+part4b.register_handlers()
+for r in part4b.ALL_ROUTERS:
+    api_router.include_router(r)
+
 app.include_router(api_router)
 
 # Static mount for uploaded files (Part 1B)

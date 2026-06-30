@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Building2, Megaphone, Search, Bookmark, BarChart3, LogOut, ChevronRight,
+  MessageCircle, ScrollText,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -14,6 +15,8 @@ const NAV = [
   { to: "/brand/campaigns", icon: Megaphone, label: "Campaigns" },
   { to: "/brand/discover", icon: Search, label: "Discover" },
   { to: "/brand/saved", icon: Bookmark, label: "Saved" },
+  { to: "/brand/agreements", icon: ScrollText, label: "Agreements" },
+  { to: "/brand/messages", icon: MessageCircle, label: "Messages" },
   { to: "/brand/analytics", icon: BarChart3, label: "Analytics" },
 ];
 

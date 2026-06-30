@@ -45,6 +45,13 @@ import BrandAnalytics from "@/pages/brand/BrandAnalytics";
 
 import DealDetails from "@/pages/DealDetails";
 
+// Part 4B — Collaborations · Messages · Agreements
+import InfluencerCollaborations from "@/pages/influencer/InfluencerCollaborations";
+import InfluencerAgreements from "@/pages/influencer/InfluencerAgreements";
+import BrandAgreements from "@/pages/brand/BrandAgreements";
+import Messages from "@/pages/Messages";
+import AgreementDetails from "@/pages/AgreementDetails";
+
 function WithLayout({ children }) {
   return <SiteLayout>{children}</SiteLayout>;
 }
@@ -90,6 +97,9 @@ export default function App() {
               <Route path="deals/:id" element={<DealDetails />} />
               <Route path="earnings" element={<InfluencerEarnings />} />
               <Route path="notifications" element={<InfluencerNotifications />} />
+              <Route path="collaborations" element={<InfluencerCollaborations />} />
+              <Route path="agreements" element={<InfluencerAgreements />} />
+              <Route path="messages" element={<Messages />} />
             </Route>
 
             <Route path="/brand" element={<ProtectedRoute><BrandLayout /></ProtectedRoute>}>
@@ -101,7 +111,11 @@ export default function App() {
               <Route path="discover" element={<BrandDiscover />} />
               <Route path="saved" element={<BrandSaved />} />
               <Route path="analytics" element={<BrandAnalytics />} />
+              <Route path="agreements" element={<BrandAgreements />} />
+              <Route path="messages" element={<Messages />} />
             </Route>
+
+            <Route path="/agreements/:id" element={<ProtectedRoute><AgreementDetails /></ProtectedRoute>} />
 
             <Route path="/dashboard" element={<DashboardRedirect />} />
             <Route path="*" element={<NotFound />} />
