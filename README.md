@@ -118,6 +118,19 @@ See `memory/test_credentials.md`. **Rotate before production.**
 
 ## Roadmap
 
-- Part 2 — Influencer Dashboard (profile builder, deals inbox, earnings)
-- Part 3 — Brand Dashboard (campaign creator, discovery, billing)
-- Part 4 — Stripe escrow, Emergent Google OAuth, Resend, WebSockets, S3
+- Part 2 — Influencer Dashboard (profile builder, deals inbox, earnings) ✅
+- Part 3 — Brand Dashboard (campaign creator, discovery, billing) ✅
+- Part 4 — Collaborations · Chat · Agreements · Performance · Reviews ✅
+- **Part 5 — Production hardening ✅**
+  - Resend email provider (env-driven, falls back to console in dev)
+  - Google OAuth sign-in via Google Identity Services + ID-token verification
+  - Cloudinary file storage with local fallback (`POST /api/uploads/{folder}` and `POST /api/chat/upload` unchanged)
+  - Pluggable payment provider — `stub` (default) or `stripe` via `PAYMENT_PROVIDER`
+  - Security middleware: HSTS in prod, X-Frame-Options DENY, Permissions-Policy, Origin-based CSRF check
+  - In-memory rate limiter on register / forgot-password / contact / OAuth
+  - Production-safe logging with secret redaction
+  - Cross-site cookie config (`COOKIE_SAMESITE=none` when Vercel↔Render are on different origins)
+  - Expanded SEO: canonical, JSON-LD Organization + WebSite + Product, richer OG/Twitter, image sitemap
+  - Vercel security headers + static asset immutable cache
+  - `.env.example` for backend and frontend
+  - Detailed `DEPLOYMENT.md` covering Resend, Google OAuth, Cloudinary, Stripe activation

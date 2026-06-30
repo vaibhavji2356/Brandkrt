@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://brandkrt.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/0.9">
+  <url>
+    <loc>https://brandkrt.com/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://customer-assets.emergentagent.com/job_d59be5d6-95b4-40b5-91b5-592c9017c3b7/artifacts/ttnp39rd_file_00000000131871fa8a8d4d0e1cad256c.png</image:loc>
+      <image:caption>BrandKrt — premium influencer marketing marketplace</image:caption>
+    </image:image>
+  </url>
   <url><loc>https://brandkrt.com/about</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://brandkrt.com/contact</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://brandkrt.com/help</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://brandkrt.com/register</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://brandkrt.com/login</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
-  <url><loc>https://brandkrt.com/register</loc><changefreq>yearly</changefreq><priority>0.8</priority></url>
   <url><loc>https://brandkrt.com/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://brandkrt.com/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
   <url><loc>https://brandkrt.com/refund</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>

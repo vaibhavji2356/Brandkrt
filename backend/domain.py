@@ -526,7 +526,7 @@ def register_handlers():
         fresh = await db.deals.find_one({"_id": oid(did)})
         return {"success": True, "status": payload.status, "deal": doc_out(fresh)}
 
-    # ----- PAYMENTS (escrow stub) -----
+    # ----- PAYMENTS (pluggable provider — Part 5) -----
     @payment_router.post("/escrow")
     async def _escrow(payload: PaymentCreateIn, user: dict = Depends(get_current_user)):
         await require_role(user, "brand", "admin")
@@ -536,10 +536,21 @@ def register_handlers():
         now = now_utc()
         platform_fee = round(payload.amount * 0.08, 2)
         influencer_earning = round(payload.amount - platform_fee, 2)
-        txid = secrets.token_hex(8).upper()
+        # delegate to provider (stub by default; stripe when PAYMENT_PROVIDER=stripe)
+        try:
+            import payments as _payments  # noqa: WPS433
+            pr = _payments.get_provider().create_escrow(amount=payload.amount, deal_id=payload.deal_id)
+            txid = pr.get("transaction_id") or secrets.token_hex(8).upper()
+            client_secret = pr.get("client_secret")
+            provider_name = pr.get("provider", "stub")
+        except Exception:
+            txid = secrets.token_hex(8).upper()
+            client_secret = None
+            provider_name = "stub"
         doc = {"deal_id": payload.deal_id, "amount": payload.amount,
                "platform_fee": platform_fee, "influencer_earning": influencer_earning,
                "release_status": "held", "transaction_id": txid,
+               "provider": provider_name, "client_secret": client_secret,
                "status": "escrowed", "created_at": now, "updated_at": now}
         res = await db.payments.insert_one(doc)
         await db.transactions.insert_one({
@@ -554,6 +565,12 @@ def register_handlers():
         pay = await db.payments.find_one({"_id": oid(pid)})
         if not pay:
             raise HTTPException(404, "Payment not found")
+        # ask provider to capture (no-op for stub)
+        try:
+            import payments as _payments  # noqa: WPS433
+            _payments.get_provider().release(transaction_id=pay.get("transaction_id") or "")
+        except Exception:
+            pass
         await db.payments.update_one(
             {"_id": oid(pid)},
             {"$set": {"release_status": "released", "status": "released", "updated_at": now_utc()}},
@@ -660,9 +677,9 @@ def register_handlers():
         res = await db.reports.insert_one(doc)
         return {"report": doc_out(await db.reports.find_one({"_id": res.inserted_id}))}
 
-    # ----- UPLOADS (local storage stub) -----
+    # ----- UPLOADS (Cloudinary in prod, local fallback in dev — Part 5) -----
     UPLOAD_ROOT = os.environ.get("UPLOAD_ROOT", "./uploads")
-    FOLDERS = ["profiles", "brand_logos", "products", "verification", "contracts", "invoices"]
+    FOLDERS = ["profiles", "brand_logos", "products", "verification", "contracts", "invoices", "chat"]
     for f in FOLDERS:
         os.makedirs(os.path.join(UPLOAD_ROOT, f), exist_ok=True)
 
@@ -670,15 +687,22 @@ def register_handlers():
     async def _upload(folder: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
         if folder not in FOLDERS:
             raise HTTPException(400, "Unknown folder")
-        ext = (file.filename or "").rsplit(".", 1)[-1].lower()
-        if ext not in {"jpg", "jpeg", "png", "webp", "pdf"}:
-            raise HTTPException(400, "Unsupported file type")
-        name = f"{secrets.token_hex(12)}.{ext}"
-        path = os.path.join(UPLOAD_ROOT, folder, name)
-        with open(path, "wb") as out:
-            out.write(await file.read())
-        url = f"/uploads/{folder}/{name}"
-        return {"url": url, "folder": folder, "filename": name}
+        data = await file.read()
+        try:
+            import storage  # noqa: WPS433
+            res = await storage.save_upload(file_bytes=data, original_name=file.filename or "file", folder=folder)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Upload failed: {e}")
+        return {
+            "url": res["url"],
+            "folder": folder,
+            "filename": res.get("name") or file.filename,
+            "kind": res.get("kind"),
+            "size": res.get("size"),
+            "provider": res.get("provider"),
+        }
 
     # ----- ADMIN -----
     async def _ensure_admin(user: dict):

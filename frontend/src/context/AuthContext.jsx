@@ -26,6 +26,12 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  const googleSignIn = async (credential) => {
+    const { data } = await api.post("/auth/google", { credential });
+    setUser(data.user);
+    return data.user;
+  };
+
   const register = async (payload) => {
     const { data } = await api.post("/auth/register", payload);
     setUser(data.user);
@@ -55,7 +61,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, refresh, login, register, logout,
+      user, loading, refresh, login, register, logout, googleSignIn,
       forgotPassword, resetPassword, verifyEmail, formatApiError,
     }}>
       {children}

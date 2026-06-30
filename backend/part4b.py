@@ -516,19 +516,15 @@ def register_handlers():
     @chat_router.post("/upload")
     async def _chat_upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
         filename = (file.filename or "").strip() or "file"
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        allowed_image = {"jpg", "jpeg", "png", "webp", "gif"}
-        allowed_file = {"pdf", "doc", "docx", "txt", "csv", "xlsx", "ppt", "pptx", "zip"}
-        if ext not in allowed_image and ext not in allowed_file:
-            raise HTTPException(400, "Unsupported file type")
-        kind = "image" if ext in allowed_image else "file"
-        name = f"{secrets.token_hex(12)}.{ext}"
-        path = os.path.join(CHAT_UPLOAD_ROOT, "chat", name)
         data = await file.read()
-        with open(path, "wb") as out:
-            out.write(data)
-        url = f"/uploads/chat/{name}"
-        return {"url": url, "name": filename, "kind": kind, "size": len(data)}
+        try:
+            import storage  # noqa: WPS433
+            res = await storage.save_upload(file_bytes=data, original_name=filename, folder="chat")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"Upload failed: {e}")
+        return {"url": res["url"], "name": filename, "kind": res.get("kind", "file"), "size": res.get("size", len(data)), "provider": res.get("provider")}
 
     # =========================================================
     # AGREEMENTS (Digital Contracts)

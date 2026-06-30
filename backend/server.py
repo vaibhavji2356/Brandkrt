@@ -18,6 +18,11 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
 
+# Part 5 production modules
+import security as _security  # noqa: E402
+import oauth as _oauth  # noqa: E402
+_security.configure_logging()
+
 # -----------------------------------------------------------------------------
 # Config
 # -----------------------------------------------------------------------------
@@ -75,10 +80,13 @@ def create_refresh_token(user_id: str) -> str:
 
 
 def set_auth_cookies(response: Response, access: str, refresh: str) -> None:
-    secure = os.environ.get("APP_ENV", "development") != "development"
-    response.set_cookie("access_token", access, httponly=True, secure=secure, samesite="lax",
+    env = os.environ.get("APP_ENV", "development")
+    secure = env != "development"
+    # cross-site cookies (Vercel <-> Render are different origins) require SameSite=None; only valid with Secure
+    samesite = os.environ.get("COOKIE_SAMESITE") or ("none" if secure else "lax")
+    response.set_cookie("access_token", access, httponly=True, secure=secure, samesite=samesite,
                         max_age=ACCESS_TOKEN_MINUTES * 60, path="/")
-    response.set_cookie("refresh_token", refresh, httponly=True, secure=secure, samesite="lax",
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=secure, samesite=samesite,
                         max_age=REFRESH_TOKEN_DAYS * 24 * 60 * 60, path="/")
 
 
@@ -122,9 +130,29 @@ class EmailService:
         await self._send(to, msg["subject"], msg["text"], msg.get("html"))
 
     async def _send(self, to: str, subject: str, body: str, html: str = None) -> None:
-        if self.provider == "console":
-            logger.info("[EMAIL:%s] to=%s subject=%s\n%s", self.provider, to, subject, body)
-        # NOTE: Resend / SendGrid providers can be plugged in here in Part 2.
+        if self.provider == "resend":
+            try:
+                import resend  # type: ignore
+                api_key = os.environ.get("RESEND_API_KEY")
+                if not api_key:
+                    logger.warning("[EMAIL] EMAIL_PROVIDER=resend but RESEND_API_KEY is not set; falling back to console")
+                else:
+                    resend.api_key = api_key
+                    params = {
+                        "from": self.from_addr,
+                        "to": [to],
+                        "subject": subject,
+                        "text": body,
+                    }
+                    if html:
+                        params["html"] = html
+                    resend.Emails.send(params)
+                    logger.info("[EMAIL:resend] sent to=%s subject=%s", to, subject)
+                    return
+            except Exception as e:
+                logger.warning("[EMAIL:resend] failed (%s) - falling back to console", e)
+        # console provider (default / fallback)
+        logger.info("[EMAIL:%s] to=%s subject=%s\n%s", self.provider or "console", to, subject, body)
 
 
 email_service = EmailService()
@@ -336,7 +364,8 @@ async def refresh_token(request: Request, response: Response):
 
 
 @auth_router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordIn):
+async def forgot_password(payload: ForgotPasswordIn, request: Request,
+                          _rl: None = Depends(_security.limiter_dependency("forgot", limit=5, window=600))):
     email = payload.email.lower().strip()
     user = await db.users.find_one({"email": email})
     # Always respond success to avoid email enumeration
@@ -376,6 +405,58 @@ async def verify_email(payload: VerifyEmailIn):
     await db.users.update_one({"_id": ObjectId(rec["user_id"])}, {"$set": {"email_verified": True}})
     await db.verification_tokens.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
     return {"success": True, "message": "Email verified successfully"}
+
+
+# ----- Part 5: Google OAuth ID-token sign-in --------------------------------
+class GoogleSignInIn(BaseModel):
+    credential: str = Field(min_length=20)
+
+
+@auth_router.get("/google/config")
+async def google_config():
+    """Frontend uses this to know whether to render the Google button."""
+    return {"enabled": _oauth.is_configured(), "client_id": os.environ.get("GOOGLE_CLIENT_ID")}
+
+
+@auth_router.post("/google")
+async def google_signin(payload: GoogleSignInIn, request: Request, response: Response,
+                        _rl: None = Depends(_security.limiter_dependency("oauth", limit=20, window=600))):
+    info = _oauth.verify_google_id_token(payload.credential)
+    email = info["email"]
+    now = datetime.now(timezone.utc)
+    user = await db.users.find_one({"email": email})
+    if not user:
+        doc = {
+            "email": email,
+            "name": info.get("name") or email.split("@")[0],
+            "role": "influencer",
+            "password_hash": hash_password(secrets.token_urlsafe(24)),
+            "email_verified": bool(info.get("email_verified", True)),
+            "avatar_url": info.get("picture"),
+            "cover_url": None,
+            "google_sub": info.get("sub"),
+            "auth_provider": "google",
+            "created_at": now,
+            "updated_at": now,
+        }
+        res = await db.users.insert_one(doc)
+        doc["_id"] = res.inserted_id
+        user = doc
+    else:
+        # link google sub on next sign-in if missing
+        if not user.get("google_sub"):
+            await db.users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"google_sub": info.get("sub"), "email_verified": True,
+                          "avatar_url": user.get("avatar_url") or info.get("picture"),
+                          "updated_at": now}},
+            )
+            user = await db.users.find_one({"_id": user["_id"]})
+
+    access = create_access_token(str(user["_id"]), email, user.get("role", "influencer"))
+    refresh = create_refresh_token(str(user["_id"]))
+    set_auth_cookies(response, access, refresh)
+    return {"user": serialize_user(user), "access_token": access}
 
 
 @auth_router.post("/resend-verification")
@@ -441,7 +522,8 @@ async def delete_account(response: Response, user: dict = Depends(get_current_us
 # Contact form
 # -----------------------------------------------------------------------------
 @api_router.post("/contact")
-async def contact(payload: ContactIn):
+async def contact(payload: ContactIn, request: Request,
+                  _rl: None = Depends(_security.limiter_dependency("contact", limit=10, window=600))):
     now = datetime.now(timezone.utc)
     await db.contact_messages.insert_one({**payload.model_dump(), "created_at": now})
     logger.info("[CONTACT] %s <%s> - %s", payload.name, payload.email, payload.subject)
@@ -532,6 +614,10 @@ _os.makedirs(_uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+_is_prod = os.environ.get("APP_ENV", "development").lower() != "development"
+app.add_middleware(_security.SecurityHeadersMiddleware, prod=_is_prod)
+if cors_origins:
+    app.add_middleware(_security.OriginCSRFMiddleware, allow_origins=cors_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins or ["http://localhost:3000"],

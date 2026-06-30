@@ -24,3 +24,8 @@ pandas>=2.2.0
 numpy>=1.26.0
 python-multipart>=0.0.9
 typer>=0.9.0
+# --- Part 5 production integrations (env-driven; safe to install everywhere) ---
+resend>=2.0.0
+cloudinary>=1.40.0
+google-auth>=2.30.0
+stripe>=10.0.0
