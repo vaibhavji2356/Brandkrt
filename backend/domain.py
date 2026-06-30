@@ -119,14 +119,28 @@ class BrandProfileIn(BaseModel):
     company_name: str
     owner_name: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     gst_number: Optional[str] = None
+    registration_number: Optional[str] = None
     registration_proof_url: Optional[str] = None
     company_address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    pin_code: Optional[str] = None
     industry: Optional[str] = None
     website: Optional[str] = None
+    instagram: Optional[str] = None
+    facebook: Optional[str] = None
+    youtube: Optional[str] = None
+    description: Optional[str] = None
     logo_url: Optional[str] = None
+    cover_url: Optional[str] = None
     product_categories: List[str] = []
+    product_images: List[str] = []
+    documents: List[str] = []
     bank_details: Optional[dict] = None
+    upi: Optional[str] = None
 
 
 @brand_router.put("/me")
@@ -176,12 +190,22 @@ class InfluencerProfileIn(BaseModel):
 class CampaignIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     title: str
+    description: Optional[str] = None
     platform: Literal["instagram", "youtube", "facebook", "linkedin", "tiktok", "other"]
+    content_type: Optional[str] = None
+    required_followers: Optional[int] = 0
+    required_avg_views: Optional[int] = 0
     budget: float = Field(ge=0)
+    payment_type: Optional[str] = None
     deadline: Optional[str] = None
     deliverables: List[str] = []
     product_details: Optional[str] = None
+    product_images: List[str] = []
     promotion_links: List[str] = []
+    visibility: Optional[str] = None
+    target_categories: List[str] = []
+    preferred_language: Optional[str] = None
+    preferred_location: Optional[str] = None
 
 
 # ============== DEAL ==============

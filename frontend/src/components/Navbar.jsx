@@ -76,8 +76,8 @@ export default function Navbar() {
                   <span className="text-xs text-muted-foreground">{user.email}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {(user.role === "influencer" || user.role === "admin") && (
-                  <DropdownMenuItem data-testid="menu-dashboard" onClick={() => navigate(user.role === "admin" ? "/admin" : "/influencer")}>
+                {(user.role === "influencer" || user.role === "admin" || user.role === "brand") && (
+                  <DropdownMenuItem data-testid="menu-dashboard" onClick={() => navigate(user.role === "admin" ? "/admin" : user.role === "brand" ? "/brand" : "/influencer")}>
                     <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                   </DropdownMenuItem>
                 )}

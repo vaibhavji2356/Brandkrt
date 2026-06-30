@@ -34,6 +34,15 @@ import InfluencerEarnings from "@/pages/influencer/InfluencerEarnings";
 import InfluencerNotifications from "@/pages/influencer/InfluencerNotifications";
 import DashboardRedirect from "@/pages/influencer/DashboardRedirect";
 
+import BrandLayout from "@/pages/brand/BrandLayout";
+import BrandOverview from "@/pages/brand/BrandOverview";
+import BrandProfile from "@/pages/brand/BrandProfile";
+import BrandCampaigns from "@/pages/brand/BrandCampaigns";
+import BrandCampaignDetails from "@/pages/brand/BrandCampaignDetails";
+import BrandDiscover from "@/pages/brand/BrandDiscover";
+import BrandSaved from "@/pages/brand/BrandSaved";
+import BrandAnalytics from "@/pages/brand/BrandAnalytics";
+
 function WithLayout({ children }) {
   return <SiteLayout>{children}</SiteLayout>;
 }
@@ -78,6 +87,16 @@ export default function App() {
               <Route path="campaigns" element={<InfluencerCampaigns />} />
               <Route path="earnings" element={<InfluencerEarnings />} />
               <Route path="notifications" element={<InfluencerNotifications />} />
+            </Route>
+
+            <Route path="/brand" element={<ProtectedRoute><BrandLayout /></ProtectedRoute>}>
+              <Route index element={<BrandOverview />} />
+              <Route path="profile" element={<BrandProfile />} />
+              <Route path="campaigns" element={<BrandCampaigns />} />
+              <Route path="campaigns/:id" element={<BrandCampaignDetails />} />
+              <Route path="discover" element={<BrandDiscover />} />
+              <Route path="saved" element={<BrandSaved />} />
+              <Route path="analytics" element={<BrandAnalytics />} />
             </Route>
 
             <Route path="/dashboard" element={<DashboardRedirect />} />
