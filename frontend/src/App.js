@@ -52,6 +52,12 @@ import BrandAgreements from "@/pages/brand/BrandAgreements";
 import Messages from "@/pages/Messages";
 import AgreementDetails from "@/pages/AgreementDetails";
 
+// Part 4C — Performance · Reports · Reviews
+import InfluencerAnalytics from "@/pages/influencer/InfluencerAnalytics";
+import BrandPerformance from "@/pages/brand/BrandPerformance";
+import DealMetrics from "@/pages/DealMetrics";
+import CampaignReport from "@/pages/CampaignReport";
+
 function WithLayout({ children }) {
   return <SiteLayout>{children}</SiteLayout>;
 }
@@ -100,6 +106,7 @@ export default function App() {
               <Route path="collaborations" element={<InfluencerCollaborations />} />
               <Route path="agreements" element={<InfluencerAgreements />} />
               <Route path="messages" element={<Messages />} />
+              <Route path="analytics" element={<InfluencerAnalytics />} />
             </Route>
 
             <Route path="/brand" element={<ProtectedRoute><BrandLayout /></ProtectedRoute>}>
@@ -113,9 +120,12 @@ export default function App() {
               <Route path="analytics" element={<BrandAnalytics />} />
               <Route path="agreements" element={<BrandAgreements />} />
               <Route path="messages" element={<Messages />} />
+              <Route path="performance" element={<BrandPerformance />} />
             </Route>
 
             <Route path="/agreements/:id" element={<ProtectedRoute><AgreementDetails /></ProtectedRoute>} />
+            <Route path="/deals/:id/metrics" element={<ProtectedRoute><DealMetrics /></ProtectedRoute>} />
+            <Route path="/deals/:id/report" element={<ProtectedRoute><CampaignReport /></ProtectedRoute>} />
 
             <Route path="/dashboard" element={<DashboardRedirect />} />
             <Route path="*" element={<NotFound />} />

@@ -463,6 +463,14 @@ async def on_startup():
     await db.verification_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("identifier")
     await domain.setup_indexes(db)
+    try:
+        await part4b.setup_part4b_indexes(db)
+    except Exception as _e:
+        logger.warning("part4b index setup failed: %s", _e)
+    try:
+        await part4c.setup_part4c_indexes(db)
+    except Exception as _e:
+        logger.warning("part4c index setup failed: %s", _e)
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@brandkrt.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
@@ -504,6 +512,14 @@ import part4b  # noqa: E402
 part4b.init(db, get_current_user)
 part4b.register_handlers()
 for r in part4b.ALL_ROUTERS:
+    api_router.include_router(r)
+
+# Part 4C: performance, reviews, completion reports
+import part4c  # noqa: E402
+
+part4c.init(db, get_current_user)
+part4c.register_handlers()
+for r in part4c.ALL_ROUTERS:
     api_router.include_router(r)
 
 app.include_router(api_router)
