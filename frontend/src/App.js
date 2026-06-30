@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "@/index.css";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
@@ -25,6 +25,14 @@ import Settings from "@/pages/Settings";
 import AdminLayout from "@/pages/admin/AdminLayout";
 import AdminOverview from "@/pages/admin/AdminOverview";
 import { AdminUsers, AdminVerification, AdminWithdrawals, AdminReports, AdminLogs } from "@/pages/admin/AdminSections";
+
+import InfluencerLayout from "@/pages/influencer/InfluencerLayout";
+import InfluencerOverview from "@/pages/influencer/InfluencerOverview";
+import InfluencerProfile from "@/pages/influencer/InfluencerProfile";
+import InfluencerCampaigns from "@/pages/influencer/InfluencerCampaigns";
+import InfluencerEarnings from "@/pages/influencer/InfluencerEarnings";
+import InfluencerNotifications from "@/pages/influencer/InfluencerNotifications";
+import DashboardRedirect from "@/pages/influencer/DashboardRedirect";
 
 function WithLayout({ children }) {
   return <SiteLayout>{children}</SiteLayout>;
@@ -64,7 +72,15 @@ export default function App() {
               <Route path="logs" element={<AdminLogs />} />
             </Route>
 
-            <Route path="/dashboard" element={<Navigate to="/profile" replace />} />
+            <Route path="/influencer" element={<ProtectedRoute><InfluencerLayout /></ProtectedRoute>}>
+              <Route index element={<InfluencerOverview />} />
+              <Route path="profile" element={<InfluencerProfile />} />
+              <Route path="campaigns" element={<InfluencerCampaigns />} />
+              <Route path="earnings" element={<InfluencerEarnings />} />
+              <Route path="notifications" element={<InfluencerNotifications />} />
+            </Route>
+
+            <Route path="/dashboard" element={<DashboardRedirect />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

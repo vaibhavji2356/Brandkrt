@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Menu, X, LogOut, User as UserIcon, Settings as SettingsIcon } from "lucide-react";
+import { Menu, X, LogOut, User as UserIcon, Settings as SettingsIcon, LayoutDashboard } from "lucide-react";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
@@ -76,6 +76,11 @@ export default function Navbar() {
                   <span className="text-xs text-muted-foreground">{user.email}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {(user.role === "influencer" || user.role === "admin") && (
+                  <DropdownMenuItem data-testid="menu-dashboard" onClick={() => navigate(user.role === "admin" ? "/admin" : "/influencer")}>
+                    <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem data-testid="menu-profile" onClick={() => navigate("/profile")}>
                   <UserIcon className="mr-2 h-4 w-4" /> Profile
                 </DropdownMenuItem>
