@@ -43,6 +43,8 @@ import BrandDiscover from "@/pages/brand/BrandDiscover";
 import BrandSaved from "@/pages/brand/BrandSaved";
 import BrandAnalytics from "@/pages/brand/BrandAnalytics";
 
+import DealDetails from "@/pages/DealDetails";
+
 function WithLayout({ children }) {
   return <SiteLayout>{children}</SiteLayout>;
 }
@@ -85,6 +87,7 @@ export default function App() {
               <Route index element={<InfluencerOverview />} />
               <Route path="profile" element={<InfluencerProfile />} />
               <Route path="campaigns" element={<InfluencerCampaigns />} />
+              <Route path="deals/:id" element={<DealDetails />} />
               <Route path="earnings" element={<InfluencerEarnings />} />
               <Route path="notifications" element={<InfluencerNotifications />} />
             </Route>
@@ -94,6 +97,7 @@ export default function App() {
               <Route path="profile" element={<BrandProfile />} />
               <Route path="campaigns" element={<BrandCampaigns />} />
               <Route path="campaigns/:id" element={<BrandCampaignDetails />} />
+              <Route path="deals/:id" element={<DealDetails />} />
               <Route path="discover" element={<BrandDiscover />} />
               <Route path="saved" element={<BrandSaved />} />
               <Route path="analytics" element={<BrandAnalytics />} />

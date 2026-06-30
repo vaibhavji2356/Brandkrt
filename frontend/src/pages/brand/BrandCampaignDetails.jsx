@@ -184,17 +184,23 @@ export default function BrandCampaignDetails() {
               />
             )}
             {deals.map((d) => (
-              <div key={d.id} className="py-3 flex items-center justify-between gap-3" data-testid={`campaign-deal-${d.id}`}>
+              <button
+                type="button"
+                key={d.id}
+                onClick={() => navigate(`/brand/deals/${d.id}`)}
+                className="w-full text-left py-3 flex items-center justify-between gap-3 hover:bg-accent/40 transition-colors"
+                data-testid={`campaign-deal-${d.id}`}
+              >
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-primary dark:text-white truncate">
                     ₹{Number(d.amount || 0).toLocaleString()}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
-                    {d.note || "—"}
+                    {d.note || "Open deal to view timeline →"}
                   </div>
                 </div>
                 <StatusChip value={d.status} />
-              </div>
+              </button>
             ))}
           </div>
         </div>

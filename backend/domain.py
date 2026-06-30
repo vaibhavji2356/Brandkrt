@@ -209,8 +209,15 @@ class CampaignIn(BaseModel):
 
 
 # ============== DEAL ==============
-DEAL_STATUSES = ["offer_sent", "offer_accepted", "product_shipped", "promotion_pending",
-                 "promotion_live", "completed", "cancelled"]
+DEAL_STATUSES = [
+    "offer_sent", "offer_accepted",
+    "product_shipped", "product_received",
+    "content_in_progress", "content_submitted", "brand_review",
+    "approved", "scheduled", "published",
+    # legacy statuses kept for backwards compatibility
+    "promotion_pending", "promotion_live",
+    "completed", "cancelled",
+]
 
 
 class DealCreateIn(BaseModel):
@@ -221,8 +228,17 @@ class DealCreateIn(BaseModel):
 
 
 class DealStatusIn(BaseModel):
-    status: Literal["offer_sent", "offer_accepted", "product_shipped", "promotion_pending",
-                    "promotion_live", "completed", "cancelled"]
+    model_config = ConfigDict(extra="ignore")
+    status: Literal[
+        "offer_sent", "offer_accepted",
+        "product_shipped", "product_received",
+        "content_in_progress", "content_submitted", "brand_review",
+        "approved", "scheduled", "published",
+        "promotion_pending", "promotion_live",
+        "completed", "cancelled",
+    ]
+    deliverables: Optional[dict] = None
+    note: Optional[str] = None
 
 
 # ============== PAYMENT (escrow stub) ==============
@@ -437,8 +453,78 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(did)})
         if not deal:
             raise HTTPException(404, "Deal not found")
-        await db.deals.update_one({"_id": oid(did)}, {"$set": {"status": payload.status, "updated_at": now_utc()}})
-        return {"success": True, "status": payload.status}
+        now = now_utc()
+        update = {"status": payload.status, "updated_at": now}
+        if payload.deliverables is not None:
+            merged = {**(deal.get("deliverables_links") or {}), **{k: v for k, v in payload.deliverables.items() if v is not None}}
+            update["deliverables_links"] = merged
+        if payload.note is not None:
+            update["last_note"] = payload.note
+        # append a tiny history entry
+        history_entry = {"status": payload.status, "by": str(user["_id"]), "role": user.get("role"), "at": now}
+        await db.deals.update_one(
+            {"_id": oid(did)},
+            {"$set": update, "$push": {"status_history": history_entry}},
+        )
+
+        # ----- notifications on key transitions -----
+        async def _brand_user_id():
+            if not deal.get("brand_id"):
+                return None
+            brand = await db.brands.find_one({"_id": oid(deal["brand_id"])})
+            return brand.get("user_id") if brand else None
+
+        async def _inf_user_id():
+            if not deal.get("influencer_id"):
+                return None
+            inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])})
+            return inf.get("user_id") if inf else None
+
+        prev = deal.get("status")
+        meta = {"deal_id": did}
+        try:
+            if payload.status == "offer_accepted" and prev != "offer_accepted":
+                buid = await _brand_user_id()
+                if buid:
+                    await notify(buid, "deal.accepted", "Offer accepted",
+                                 "A creator accepted your campaign offer.", meta)
+            elif payload.status == "cancelled" and prev != "cancelled":
+                # treat rejection (creator side) vs general cancellation
+                other = await _brand_user_id() if user.get("role") == "influencer" else await _inf_user_id()
+                if other:
+                    title = "Offer declined" if user.get("role") == "influencer" else "Deal cancelled"
+                    await notify(other, "deal.cancelled", title, "The deal has been cancelled.", meta)
+            elif payload.status == "product_shipped":
+                iuid = await _inf_user_id()
+                if iuid:
+                    await notify(iuid, "deal.shipped", "Product shipped",
+                                 "The brand has shipped the product for your campaign.", meta)
+            elif payload.status == "content_submitted":
+                buid = await _brand_user_id()
+                if buid:
+                    await notify(buid, "deal.submission", "Content submitted for review",
+                                 "The creator has submitted content for your campaign.", meta)
+            elif payload.status == "approved":
+                iuid = await _inf_user_id()
+                if iuid:
+                    await notify(iuid, "deal.approved", "Content approved",
+                                 "Great news — the brand approved your content.", meta)
+            elif payload.status == "published":
+                buid = await _brand_user_id()
+                if buid:
+                    await notify(buid, "deal.published", "Post is live",
+                                 "The creator has published the campaign content.", meta)
+            elif payload.status == "completed":
+                iuid = await _inf_user_id()
+                if iuid:
+                    await notify(iuid, "deal.completed", "Deal completed",
+                                 "Your campaign has been marked completed.", meta)
+        except Exception:
+            pass
+
+        await log_activity(str(user["_id"]), "deal.status", "deal", did, {"to": payload.status})
+        fresh = await db.deals.find_one({"_id": oid(did)})
+        return {"success": True, "status": payload.status, "deal": doc_out(fresh)}
 
     # ----- PAYMENTS (escrow stub) -----
     @payment_router.post("/escrow")
@@ -465,9 +551,30 @@ def register_handlers():
     @payment_router.post("/{pid}/release")
     async def _release(pid: str, user: dict = Depends(get_current_user)):
         await require_role(user, "admin", "brand")
-        await db.payments.update_one({"_id": oid(pid)},
-                                     {"$set": {"release_status": "released", "status": "released",
-                                               "updated_at": now_utc()}})
+        pay = await db.payments.find_one({"_id": oid(pid)})
+        if not pay:
+            raise HTTPException(404, "Payment not found")
+        await db.payments.update_one(
+            {"_id": oid(pid)},
+            {"$set": {"release_status": "released", "status": "released", "updated_at": now_utc()}},
+        )
+        # notify the creator that funds are released
+        try:
+            deal = await db.deals.find_one({"_id": oid(pay["deal_id"])}) if pay.get("deal_id") else None
+            if deal and deal.get("influencer_id"):
+                inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])})
+                if inf:
+                    earning = pay.get("influencer_earning", 0)
+                    await notify(
+                        inf["user_id"],
+                        "payment.released",
+                        "Payment released",
+                        f"Your earnings of \u20b9{earning} for this campaign are now in your wallet.",
+                        {"deal_id": str(deal["_id"]), "payment_id": pid},
+                    )
+        except Exception:
+            pass
+        await log_admin(str(user["_id"]), "payment.release", pid)
         return {"success": True}
 
     @payment_router.get("")

@@ -45,6 +45,19 @@ const STATUS_STYLES = {
   escrowed: "bg-secondary/15 text-secondary",
   released: "bg-success/10 text-success",
   held: "bg-warning/10 text-warning",
+  // Brand ↔ Influencer deal lifecycle
+  offer_sent: "bg-warning/10 text-warning",
+  offer_accepted: "bg-success/10 text-success",
+  product_shipped: "bg-secondary/15 text-secondary",
+  product_received: "bg-secondary/15 text-secondary",
+  content_in_progress: "bg-warning/10 text-warning",
+  content_submitted: "bg-secondary/15 text-secondary",
+  brand_review: "bg-warning/10 text-warning",
+  scheduled: "bg-secondary/15 text-secondary",
+  published: "bg-success/10 text-success",
+  // legacy
+  promotion_pending: "bg-warning/10 text-warning",
+  promotion_live: "bg-success/10 text-success",
 };
 
 export function StatusChip({ value, className = "" }) {
