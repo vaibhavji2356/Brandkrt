@@ -5,12 +5,19 @@
 
 const GIS_SRC = "https://accounts.google.com/gsi/client";
 let _loaded = null;
-
-export const GOOGLE_CLIENT_ID =
+let _clientId =
   (typeof process !== "undefined" && process.env && process.env.REACT_APP_GOOGLE_CLIENT_ID) || "";
 
+export function getGoogleClientId() {
+  return _clientId;
+}
+
+export function setGoogleClientId(clientId) {
+  _clientId = clientId || "";
+}
+
 export function isGoogleConfigured() {
-  return !!GOOGLE_CLIENT_ID;
+  return !!getGoogleClientId();
 }
 
 export function loadGoogleIdentity() {
@@ -42,15 +49,15 @@ export function loadGoogleIdentity() {
  * Uses GIS button rendering inside the given container element (preferred) — if
  * no container is passed we fall back to GIS prompt() one-tap behaviour.
  */
-export async function requestGoogleCredential({ containerEl } = {}) {
-  if (!GOOGLE_CLIENT_ID) {
-    throw new Error("Google sign-in is not configured (REACT_APP_GOOGLE_CLIENT_ID missing)");
+export async function requestGoogleCredential({ containerEl, clientId = getGoogleClientId() } = {}) {
+  if (!clientId) {
+    throw new Error("Google sign-in is not configured (client ID missing)");
   }
   const google = await loadGoogleIdentity();
   return new Promise((resolve, reject) => {
     try {
       google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
+        client_id: clientId,
         ux_mode: "popup",
         callback: (resp) => {
           if (resp && resp.credential) resolve(resp.credential);

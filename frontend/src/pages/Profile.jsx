@@ -1,11 +1,29 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import SiteLayout from "@/components/SiteLayout";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import api, { formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { ShieldCheck, Mail, BadgeCheck } from "lucide-react";
 import { Link } from "react-router-dom";
+
+function ProfileAvatar({ src, name }) {
+  const [imgError, setImgError] = useState(false);
+  const safeSrc = typeof src === "string" && src.trim() ? src.trim() : "";
+  const initials = (name || "U").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+
+  useEffect(() => {
+    setImgError(false);
+  }, [safeSrc]);
+
+  return (
+    <Avatar className="h-24 w-24 rounded-2xl border-4 border-background bg-secondary text-secondary-foreground shadow-luxe-sm overflow-hidden">
+      {safeSrc && !imgError ? <AvatarImage src={safeSrc} alt="" onError={() => setImgError(true)} /> : null}
+      <AvatarFallback className="rounded-2xl bg-secondary text-secondary-foreground text-2xl font-display font-semibold">{initials}</AvatarFallback>
+    </Avatar>
+  );
+}
 
 export default function Profile() {
   const { user, refresh } = useAuth();
@@ -46,8 +64,8 @@ export default function Profile() {
             <div className="h-40 bg-primary" style={{ backgroundImage: "radial-gradient(circle at 20% 50%, rgba(212,175,55,0.4), transparent 50%)" }} />
             <div className="px-8 pb-8">
               <div className="flex flex-col sm:flex-row sm:items-end sm:gap-6 -mt-12">
-                <div className="h-24 w-24 rounded-2xl border-4 border-background bg-secondary text-secondary-foreground flex items-center justify-center text-2xl font-display font-semibold shadow-luxe-sm" data-testid="profile-avatar">
-                  {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover rounded-2xl" /> : initials}
+                <div data-testid="profile-avatar">
+                  <ProfileAvatar src={avatar} name={user?.name || user?.email} />
                 </div>
                 <div className="mt-4 sm:mt-0">
                   <h1 className="text-2xl md:text-3xl font-display font-light tracking-tight text-primary dark:text-white" data-testid="profile-name">{user?.name}</h1>

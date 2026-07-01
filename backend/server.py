@@ -462,7 +462,7 @@ class GoogleSignInIn(BaseModel):
 @auth_router.get("/google/config")
 async def google_config():
     """Frontend uses this to know whether to render the Google button."""
-    return {"enabled": _oauth.is_configured(), "client_id": os.environ.get("GOOGLE_CLIENT_ID")}
+    return {"enabled": _oauth.is_configured(), "client_id": _oauth.get_client_id()}
 
 
 @auth_router.post("/google")

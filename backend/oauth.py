@@ -18,16 +18,23 @@ from fastapi import HTTPException
 
 logger = logging.getLogger("brandkrt.oauth")
 
-_CLIENT_ID: Optional[str] = os.environ.get("GOOGLE_CLIENT_ID")
+
+def get_client_id() -> Optional[str]:
+    for env_name in ("GOOGLE_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_ID", "REACT_APP_GOOGLE_CLIENT_ID"):
+        value = os.environ.get(env_name)
+        if value and value.strip():
+            return value.strip()
+    return None
 
 
 def is_configured() -> bool:
-    return bool(_CLIENT_ID)
+    return bool(get_client_id())
 
 
 def verify_google_id_token(token: str) -> dict:
     """Return {email, name, picture, sub, email_verified} or raise HTTPException."""
-    if not _CLIENT_ID:
+    client_id = get_client_id()
+    if not client_id:
         raise HTTPException(503, "Google sign-in is not configured on this server")
     if not token:
         raise HTTPException(400, "Missing Google credential")
@@ -38,7 +45,7 @@ def verify_google_id_token(token: str) -> dict:
         logger.error("google-auth not installed: %s", e)
         raise HTTPException(503, "Google sign-in dependency missing on server")
     try:
-        info = gid_token.verify_oauth2_token(token, g_requests.Request(), _CLIENT_ID)
+        info = gid_token.verify_oauth2_token(token, g_requests.Request(), client_id)
     except ValueError as e:
         # invalid signature, expired, wrong audience…
         raise HTTPException(401, f"Invalid Google credential: {e}")

@@ -11,4 +11,5 @@ export const BRAND = {
   contactEmail: "vaibhav@brandkrt.com",
 };
 
-export const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const rawBackendUrl = process.env.REACT_APP_BACKEND_URL?.trim();
+export const API = rawBackendUrl ? `${rawBackendUrl.replace(/\/$/, "")}/api` : "/api";

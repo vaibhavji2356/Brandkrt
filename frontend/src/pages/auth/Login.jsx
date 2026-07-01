@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
-import { isGoogleConfigured, requestGoogleCredential } from "@/lib/googleAuth";
+import { getGoogleClientId, isGoogleConfigured, requestGoogleCredential, setGoogleClientId } from "@/lib/googleAuth";
 import api from "@/lib/api";
 
 export default function Login() {
@@ -30,7 +30,9 @@ export default function Login() {
   useEffect(() => {
     let alive = true;
     api.get("/auth/google/config").then((r) => {
-      if (alive) setGoogleEnabled(!!r.data?.enabled && isGoogleConfigured());
+      const clientId = r.data?.client_id || "";
+      setGoogleClientId(clientId);
+      if (alive) setGoogleEnabled(!!r.data?.enabled && !!clientId);
     }).catch(() => { /* keep current state */ });
     return () => { alive = false; };
   }, []);
@@ -42,7 +44,7 @@ export default function Login() {
     }
     setGoogleBusy(true);
     try {
-      const credential = await requestGoogleCredential({ containerEl: googleBtnRef.current });
+      const credential = await requestGoogleCredential({ containerEl: googleBtnRef.current, clientId: getGoogleClientId() });
       const u = await googleSignIn(credential);
       toast.success(`Welcome ${u.name?.split(" ")[0] || ""}!`);
       const dest = u.role === "admin" ? "/admin" : (from === "/profile" ? "/profile" : from);
