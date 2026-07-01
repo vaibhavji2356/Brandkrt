@@ -64,75 +64,75 @@ function WithLayout({ children }) {
 
 export default function App() {
   return (
-    <ErrorBoundary>
-    <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <Toaster richColors closeButton position="top-right" />
-          <Routes>
-            <Route path="/" element={<WithLayout><Landing /></WithLayout>} />
-            <Route path="/about" element={<About />} />
-            <Route path="/contact" element={<WithLayout><Landing /></WithLayout>} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/refund" element={<Refund />} />
-            <Route path="/help" element={<HelpCenter />} />
+    <BrowserRouter>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <AuthProvider>
+            <Toaster richColors closeButton position="top-right" />
+            <Routes>
+              <Route path="/" element={<WithLayout><Landing /></WithLayout>} />
+              <Route path="/about" element={<About />} />
+              <Route path="/contact" element={<WithLayout><Landing /></WithLayout>} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/refund" element={<Refund />} />
+              <Route path="/help" element={<HelpCenter />} />
 
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
 
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
-            <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
-              <Route index element={<AdminOverview />} />
-              <Route path="users" element={<AdminUsers />} />
-              <Route path="verification" element={<AdminVerification />} />
-              <Route path="withdrawals" element={<AdminWithdrawals />} />
-              <Route path="reports" element={<AdminReports />} />
-              <Route path="logs" element={<AdminLogs />} />
-            </Route>
+              <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+                <Route index element={<AdminOverview />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="verification" element={<AdminVerification />} />
+                <Route path="withdrawals" element={<AdminWithdrawals />} />
+                <Route path="reports" element={<AdminReports />} />
+                <Route path="logs" element={<AdminLogs />} />
+              </Route>
 
-            <Route path="/influencer" element={<ProtectedRoute><InfluencerLayout /></ProtectedRoute>}>
-              <Route index element={<InfluencerOverview />} />
-              <Route path="profile" element={<InfluencerProfile />} />
-              <Route path="campaigns" element={<InfluencerCampaigns />} />
-              <Route path="deals/:id" element={<DealDetails />} />
-              <Route path="earnings" element={<InfluencerEarnings />} />
-              <Route path="notifications" element={<InfluencerNotifications />} />
-              <Route path="collaborations" element={<InfluencerCollaborations />} />
-              <Route path="agreements" element={<InfluencerAgreements />} />
-              <Route path="messages" element={<Messages />} />
-              <Route path="analytics" element={<InfluencerAnalytics />} />
-            </Route>
+              <Route path="/influencer" element={<ProtectedRoute><InfluencerLayout /></ProtectedRoute>}>
+                <Route index element={<InfluencerOverview />} />
+                <Route path="profile" element={<InfluencerProfile />} />
+                <Route path="campaigns" element={<InfluencerCampaigns />} />
+                <Route path="deals/:id" element={<DealDetails />} />
+                <Route path="earnings" element={<InfluencerEarnings />} />
+                <Route path="notifications" element={<InfluencerNotifications />} />
+                <Route path="collaborations" element={<InfluencerCollaborations />} />
+                <Route path="agreements" element={<InfluencerAgreements />} />
+                <Route path="messages" element={<Messages />} />
+                <Route path="analytics" element={<InfluencerAnalytics />} />
+              </Route>
 
-            <Route path="/brand" element={<ProtectedRoute><BrandLayout /></ProtectedRoute>}>
-              <Route index element={<BrandOverview />} />
-              <Route path="profile" element={<BrandProfile />} />
-              <Route path="campaigns" element={<BrandCampaigns />} />
-              <Route path="campaigns/:id" element={<BrandCampaignDetails />} />
-              <Route path="deals/:id" element={<DealDetails />} />
-              <Route path="discover" element={<BrandDiscover />} />
-              <Route path="saved" element={<BrandSaved />} />
-              <Route path="analytics" element={<BrandAnalytics />} />
-              <Route path="agreements" element={<BrandAgreements />} />
-              <Route path="messages" element={<Messages />} />
-              <Route path="performance" element={<BrandPerformance />} />
-            </Route>
+              <Route path="/brand" element={<ProtectedRoute><BrandLayout /></ProtectedRoute>}>
+                <Route index element={<BrandOverview />} />
+                <Route path="profile" element={<BrandProfile />} />
+                <Route path="campaigns" element={<BrandCampaigns />} />
+                <Route path="campaigns/:id" element={<BrandCampaignDetails />} />
+                <Route path="deals/:id" element={<DealDetails />} />
+                <Route path="discover" element={<BrandDiscover />} />
+                <Route path="saved" element={<BrandSaved />} />
+                <Route path="analytics" element={<BrandAnalytics />} />
+                <Route path="agreements" element={<BrandAgreements />} />
+                <Route path="messages" element={<Messages />} />
+                <Route path="performance" element={<BrandPerformance />} />
+              </Route>
 
-            <Route path="/agreements/:id" element={<ProtectedRoute><AgreementDetails /></ProtectedRoute>} />
-            <Route path="/deals/:id/metrics" element={<ProtectedRoute><DealMetrics /></ProtectedRoute>} />
-            <Route path="/deals/:id/report" element={<ProtectedRoute><CampaignReport /></ProtectedRoute>} />
+              <Route path="/agreements/:id" element={<ProtectedRoute><AgreementDetails /></ProtectedRoute>} />
+              <Route path="/deals/:id/metrics" element={<ProtectedRoute><DealMetrics /></ProtectedRoute>} />
+              <Route path="/deals/:id/report" element={<ProtectedRoute><CampaignReport /></ProtectedRoute>} />
 
-            <Route path="/dashboard" element={<DashboardRedirect />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
-    </ErrorBoundary>
+              <Route path="/dashboard" element={<DashboardRedirect />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </BrowserRouter>
   );
 }
