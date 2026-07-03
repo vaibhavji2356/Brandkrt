@@ -53,7 +53,7 @@ export default function BrandOverview() {
           api.get("/payments"),
           api.get("/notifications"),
         ]);
-        setBrand(b.data.brand || null);
+        setBrand(b.data?.brand || null);
         setCampaigns(c.data.campaigns || []);
         setDeals(d.data.deals || []);
         setPayments(p.data.payments || []);

@@ -16,6 +16,7 @@ import {
   AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { LayoutDashboard } from "lucide-react";
 
 export default function Settings() {
   const { user, logout } = useAuth();
@@ -29,6 +30,7 @@ export default function Settings() {
 
   const [notifications, setNotifications] = useState({ email: true, marketing: false, product: true });
   const [language, setLanguage] = useState("en");
+  const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : user?.role === "influencer" ? "/influencer" : "/profile";
 
   const changePassword = async (e) => {
     e.preventDefault();
@@ -60,8 +62,20 @@ export default function Settings() {
     <SiteLayout>
       <section className="section-y" data-testid="settings-page">
         <div className="container-luxe max-w-4xl">
-          <h1 className="text-4xl font-display font-light tracking-tight text-primary dark:text-white">Settings</h1>
-          <p className="mt-2 text-muted-foreground">Manage account preferences and security.</p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="text-4xl font-display font-light tracking-tight text-primary dark:text-white">Settings</h1>
+              <p className="mt-2 text-muted-foreground">Manage account preferences and security.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(dashboardPath)}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold"
+              data-testid="settings-dashboard-link"
+            >
+              <LayoutDashboard className="h-4 w-4" /> Dashboard
+            </button>
+          </div>
 
           <Tabs defaultValue="account" className="mt-10">
             <TabsList className="grid grid-cols-4 max-w-xl">

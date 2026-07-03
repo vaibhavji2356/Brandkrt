@@ -144,8 +144,9 @@ function NewAgreementModal({ onClose, onCreated }) {
         if (!alive) return;
         setCreators(inf.data.influencers || []);
         setCampaigns(cm.data.campaigns || []);
-        if (b.data.brand && !form.brand_name) {
-          setForm((f) => ({ ...f, brand_name: b.data.brand.company_name || "" }));
+        const brand = b.data?.brand;
+        if (brand && !form.brand_name) {
+          setForm((f) => ({ ...f, brand_name: brand.company_name || "" }));
         }
       } catch (_) {}
       if (alive) setSearching(false);

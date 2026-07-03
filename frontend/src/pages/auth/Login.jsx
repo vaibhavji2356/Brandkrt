@@ -13,7 +13,7 @@ export default function Login() {
   const { login, googleSignIn, formatApiError } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const from = params.get("from") || "/profile";
+  const from = params.get("from") || "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,7 +47,9 @@ export default function Login() {
       const credential = await requestGoogleCredential({ containerEl: googleBtnRef.current, clientId: getGoogleClientId() });
       const u = await googleSignIn(credential);
       toast.success(`Welcome ${u.name?.split(" ")[0] || ""}!`);
-      const dest = u.role === "admin" ? "/admin" : (from === "/profile" ? "/profile" : from);
+      const dest = from === "/dashboard"
+        ? (u.role === "admin" ? "/admin" : u.role === "brand" ? "/brand" : u.role === "influencer" ? "/influencer" : "/profile")
+        : from;
       navigate(dest, { replace: true });
     } catch (err) {
       toast.error(formatApiError ? formatApiError(err) : (err?.message || "Google sign-in failed"));
@@ -63,7 +65,9 @@ export default function Login() {
     try {
       const u = await login(email, password, remember);
       toast.success("Welcome back!");
-      const dest = u.role === "admin" ? "/admin" : (from === "/profile" ? "/profile" : from);
+      const dest = from === "/dashboard"
+        ? (u.role === "admin" ? "/admin" : u.role === "brand" ? "/brand" : u.role === "influencer" ? "/influencer" : "/profile")
+        : from;
       navigate(dest, { replace: true });
     } catch (err) {
       setError(formatApiError(err));

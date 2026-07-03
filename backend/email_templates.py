@@ -1,7 +1,7 @@
 """BrandKrt email templates - reusable HTML for transactional emails.
 
 EmailService composes a template with brand-styled HTML and plain text fallback.
-Pluggable provider (console for Part 1A-1C, Resend in production).
+Pluggable provider with SMTP for production and console fallback in development.
 """
 from __future__ import annotations
 

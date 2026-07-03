@@ -85,8 +85,8 @@ export default function CampaignReport() {
           </div>
 
           <div className="p-6 grid gap-6 md:grid-cols-2">
-            <Party icon={ShieldCheck} role="Brand" name={brand?.company_name || "—"} subtitle={brand?.industry || ""} verified={brand?.verification_status === "approved"} />
-            <Party icon={BadgeCheck} role="Creator" name={influencer?.username || "—"} subtitle={influencer?.category || ""} verified={influencer?.verification_status === "approved"} />
+            <Party icon={ShieldCheck} role="Brand" name={brand?.company_name || "—"} subtitle={brand?.industry || ""} verified={["approved", "verified"].includes(brand?.verification_status)} />
+            <Party icon={BadgeCheck} role="Creator" name={influencer?.username || "—"} subtitle={influencer?.category || ""} verified={["approved", "verified"].includes(influencer?.verification_status)} />
           </div>
 
           {/* Progress bar */}

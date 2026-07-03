@@ -37,7 +37,9 @@ export function SuccessState({ title, description, action, testId = "success-sta
 const STATUS_STYLES = {
   active: "bg-success/10 text-success",
   pending: "bg-warning/10 text-warning",
+  in_progress: "bg-secondary/15 text-secondary",
   approved: "bg-success/10 text-success",
+  verified: "bg-success/10 text-success",
   rejected: "bg-destructive/10 text-destructive",
   cancelled: "bg-muted text-muted-foreground",
   draft: "bg-muted text-muted-foreground",

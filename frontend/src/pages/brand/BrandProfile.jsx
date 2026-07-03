@@ -66,17 +66,17 @@ export default function BrandProfile() {
     (async () => {
       try {
         const { data } = await api.get("/brands/me");
-        if (data.brand) {
-          const b = data.brand;
+        const brand = data?.brand;
+        if (brand) {
           setForm({
             ...EMPTY,
-            ...b,
-            bank_details: { ...EMPTY.bank_details, ...(b.bank_details || {}) },
-            product_categories: b.product_categories || [],
-            product_images: b.product_images || [],
-            documents: b.documents || [],
+            ...brand,
+            bank_details: { ...EMPTY.bank_details, ...(brand.bank_details || {}) },
+            product_categories: brand.product_categories || [],
+            product_images: brand.product_images || [],
+            documents: brand.documents || [],
           });
-          setVerified(b.verification_status || "pending");
+          setVerified(brand.verification_status || "pending");
         } else if (user?.name) {
           set("company_name", user.name);
         }
@@ -86,13 +86,11 @@ export default function BrandProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const absUrl = (rel) => (process.env.REACT_APP_BACKEND_URL || "") + rel;
-
   const uploadOne = async (file, folder) => {
     const fd = new FormData();
     fd.append("file", file);
     const { data } = await api.post(`/uploads/${folder}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-    return absUrl(data.url);
+    return data.url;
   };
 
   const pickLogo = async (e) => {
@@ -150,13 +148,29 @@ export default function BrandProfile() {
       const payload = { ...form };
       ["id", "user_id", "status", "verification_status", "created_at", "updated_at"].forEach((k) => delete payload[k]);
       const { data } = await api.put("/brands/me", payload);
-      if (data.brand) setVerified(data.brand.verification_status || verified);
+      const updatedBrand = data?.brand;
+      if (updatedBrand) setVerified(updatedBrand.verification_status || verified);
       toast.success("Business profile saved.");
     } catch (err) { toast.error(formatApiError(err)); }
     finally { setSaving(false); }
   };
 
-  if (loading) return <div className="text-muted-foreground">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="h-10 w-48 rounded-full bg-muted/20 animate-pulse" />
+        <div className="rounded-2xl border border-border bg-card p-6 animate-pulse space-y-4">
+          <div className="h-40 rounded-2xl bg-muted/10" />
+          <div className="h-24 w-full rounded-2xl bg-muted/10" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="h-20 rounded-2xl bg-muted/10" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const initials = (form.company_name || user?.name || user?.email || "B").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
 

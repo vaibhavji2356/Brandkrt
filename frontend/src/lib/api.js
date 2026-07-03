@@ -1,10 +1,35 @@
 import axios from "axios";
-import { API } from "./brand";
+import { API, normalizeAssetUrls } from "./brand";
 
 const api = axios.create({
   baseURL: API,
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
+});
+
+api.interceptors.request.use((config) => {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("brandkrt_access_token") : null;
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+api.interceptors.response.use((response) => {
+  response.data = normalizeAssetUrls(response.data);
+  return response;
+}, async (error) => {
+  const status = error?.response?.status;
+  const config = error?.config;
+  const hasStoredToken = typeof window !== "undefined" && window.localStorage.getItem("brandkrt_access_token");
+  if ((status === 401 || status === 403) && config && hasStoredToken && !config._retryWithoutAuth) {
+    window.localStorage.removeItem("brandkrt_access_token");
+    config._retryWithoutAuth = true;
+    if (config.headers) delete config.headers.Authorization;
+    return api(config);
+  }
+  return Promise.reject(error);
 });
 
 export function formatApiError(err) {

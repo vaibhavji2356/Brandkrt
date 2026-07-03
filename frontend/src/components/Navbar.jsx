@@ -33,6 +33,7 @@ export default function Navbar() {
 
   const initials = (user?.name || user?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+  const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : user?.role === "influencer" ? "/influencer" : "/profile";
 
   return (
     <header
@@ -141,9 +142,35 @@ export default function Navbar() {
             <div className="flex items-center justify-between pt-2">
               <ThemeToggle />
               {user ? (
-                <button onClick={async () => { await logout(); setOpen(false); navigate("/"); }} className="text-sm font-semibold rounded-full bg-primary text-primary-foreground px-5 py-2.5">
-                  Log out
-                </button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); navigate(dashboardPath); }}
+                    className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
+                    data-testid="mobile-menu-dashboard"
+                  >
+                    <LayoutDashboard className="h-4 w-4" /> Dashboard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); navigate("/profile"); }}
+                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold"
+                    data-testid="mobile-menu-profile"
+                  >
+                    <UserIcon className="h-4 w-4" /> Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); navigate("/settings"); }}
+                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold"
+                    data-testid="mobile-menu-settings"
+                  >
+                    <SettingsIcon className="h-4 w-4" /> Settings
+                  </button>
+                  <button onClick={async () => { await logout(); setOpen(false); navigate("/"); }} className="text-sm font-semibold rounded-full bg-primary text-primary-foreground px-5 py-2.5">
+                    Log out
+                  </button>
+                </div>
               ) : (
                 <div className="flex gap-2">
                   <Link to="/login" onClick={() => setOpen(false)} className="text-sm font-medium px-4 py-2">Login</Link>

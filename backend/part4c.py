@@ -335,7 +335,7 @@ def register_handlers():
             "total_earnings": round(total_earnings, 2),
             "repeat_brands": repeat_brands,
             "unique_brands": len(brand_counts),
-            "verified": (inf_doc or {}).get("verification_status") == "approved",
+            "verified": (inf_doc or {}).get("verification_status") in {"approved", "verified"},
             "verification_status": (inf_doc or {}).get("verification_status") or "pending",
             "overall_rating": summary["average_rating"],
             "total_reviews": summary["total_reviews"],
@@ -397,7 +397,7 @@ def register_handlers():
             "average_roi": avg_roi,
             "average_creator_rating": avg_rating,
             "total_reviews": len(ratings),
-            "verified": (brand_doc or {}).get("verification_status") == "approved",
+            "verified": (brand_doc or {}).get("verification_status") in {"approved", "verified"},
         }
 
     @perf_router.get("/brand/me")

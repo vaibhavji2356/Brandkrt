@@ -2,7 +2,7 @@
   "short_name": "BrandKrt",
   "name": "BrandKrt — Connecting Brands With Creators",
   "icons": [
-    { "src": "https://customer-assets.emergentagent.com/job_d59be5d6-95b4-40b5-91b5-592c9017c3b7/artifacts/gh00lyzl_file_00000000a1fc7208bfa62613752b2097.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+    { "src": "/assets/brandkrt-icon.svg", "type": "image/svg+xml", "sizes": "512x512", "purpose": "any maskable" }
   ],
   "start_url": "/",
   "display": "standalone",

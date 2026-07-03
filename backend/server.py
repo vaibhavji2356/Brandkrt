@@ -126,11 +126,26 @@ def create_refresh_token(user_id: str) -> str:
     return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
+def _is_production_like_environment() -> bool:
+    env = os.environ.get("APP_ENV", "").strip().lower()
+    if env in {"production", "prod", "true", "1", "staging"}:
+        return True
+
+    frontend_url = os.environ.get("FRONTEND_URL", "").strip().lower()
+    if frontend_url:
+        if frontend_url.startswith("https://") and "localhost" not in frontend_url and "127.0.0.1" not in frontend_url:
+            return True
+
+    return False
+
+
 def set_auth_cookies(response: Response, access: str, refresh: str) -> None:
-    env = os.environ.get("APP_ENV", "development")
-    secure = env != "development"
+    secure = _is_production_like_environment()
     # cross-site cookies (Vercel <-> Render are different origins) require SameSite=None; only valid with Secure
-    samesite = os.environ.get("COOKIE_SAMESITE") or ("none" if secure else "lax")
+    configured = os.environ.get("COOKIE_SAMESITE", "").strip().lower()
+    samesite = configured or ("none" if secure else "lax")
+    if samesite == "none" and not secure:
+        secure = True
     response.set_cookie("access_token", access, httponly=True, secure=secure, samesite=samesite,
                         max_age=ACCESS_TOKEN_MINUTES * 60, path="/")
     response.set_cookie("refresh_token", refresh, httponly=True, secure=secure, samesite=samesite,
@@ -156,12 +171,12 @@ def serialize_user(user: dict) -> dict:
 
 
 # -----------------------------------------------------------------------------
-# Email service (modular abstraction - console only for Part 1A)
+# Email service
 # -----------------------------------------------------------------------------
 class EmailService:
     def __init__(self) -> None:
-        self.provider = os.environ.get("EMAIL_PROVIDER", "console")
-        self.from_addr = os.environ.get("EMAIL_FROM", "support@brandkrt.com")
+        self.provider = os.environ.get("EMAIL_PROVIDER", "").strip().lower() or "auto"
+        self.from_addr = os.environ.get("EMAIL_FROM") or os.environ.get("SMTP_FROM") or "support@brandkrt.com"
         self.frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
     async def send_verification(self, to: str, token: str) -> None:
@@ -176,13 +191,36 @@ class EmailService:
         msg = tpl(link)
         await self._send(to, msg["subject"], msg["text"], msg.get("html"))
 
+    def _smtp_config(self) -> dict:
+        return {
+            "host": os.environ.get("SMTP_HOST") or os.environ.get("EMAIL_HOST") or "smtp.hostinger.com",
+            "port": int(os.environ.get("SMTP_PORT") or os.environ.get("EMAIL_PORT") or "465"),
+            "user": os.environ.get("SMTP_USER") or self.from_addr,
+            "password": os.environ.get("SMTP_PASS") or os.environ.get("EMAIL_PASSWORD"),
+            "use_tls": os.environ.get("SMTP_USE_TLS", "false").strip().lower() in {"1", "true", "yes", "on"},
+            "use_ssl": os.environ.get("SMTP_USE_SSL", "true").strip().lower() in {"1", "true", "yes", "on"},
+        }
+
+    def _allow_console_fallback(self) -> bool:
+        configured = os.environ.get("EMAIL_CONSOLE_FALLBACK", "").strip().lower()
+        if configured in {"0", "false", "no", "off"}:
+            return False
+        if configured in {"1", "true", "yes", "on"}:
+            return True
+        return not _is_production_like_environment()
+
     async def _send(self, to: str, subject: str, body: str, html: str = None) -> None:
+        smtp_config = self._smtp_config()
+        smtp_provider = (
+            self.provider == "smtp"
+            or (self.provider in {"auto", "console"} and bool(smtp_config["password"]))
+        )
         if self.provider == "resend":
             try:
                 import resend  # type: ignore
                 api_key = os.environ.get("RESEND_API_KEY")
                 if not api_key:
-                    logger.warning("[EMAIL] EMAIL_PROVIDER=resend but RESEND_API_KEY is not set; falling back to console")
+                    raise RuntimeError("EMAIL_PROVIDER=resend but RESEND_API_KEY is not configured")
                 else:
                     resend.api_key = api_key
                     params = {
@@ -197,9 +235,52 @@ class EmailService:
                     logger.info("[EMAIL:resend] sent to=%s subject=%s", to, subject)
                     return
             except Exception as e:
-                logger.warning("[EMAIL:resend] failed (%s) - falling back to console", e)
-        # console provider (default / fallback)
-        logger.info("[EMAIL:%s] to=%s subject=%s\n%s", self.provider or "console", to, subject, body)
+                if not self._allow_console_fallback():
+                    raise RuntimeError(f"Resend email delivery failed: {e}") from e
+                logger.warning("[EMAIL:resend] failed (%s); console fallback enabled", e)
+
+        if self.provider == "smtp" and not smtp_config["password"]:
+            raise RuntimeError("EMAIL_PROVIDER=smtp but SMTP_PASS is not configured")
+
+        if smtp_provider:
+            try:
+                import smtplib
+                from email.message import EmailMessage
+
+                message = EmailMessage()
+                message["From"] = self.from_addr
+                message["To"] = to
+                message["Subject"] = subject
+                message.set_content(body)
+                if html:
+                    message.add_alternative(html, subtype="html")
+
+                if smtp_config["use_ssl"]:
+                    with smtplib.SMTP_SSL(smtp_config["host"], smtp_config["port"], timeout=30) as smtp:
+                        smtp.login(smtp_config["user"], smtp_config["password"])
+                        smtp.send_message(message)
+                else:
+                    with smtplib.SMTP(smtp_config["host"], smtp_config["port"], timeout=30) as smtp:
+                        if smtp_config["use_tls"]:
+                            smtp.starttls()
+                        smtp.login(smtp_config["user"], smtp_config["password"])
+                        smtp.send_message(message)
+
+                logger.info("[EMAIL:smtp] sent to=%s subject=%s host=%s port=%s", to, subject, smtp_config["host"], smtp_config["port"])
+                return
+            except Exception as e:
+                logger.error(
+                    "[EMAIL:smtp] failed to send to=%s subject=%s host=%s port=%s error=%s",
+                    to, subject, smtp_config["host"], smtp_config["port"], e,
+                    exc_info=True,
+                )
+                if not self._allow_console_fallback():
+                    raise RuntimeError(f"SMTP email delivery failed: {e}") from e
+
+        if not self._allow_console_fallback():
+            raise RuntimeError("No transactional email provider is configured")
+
+        logger.info("[EMAIL:%s] to=%s subject=%s (console fallback; email body suppressed)", self.provider or "console", to, subject)
 
 
 email_service = EmailService()
@@ -250,11 +331,12 @@ class ContactIn(BaseModel):
 # Auth dependency
 # -----------------------------------------------------------------------------
 async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
+    token = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
     if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+        token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -403,7 +485,7 @@ async def refresh_token(request: Request, response: Response):
         access = create_access_token(str(user["_id"]), user["email"], user.get("role", "influencer"))
         new_refresh = create_refresh_token(str(user["_id"]))
         set_auth_cookies(response, access, new_refresh)
-        return {"user": serialize_user(user)}
+        return {"user": serialize_user(user), "access_token": access}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
     except jwt.InvalidTokenError:

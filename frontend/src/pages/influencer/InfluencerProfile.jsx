@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Camera, BadgeCheck, Save, Loader2 } from "lucide-react";
+import { Camera, BadgeCheck, Save, Loader2, Video } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,11 +49,12 @@ export default function InfluencerProfile() {
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [verified, setVerified] = useState("pending");
+  const [verified, setVerified] = useState("not_started");
   const avatarRef = useRef(null);
   const coverRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [latestVerification, setLatestVerification] = useState(null);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const setBank = (k, v) => setForm((f) => ({ ...f, bank_details: { ...(f.bank_details || {}), [k]: v } }));
@@ -69,9 +70,13 @@ export default function InfluencerProfile() {
             ...inf,
             bank_details: { ...EMPTY.bank_details, ...(inf.bank_details || {}) },
           });
-          setVerified(inf.verification_status || "pending");
+          setVerified(inf.verification_status || "not_started");
         }
       } catch (_) { /* not yet created */ }
+      try {
+        const { data } = await api.get("/verification/mine");
+        setLatestVerification((data.requests || []).find((r) => r.kind === "influencer") || null);
+      } catch (_) { /* optional */ }
       setLoading(false);
     })();
   }, []);
@@ -80,7 +85,7 @@ export default function InfluencerProfile() {
     const fd = new FormData();
     fd.append("file", file);
     const { data } = await api.post("/uploads/profiles", fd, { headers: { "Content-Type": "multipart/form-data" } });
-    const url = (process.env.REACT_APP_BACKEND_URL || "") + data.url;
+    const url = data.url;
     if (kind === "avatar") set("profile_photo_url", url);
     else set("cover_photo_url", url);
   };
@@ -130,6 +135,7 @@ export default function InfluencerProfile() {
   if (loading) return <div className="text-muted-foreground">Loading…</div>;
 
   const initials = (user?.name || user?.email || "U").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+  const callTime = latestVerification?.schedule_call_at;
 
   return (
     <form onSubmit={save} className="space-y-8" data-testid="influencer-profile-form">
@@ -137,6 +143,16 @@ export default function InfluencerProfile() {
         <h2 className="text-3xl font-display font-light text-primary dark:text-white">Profile Builder</h2>
         <p className="text-sm text-muted-foreground mt-1">Tell brands who you are. A complete profile gets up to 3× more campaign invites.</p>
       </div>
+
+      {latestVerification?.status === "in_progress" && callTime && (
+        <div className="rounded-2xl border border-secondary/30 bg-secondary/10 p-4 flex items-start gap-3" data-testid="profile-verification-call">
+          <Video className="h-5 w-5 text-secondary mt-0.5" />
+          <div>
+            <div className="font-semibold text-primary dark:text-white">WhatsApp verification call scheduled</div>
+            <div className="text-sm text-muted-foreground">{new Date(callTime).toLocaleString()}</div>
+          </div>
+        </div>
+      )}
 
       {/* Cover + Avatar */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -181,7 +197,7 @@ export default function InfluencerProfile() {
                   {user?.name || "Your name"}
                 </h1>
                 <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                  verified === "approved" ? "bg-success/10 text-success" :
+                  ["approved", "verified"].includes(verified) ? "bg-success/10 text-success" :
                   verified === "rejected" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"
                 }`}>
                   <BadgeCheck className="h-3 w-3" /> {verified}

@@ -250,14 +250,17 @@ class PaymentCreateIn(BaseModel):
 # ============== VERIFICATION ==============
 class VerificationIn(BaseModel):
     kind: Literal["brand", "influencer"]
-    documents: List[str] = []
+    documents: List[Any] = []
     notes: Optional[str] = None
+    contact_name: Optional[str] = None
+    contact_phone: Optional[str] = None
 
 
 class VerificationDecisionIn(BaseModel):
-    decision: Literal["approved", "rejected"]
+    decision: Literal["in_progress", "verified", "rejected"]
     notes: Optional[str] = None
     schedule_call_at: Optional[str] = None
+    call_completed: bool = False
 
 
 # ============== WITHDRAWAL ==============
@@ -308,7 +311,7 @@ def register_handlers():
             doc = await db.brands.find_one({"_id": existing["_id"]})
         else:
             data["created_at"] = now
-            data["verification_status"] = "pending"
+            data["verification_status"] = "not_started"
             res = await db.brands.insert_one(data)
             doc = await db.brands.find_one({"_id": res.inserted_id})
         await log_activity(str(user["_id"]), "brand.upsert", "brand", str(doc["_id"]))
@@ -347,7 +350,7 @@ def register_handlers():
             doc = await db.influencers.find_one({"_id": existing["_id"]})
         else:
             data["created_at"] = now
-            data["verification_status"] = "pending"
+            data["verification_status"] = "not_started"
             res = await db.influencers.insert_one(data)
             doc = await db.influencers.find_one({"_id": res.inserted_id})
         await log_activity(str(user["_id"]), "influencer.upsert", "influencer", str(doc["_id"]))
@@ -634,11 +637,28 @@ def register_handlers():
     # ----- VERIFICATION -----
     @verify_router.post("")
     async def _submit_verif(payload: VerificationIn, user: dict = Depends(get_current_user)):
+        if user.get("role") not in {payload.kind, "admin"}:
+            raise HTTPException(403, "Verification kind does not match your account role")
+
+        existing = await db.verification_requests.find_one({
+            "user_id": str(user["_id"]),
+            "kind": payload.kind,
+            "status": {"$in": ["pending", "in_progress"]},
+        })
+        if existing:
+            return {"request": doc_out(existing), "already_pending": True}
+
         now = now_utc()
         doc = {"user_id": str(user["_id"]), "kind": payload.kind,
                "documents": payload.documents, "notes": payload.notes,
+               "contact_name": payload.contact_name, "contact_phone": payload.contact_phone,
                "status": "pending", "created_at": now, "updated_at": now}
         res = await db.verification_requests.insert_one(doc)
+        collection = db.brands if payload.kind == "brand" else db.influencers
+        await collection.update_one(
+            {"user_id": str(user["_id"])},
+            {"$set": {"verification_status": "pending", "updated_at": now}},
+        )
         await log_activity(str(user["_id"]), "verification.submit", "verification", str(res.inserted_id))
         return {"request": doc_out(await db.verification_requests.find_one({"_id": res.inserted_id}))}
 
@@ -775,11 +795,43 @@ def register_handlers():
         cur = db.users.find(query, {"password_hash": 0}).sort("created_at", -1).limit(min(limit, 200))
         return {"users": [doc_out(x) async for x in cur]}
 
+    async def _verification_out(req: dict) -> dict:
+        out = doc_out(req)
+        target_user = await db.users.find_one({"_id": oid(req["user_id"])}, {"password_hash": 0})
+        profile_collection = db.brands if req.get("kind") == "brand" else db.influencers
+        profile = await profile_collection.find_one({"user_id": req["user_id"]})
+        if target_user:
+            out["user"] = {
+                "id": str(target_user["_id"]),
+                "name": req.get("contact_name") or target_user.get("name") or target_user.get("email", "").split("@")[0],
+                "email": target_user.get("email"),
+                "phone": req.get("contact_phone") or target_user.get("phone") or (profile or {}).get("phone"),
+            }
+        if profile:
+            display_name = (
+                profile.get("username")
+                or profile.get("company_name")
+                or profile.get("brand_name")
+                or out.get("user", {}).get("name")
+            )
+            out["profile"] = {
+                "name": display_name,
+                "phone": profile.get("phone"),
+                "city": profile.get("city"),
+                "category": profile.get("category") or profile.get("industry"),
+            }
+            if out.get("user") and not out["user"].get("phone"):
+                out["user"]["phone"] = profile.get("phone")
+        return out
+
     @admin_router.get("/verification")
     async def _admin_verif(user: dict = Depends(get_current_user), status: str = "pending"):
         await _ensure_admin(user)
         cur = db.verification_requests.find({"status": status}).sort("created_at", -1).limit(100)
-        return {"requests": [doc_out(x) async for x in cur]}
+        rows = []
+        async for req in cur:
+            rows.append(await _verification_out(req))
+        return {"requests": rows}
 
     @admin_router.post("/verification/{rid}/decision")
     async def _admin_decide(rid: str, payload: VerificationDecisionIn, user: dict = Depends(get_current_user)):
@@ -787,19 +839,48 @@ def register_handlers():
         req = await db.verification_requests.find_one({"_id": oid(rid)})
         if not req:
             raise HTTPException(404, "Request not found")
-        update = {"status": payload.decision, "admin_notes": payload.notes,
-                  "schedule_call_at": payload.schedule_call_at, "updated_at": now_utc()}
+
+        current_status = req.get("status")
+        if payload.decision == "in_progress" and current_status not in {"pending", "in_progress"}:
+            raise HTTPException(400, "Only pending requests can be moved to in progress")
+        if payload.decision == "verified":
+            if current_status != "in_progress":
+                raise HTTPException(400, "Request must be in progress before it can be verified")
+            if not payload.call_completed:
+                raise HTTPException(400, "Confirm the WhatsApp video call is completed before verifying")
+
+        now = now_utc()
+        update = {"status": payload.decision, "updated_at": now}
+        if payload.notes is not None:
+            update["admin_notes"] = payload.notes
+        if payload.schedule_call_at is not None:
+            update["schedule_call_at"] = payload.schedule_call_at
+        if payload.call_completed:
+            update["call_completed"] = True
+            update["call_completed_at"] = now
+
         await db.verification_requests.update_one({"_id": oid(rid)}, {"$set": update})
         # propagate to brand/influencer collection
         collection = db.brands if req["kind"] == "brand" else db.influencers
         await collection.update_one({"user_id": req["user_id"]},
                                     {"$set": {"verification_status": payload.decision, "updated_at": now_utc()}})
-        await notify(req["user_id"], "verification.decision",
-                     f"Verification {payload.decision}",
-                     payload.notes or "Your verification request has been reviewed.",
-                     {"request_id": rid})
+        if payload.decision == "in_progress" and payload.schedule_call_at:
+            title = "WhatsApp verification call scheduled"
+            body = f"Your WhatsApp video verification call is scheduled for {payload.schedule_call_at}."
+        elif payload.decision == "in_progress":
+            title = "Verification in progress"
+            body = "Your verification request is now under admin review."
+        elif payload.decision == "verified":
+            title = "Verification complete"
+            body = payload.notes or "Your insights and WhatsApp video call were approved. You're now verified."
+        else:
+            title = "Verification rejected"
+            body = payload.notes or "Your verification request needs changes before approval."
+
+        await notify(req["user_id"], "verification.decision", title, body, {"request_id": rid})
         await log_admin(str(user["_id"]), f"verification.{payload.decision}", rid, {"notes": payload.notes})
-        return {"success": True}
+        fresh = await db.verification_requests.find_one({"_id": oid(rid)})
+        return {"success": True, "request": await _verification_out(fresh)}
 
     @admin_router.get("/withdrawals")
     async def _admin_wd(user: dict = Depends(get_current_user), status: str = "pending"):

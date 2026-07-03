@@ -1,6 +1,6 @@
 export const LOGO = {
-  full: "https://customer-assets.emergentagent.com/job_d59be5d6-95b4-40b5-91b5-592c9017c3b7/artifacts/ttnp39rd_file_00000000131871fa8a8d4d0e1cad256c.png",
-  icon: "https://customer-assets.emergentagent.com/job_d59be5d6-95b4-40b5-91b5-592c9017c3b7/artifacts/gh00lyzl_file_00000000a1fc7208bfa62613752b2097.png",
+  full: "/assets/brandkrt-og.svg",
+  icon: "/assets/brandkrt-icon.svg",
 };
 
 export const BRAND = {
@@ -12,4 +12,26 @@ export const BRAND = {
 };
 
 const rawBackendUrl = process.env.REACT_APP_BACKEND_URL?.trim();
-export const API = rawBackendUrl ? `${rawBackendUrl.replace(/\/$/, "")}/api` : "/api";
+export const BACKEND_ORIGIN = rawBackendUrl ? rawBackendUrl.replace(/\/api\/?$/, "").replace(/\/$/, "") : "";
+export const API = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : "/api";
+
+export function assetUrl(value) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("/uploads/")) {
+    const origin = BACKEND_ORIGIN || (typeof window !== "undefined" ? window.location.origin : "");
+    return `${origin}${trimmed}`;
+  }
+  return trimmed;
+}
+
+export function normalizeAssetUrls(value) {
+  if (Array.isArray(value)) return value.map(normalizeAssetUrls);
+  if (!value || typeof value !== "object") return assetUrl(value);
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, normalizeAssetUrls(entry)])
+  );
+}

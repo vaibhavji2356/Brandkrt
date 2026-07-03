@@ -87,7 +87,7 @@ export default function BrandDiscover() {
         const hit = [inf.city, inf.state, inf.country].filter(Boolean).some((x) => x.toLowerCase().includes(loc));
         if (!hit) return false;
       }
-      if (verifiedOnly && inf.verification_status !== "approved") return false;
+      if (verifiedOnly && !["approved", "verified"].includes(inf.verification_status)) return false;
       return true;
     });
   }, [list, bucket, minViews, platform, location, verifiedOnly]);
@@ -223,7 +223,7 @@ export function InfluencerCard({ inf, isSaved, onToggleSave, onOpen, onInvite, h
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-primary dark:text-white truncate">{inf.username || "Creator"}</h3>
-            {inf.verification_status === "approved" && <BadgeCheck className="h-4 w-4 text-secondary shrink-0" />}
+            {["approved", "verified"].includes(inf.verification_status) && <BadgeCheck className="h-4 w-4 text-secondary shrink-0" />}
           </div>
           <p className="text-xs text-muted-foreground truncate">{inf.category || "—"}</p>
           {(inf.city || inf.country) && (
@@ -289,7 +289,7 @@ function ProfileDialog({ open, influencer, onClose, isSaved, onToggleSave, onInv
         <DialogHeader>
           <DialogTitle className="text-2xl font-display font-light flex items-center gap-2">
             {influencer.username || "Creator"}
-            {influencer.verification_status === "approved" && <BadgeCheck className="h-5 w-5 text-secondary" />}
+            {["approved", "verified"].includes(influencer.verification_status) && <BadgeCheck className="h-5 w-5 text-secondary" />}
           </DialogTitle>
           <DialogDescription>{influencer.category || "—"} · {[influencer.city, influencer.country].filter(Boolean).join(", ") || "Location TBD"}</DialogDescription>
         </DialogHeader>

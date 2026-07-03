@@ -9,14 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
 
-const ASSET_BASE = process.env.REACT_APP_BACKEND_URL || "";
-
-function fullUrl(maybeRelative) {
-  if (!maybeRelative) return "";
-  if (/^https?:\/\//i.test(maybeRelative)) return maybeRelative;
-  return `${ASSET_BASE}${maybeRelative}`;
-}
-
 function timestamp(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -109,7 +101,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
     fd.append("file", file);
     try {
       const { data } = await api.post("/chat/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      const att = { url: fullUrl(data.url), name: data.name, kind: kindHint || data.kind, size: data.size };
+      const att = { url: data.url, name: data.name, kind: kindHint || data.kind, size: data.size };
       setPending((arr) => [...arr, att]);
     } catch (err) {
       toast.error(formatApiError(err));

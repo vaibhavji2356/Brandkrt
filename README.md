@@ -9,7 +9,7 @@
 - **Backend**: FastAPI, Motor (async MongoDB), PyJWT, bcrypt
 - **Database**: MongoDB
 - **Auth**: JWT (httpOnly cookies) + Emergent Google OAuth (Part 2)
-- **Email**: Modular `EmailService` — `console` in dev, `Resend` in production (templates in `backend/email_templates.py`)
+- **Email**: Modular `EmailService` with SMTP for `support@brandkrt.com` and safe console fallback in dev (templates in `backend/email_templates.py`)
 - **Storage**: Local disk + `/uploads` static mount in dev; S3/GCS-ready abstraction
 
 ## Folder structure
@@ -80,7 +80,7 @@ sudo supervisorctl restart backend
 2. Set env per `.env.example` (`JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `FRONTEND_URL`, `CORS_ORIGINS`).
 3. Start command: `uvicorn server:app --host 0.0.0.0 --port $PORT`.
 4. Point `api.brandkrt.com` DNS at the backend.
-5. (Optional) Set `EMAIL_PROVIDER=resend` and add `RESEND_API_KEY` once the brandkrt.com domain is verified.
+5. Set `EMAIL_PROVIDER=smtp` and add the `support@brandkrt.com` SMTP settings (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`).
 
 ### Security checklist before launch
 - [ ] `JWT_SECRET` rotated and ≥64 chars
@@ -122,7 +122,7 @@ See `memory/test_credentials.md`. **Rotate before production.**
 - Part 3 — Brand Dashboard (campaign creator, discovery, billing) ✅
 - Part 4 — Collaborations · Chat · Agreements · Performance · Reviews ✅
 - **Part 5 — Production hardening ✅**
-  - Resend email provider (env-driven, falls back to console in dev)
+  - SMTP email provider (env-driven, safe console fallback in dev)
   - Google OAuth sign-in via Google Identity Services + ID-token verification
   - Cloudinary file storage with local fallback (`POST /api/uploads/{folder}` and `POST /api/chat/upload` unchanged)
   - Pluggable payment provider — `stub` (default) or `stripe` via `PAYMENT_PROVIDER`
@@ -133,4 +133,4 @@ See `memory/test_credentials.md`. **Rotate before production.**
   - Expanded SEO: canonical, JSON-LD Organization + WebSite + Product, richer OG/Twitter, image sitemap
   - Vercel security headers + static asset immutable cache
   - `.env.example` for backend and frontend
-  - Detailed `DEPLOYMENT.md` covering Resend, Google OAuth, Cloudinary, Stripe activation
+  - Detailed `DEPLOYMENT.md` covering SMTP email, Google OAuth, Cloudinary, Stripe activation

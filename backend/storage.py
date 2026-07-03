@@ -6,8 +6,8 @@ legacy local-disk behaviour used in Parts 1-4 so /uploads/{folder}/{file} keeps
 working exactly as before in dev.
 
 The public `save_upload()` function returns a *full https URL when on Cloudinary*
-and a *relative `/uploads/...` path when on local disk* — matching the existing
-frontend convention (it already prefixes REACT_APP_BACKEND_URL to relative URLs).
+and a *relative `/uploads/...` path when on local disk*;
+the frontend normalizes those paths to REACT_APP_BACKEND_URL before rendering.
 """
 from __future__ import annotations
 

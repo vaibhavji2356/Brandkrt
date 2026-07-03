@@ -59,17 +59,18 @@ APP_ENV=production
 COOKIE_SAMESITE=none           # cross-site cookies for Vercel↔Render
 ```
 
-### Optional — Email (Resend)
+### Email (SMTP from support@brandkrt.com)
 ```
-EMAIL_PROVIDER=resend
-RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxx
-EMAIL_FROM=BrandKrt <no-reply@brandkrt.com>
+EMAIL_PROVIDER=smtp
+EMAIL_FROM=BrandKrt <support@brandkrt.com>
+SMTP_HOST=<your-smtp-host>
+SMTP_PORT=465
+SMTP_USER=support@brandkrt.com
+SMTP_PASS=<your-smtp-password>
+SMTP_USE_SSL=true
+SMTP_USE_TLS=false
 ```
-1. Create an account at https://resend.com and add a domain (`brandkrt.com`).
-2. Add the DNS records Resend shows you (SPF, DKIM, Return-Path).
-3. Verify the domain, then create an API key with `Sending access`.
-4. Paste the key as `RESEND_API_KEY` in Render.
-Leaving `EMAIL_PROVIDER=console` (default) keeps the dev behaviour — verification + reset tokens just appear in Render logs.
+Use the mailbox credentials for `support@brandkrt.com`. In production-like environments, the backend no longer logs verification/reset links as a fallback; missing or failing SMTP now surfaces a delivery error instead of silently printing the token.
 
 ### Optional — Google OAuth
 ```
@@ -111,7 +112,7 @@ STRIPE_SECRET_KEY=sk_live_xxx
 - [ ] `APP_ENV=production` (enables `Secure` cookies + HSTS)
 - [ ] `COOKIE_SAMESITE=none` if frontend and backend live on different domains
 - [ ] MongoDB Atlas IP allow-list configured, auth enabled
-- [ ] Resend domain DKIM verified before sending bulk
+- [ ] `support@brandkrt.com` SMTP credentials configured and tested
 - [ ] Google OAuth origins limited to production domain
 - [ ] Cloudinary unsigned upload presets disabled — all uploads happen via our backend
 
@@ -134,4 +135,4 @@ STRIPE_SECRET_KEY=sk_live_xxx
 | Cookies not persisted on Safari | Need `APP_ENV=production` + `COOKIE_SAMESITE=none` so cookies become `Secure; SameSite=None` |
 | Google button greyed out | `REACT_APP_GOOGLE_CLIENT_ID` empty or `GOOGLE_CLIENT_ID` not set on backend |
 | Uploads return relative `/uploads/...` but 404 in prod | Cloudinary not configured — local disk is ephemeral on Render. Set `CLOUDINARY_URL` |
-| Emails not arriving | `EMAIL_PROVIDER` still `console`, or Resend domain not verified — check Render logs for `[EMAIL:resend]` line |
+| Emails not arriving | Missing/incorrect SMTP env vars, or `support@brandkrt.com` mailbox authentication failed — check Render logs for `[EMAIL:smtp]` |

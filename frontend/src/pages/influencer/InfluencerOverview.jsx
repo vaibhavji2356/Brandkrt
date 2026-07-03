@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Megaphone, CheckCircle2, Wallet, BadgeCheck, ArrowRight, Sparkles, Clock,
+  Megaphone, CheckCircle2, Wallet, BadgeCheck, ArrowRight, Sparkles, Clock, Loader2,
 } from "lucide-react";
-import api from "@/lib/api";
+import { toast } from "sonner";
+import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { StatusChip, EmptyState } from "@/components/State";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 function StatCard({ icon: Icon, label, value, hint, testId }) {
   return (
@@ -28,21 +32,29 @@ export default function InfluencerOverview() {
   const [payments, setPayments] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [influencer, setInfluencer] = useState(null);
+  const [verificationRequests, setVerificationRequests] = useState([]);
+  const [startingVerification, setStartingVerification] = useState(false);
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [verificationFiles, setVerificationFiles] = useState({ insights: null, identity: null, other: null });
+  const [verificationContact, setVerificationContact] = useState({ name: "", phone: "" });
+  const [verificationNotes, setVerificationNotes] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [d, p, n, me] = await Promise.all([
+        const [d, p, n, me, v] = await Promise.all([
           api.get("/deals"),
           api.get("/payments"),
           api.get("/notifications"),
           api.get("/influencers/me"),
+          api.get("/verification/mine"),
         ]);
         setDeals(d.data.deals || []);
         setPayments(p.data.payments || []);
         setNotifications(n.data.notifications || []);
         setInfluencer(me.data.influencer || null);
+        setVerificationRequests(v.data.requests || []);
       } catch (_) { /* noop */ }
       setLoading(false);
     })();
@@ -68,6 +80,63 @@ export default function InfluencerOverview() {
   const completedCount = deals.filter((d) => d.status === "completed").length;
   const unread = notifications.filter((n) => !n.read).length;
   const profileReady = !!influencer;
+  const latestVerification = verificationRequests.find((r) => r.kind === "influencer");
+  const verificationStatus = ["approved", "verified"].includes(influencer?.verification_status)
+    ? "verified"
+    : latestVerification?.status || "not_started";
+  const hasPendingVerification = verificationStatus === "pending";
+  const isVerificationInProgress = verificationStatus === "in_progress";
+  const callTime = latestVerification?.schedule_call_at;
+
+  const submitVerification = async () => {
+    if (!profileReady) {
+      toast.error("Please complete your Creator Profile before starting verification.");
+      return;
+    }
+    if (!verificationFiles.insights || !verificationFiles.identity) {
+      toast.error("Please upload account insights and proof of identity.");
+      return;
+    }
+    if (!verificationContact.name.trim() || !verificationContact.phone.trim()) {
+      toast.error("Please enter your name and WhatsApp phone number.");
+      return;
+    }
+
+    setStartingVerification(true);
+    try {
+      const uploadDoc = async (file, type, label) => {
+        if (!file) return null;
+        const fd = new FormData();
+        fd.append("file", file);
+        const { data } = await api.post("/uploads/verification", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        return { type, label, url: data.url, name: file.name };
+      };
+      const documents = (await Promise.all([
+        uploadDoc(verificationFiles.insights, "account_insights", "Account insights"),
+        uploadDoc(verificationFiles.identity, "identity_proof", "Proof of identity"),
+        uploadDoc(verificationFiles.other, "supporting_document", "Supporting document"),
+      ])).filter(Boolean);
+      const { data } = await api.post("/verification", {
+        kind: "influencer",
+        documents,
+        contact_name: verificationContact.name.trim(),
+        contact_phone: verificationContact.phone.trim(),
+        notes: verificationNotes || "Influencer submitted verification documents from the dashboard.",
+      });
+      if (data.request) {
+        setVerificationRequests((rows) => [data.request, ...rows.filter((row) => row.id !== data.request.id)]);
+      }
+      setVerificationOpen(false);
+      setVerificationFiles({ insights: null, identity: null, other: null });
+      setVerificationContact({ name: "", phone: "" });
+      setVerificationNotes("");
+      toast.success(data.already_pending ? "Verification request is already pending." : "Verification request sent to admin.");
+    } catch (err) {
+      toast.error(formatApiError(err));
+    } finally {
+      setStartingVerification(false);
+    }
+  };
 
   if (loading) {
     return <div className="text-muted-foreground">Loading…</div>;
@@ -168,19 +237,131 @@ export default function InfluencerOverview() {
           <BadgeCheck className="h-5 w-5 text-secondary mt-0.5" />
           <div>
             <div className="font-semibold text-primary dark:text-white">
-              {influencer?.verification_status === "approved" ? "You're a verified creator" : "Become a verified creator"}
+              {verificationStatus === "verified" ? "You're a verified creator" : isVerificationInProgress ? "Verification in progress" : hasPendingVerification ? "Verification pending" : "Become a verified creator"}
             </div>
             <div className="text-sm text-muted-foreground">
-              {influencer?.verification_status === "approved"
-                ? "Your profile has the verified badge — brands trust you instantly."
-                : "Verified creators get up to 3× more campaign invites. Submit your ID + handle proof from settings."}
+              {verificationStatus === "verified"
+                ? "Your profile has the verified badge. Brands trust you instantly."
+                : isVerificationInProgress && callTime
+                  ? `WhatsApp video call scheduled for ${new Date(callTime).toLocaleString()}.`
+                  : isVerificationInProgress
+                    ? "Admin is reviewing your documents. Your WhatsApp video call will be scheduled here."
+                    : hasPendingVerification
+                      ? "Your documents are waiting for admin review."
+                      : "Upload account insights, redacted ID proof, and supporting documents for admin review."}
             </div>
           </div>
         </div>
-        <Link to="/settings" className="inline-flex items-center gap-2 rounded-full border border-border bg-background hover:bg-accent px-4 py-2 text-sm font-semibold whitespace-nowrap">
-          Open settings <ArrowRight className="h-4 w-4" />
-        </Link>
+        {verificationStatus === "verified" ? (
+          <Link to="/influencer/profile" className="inline-flex items-center gap-2 rounded-full border border-border bg-background hover:bg-accent px-4 py-2 text-sm font-semibold whitespace-nowrap">
+            View profile <ArrowRight className="h-4 w-4" />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setVerificationOpen(true)}
+            disabled={startingVerification || hasPendingVerification || isVerificationInProgress || !profileReady}
+            className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 text-sm font-semibold whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+            data-testid="start-verification-btn"
+          >
+            {startingVerification ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
+            {isVerificationInProgress ? "In Progress" : hasPendingVerification ? "Request pending" : "Start Verification"}
+          </button>
+        )}
       </div>
+
+      <Dialog open={verificationOpen} onOpenChange={setVerificationOpen}>
+        <DialogContent className="max-w-xl" data-testid="verification-dialog">
+          <DialogHeader>
+            <DialogTitle>Start Verification</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Full name *</label>
+                <Input
+                  value={verificationContact.name}
+                  onChange={(event) => setVerificationContact((contact) => ({ ...contact, name: event.target.value }))}
+                  className="mt-2"
+                  placeholder={user?.name || "Your full name"}
+                  data-testid="verification-contact-name"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">WhatsApp phone *</label>
+                <Input
+                  value={verificationContact.phone}
+                  onChange={(event) => setVerificationContact((contact) => ({ ...contact, phone: event.target.value }))}
+                  className="mt-2"
+                  placeholder="+91 98765 43210"
+                  data-testid="verification-contact-phone"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Account insights *</label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="mt-2"
+                onChange={(event) => setVerificationFiles((files) => ({ ...files, insights: event.target.files?.[0] || null }))}
+                data-testid="verification-insights-input"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Proof of identity *</label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="mt-2"
+                onChange={(event) => setVerificationFiles((files) => ({ ...files, identity: event.target.files?.[0] || null }))}
+                data-testid="verification-identity-input"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Use a redacted Aadhaar or equivalent identity document.</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Other supporting document</label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="mt-2"
+                onChange={(event) => setVerificationFiles((files) => ({ ...files, other: event.target.files?.[0] || null }))}
+                data-testid="verification-other-input"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Notes for admin</label>
+              <Textarea
+                rows={3}
+                value={verificationNotes}
+                onChange={(event) => setVerificationNotes(event.target.value)}
+                className="mt-2"
+                placeholder="Share your primary handle, niche, or anything the admin should check."
+                data-testid="verification-notes-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setVerificationOpen(false)}
+              className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submitVerification}
+              disabled={startingVerification}
+              className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              data-testid="verification-submit-btn"
+            >
+              {startingVerification && <Loader2 className="h-4 w-4 animate-spin" />}
+              Submit for Review
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

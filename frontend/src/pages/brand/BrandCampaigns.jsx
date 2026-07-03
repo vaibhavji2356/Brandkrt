@@ -192,8 +192,6 @@ function NewCampaignDialog({ open, onClose, onCreated }) {
 
   useEffect(() => { if (!open) setForm(EMPTY_CAMPAIGN); }, [open]);
 
-  const absUrl = (rel) => (process.env.REACT_APP_BACKEND_URL || "") + rel;
-
   const pickImages = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -203,7 +201,7 @@ function NewCampaignDialog({ open, onClose, onCreated }) {
         const fd = new FormData();
         fd.append("file", f);
         const { data } = await api.post("/uploads/products", fd, { headers: { "Content-Type": "multipart/form-data" } });
-        return absUrl(data.url);
+        return data.url;
       }));
       set("product_images", [...form.product_images, ...urls]);
       toast.success(`${urls.length} image(s) uploaded.`);

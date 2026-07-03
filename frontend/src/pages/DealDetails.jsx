@@ -184,7 +184,7 @@ export default function DealDetails() {
       const fd = new FormData();
       fd.append("file", file);
       const { data } = await api.post("/uploads/products", fd, { headers: { "Content-Type": "multipart/form-data" } });
-      const url = (process.env.REACT_APP_BACKEND_URL || "") + data.url;
+      const url = data.url;
       setLinks((l) => ({ ...l, screenshot_url: url }));
       toast.success("Screenshot uploaded. Don't forget to save deliverables.");
     } catch (err) {

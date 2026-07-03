@@ -2,6 +2,13 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import api, { formatApiError } from "@/lib/api";
 
 const AuthContext = createContext(null);
+const TOKEN_KEY = "brandkrt_access_token";
+
+function saveAccessToken(token) {
+  if (typeof window === "undefined") return;
+  if (token) window.localStorage.setItem(TOKEN_KEY, token);
+  else window.localStorage.removeItem(TOKEN_KEY);
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);     // user object | null
@@ -14,8 +21,10 @@ export function AuthProvider({ children }) {
     } catch (e) {
       try {
         const { data } = await api.post("/auth/refresh");
+        saveAccessToken(data.access_token);
         setUser(data.user);
       } catch (refreshErr) {
+        saveAccessToken(null);
         setUser(null);
       }
     } finally {
@@ -27,24 +36,28 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password, remember_me = false) => {
     const { data } = await api.post("/auth/login", { email, password, remember_me });
+    saveAccessToken(data.access_token);
     setUser(data.user);
     return data.user;
   };
 
   const googleSignIn = async (credential) => {
     const { data } = await api.post("/auth/google", { credential });
+    saveAccessToken(data.access_token);
     setUser(data.user);
     return data.user;
   };
 
   const register = async (payload) => {
     const { data } = await api.post("/auth/register", payload);
+    saveAccessToken(data.access_token);
     setUser(data.user);
     return data.user;
   };
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch (e) {}
+    saveAccessToken(null);
     setUser(null);
   };
 

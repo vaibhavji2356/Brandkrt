@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="BrandKrt">
+  <rect width="1200" height="630" fill="#F8FAFC"/>
+  <rect x="70" y="70" width="1060" height="490" rx="42" fill="#0A1F44"/>
+  <rect x="116" y="116" width="128" height="128" rx="28" fill="#FFFFFF"/>
+  <path d="M147 209v-62h34c14 0 23 7 23 18 0 6-3 11-8 14 8 3 13 9 13 18 0 12-9 12-25 12h-37zm18-37h13c5 0 8-2 8-7s-3-7-8-7h-13v14zm0 25h17c6 0 9-3 9-8s-3-7-9-7h-17v15z" fill="#0A1F44"/>
+  <path d="M206 147h15v25l20-25h16l-22 27 24 35h-18l-17-25-3 4v21h-15v-62z" fill="#D4AF37"/>
+  <text x="116" y="356" fill="#FFFFFF" font-family="Outfit, Manrope, Arial, sans-serif" font-size="96" font-weight="300">Brand<tspan fill="#D4AF37" font-weight="700">krt</tspan></text>
+  <text x="120" y="426" fill="#D9E2F1" font-family="Manrope, Arial, sans-serif" font-size="32">Connecting Brands With Creators</text>
+</svg>
