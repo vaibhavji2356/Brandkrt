@@ -7,6 +7,7 @@ ActivityLogs, AdminLogs. Plus admin analytics & RBAC."""
 from __future__ import annotations
 
 import os
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Optional, List, Literal
@@ -868,16 +869,35 @@ def register_handlers():
         target = await db.users.find_one({"_id": oid(uid)}, {"password_hash": 0})
         if not target:
             raise HTTPException(404, "User not found")
-        await log_admin(str(user["_id"]), "user.delete", uid, {"email": target.get("email"), "role": target.get("role")})
-        await db.users.delete_one({"_id": oid(uid)})
+        email = (target.get("email") or "").lower().strip()
+        email_match = {"email": email} if email else {"_id": None}
+        await log_admin(str(user["_id"]), "user.delete", "erased-user", {"role": target.get("role")})
+
+        await db.users.delete_many({"$or": [{"_id": oid(uid)}, email_match]})
         await db.brands.delete_many({"user_id": uid})
         await db.influencers.delete_many({"user_id": uid})
         await db.verification_requests.delete_many({"user_id": uid})
         await db.withdrawal_requests.delete_many({"user_id": uid})
         await db.notifications.delete_many({"user_id": uid})
         await db.activity_logs.delete_many({"user_id": uid})
+        await db.admin_logs.delete_many({"target": uid})
+        await db.password_reset_tokens.delete_many({"$or": [{"user_id": uid}, email_match]})
+        await db.verification_tokens.delete_many({"$or": [{"user_id": uid}, email_match]})
+        await db.registration_otps.delete_many(email_match)
+        if email:
+            await db.login_attempts.delete_many({"identifier": {"$regex": f":{re.escape(email)}$"}})
         await db.saved_influencers.delete_many({"$or": [{"user_id": uid}, {"influencer_id": uid}]})
-        return {"success": True}
+        await db.campaigns.delete_many({"$or": [{"user_id": uid}, {"brand_id": uid}, {"creator_id": uid}, {"influencer_id": uid}]})
+        await db.deals.delete_many({"$or": [{"user_id": uid}, {"brand_id": uid}, {"creator_id": uid}, {"influencer_id": uid}]})
+        await db.payments.delete_many({"$or": [{"user_id": uid}, {"brand_id": uid}, {"creator_id": uid}, {"influencer_id": uid}]})
+        await db.messages.delete_many({"user_id": uid})
+        await db.conversations.delete_many({"$or": [{"user_id": uid}, {"participant_ids": uid}, {"participants": uid}]})
+        await db.collaborations.delete_many({"$or": [{"user_id": uid}, {"from_user_id": uid}, {"to_user_id": uid}, {"creator_id": uid}]})
+        await db.agreements.delete_many({"$or": [{"user_id": uid}, {"brand_id": uid}, {"influencer_id": uid}, {"creator_id": uid}]})
+        await db.reviews.delete_many({"$or": [{"user_id": uid}, {"reviewer_id": uid}, {"target_user_id": uid}]})
+        await db.reports.delete_many({"$or": [{"user_id": uid}, {"reporter_id": uid}, {"target_user_id": uid}]})
+        remaining = await db.users.count_documents(email_match) if email else 0
+        return {"success": True, "erased": True, "remaining_users_with_email": remaining}
 
     async def _verification_out(req: dict) -> dict:
         out = doc_out(req)
