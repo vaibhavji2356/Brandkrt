@@ -94,6 +94,17 @@ MAX_UPLOAD_MB=10
 
 If `CLOUDINARY_URL` is not set, uploads continue to land on Render's local disk (ephemeral — files vanish on redeploy). Use this for dev only.
 
+### Optional — Payments (Razorpay)
+```
+PAYMENT_PROVIDER=razorpay
+RAZORPAY_KEY_ID=rzp_test_xxx
+RAZORPAY_KEY_SECRET=<your Razorpay key secret>
+```
+- `POST /api/payments/escrow` creates a Razorpay Order and returns Checkout details to the React app.
+- The React app opens Razorpay Checkout from the existing `Fund escrow` button.
+- After payment, `POST /api/payments/razorpay/verify` verifies the Razorpay signature on the backend before marking escrow as funded.
+- Use test keys first. Switch to live keys only after Razorpay account activation and a successful test payment.
+
 ### Optional — Payments (Stripe)
 ```
 PAYMENT_PROVIDER=stripe

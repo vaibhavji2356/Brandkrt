@@ -125,7 +125,7 @@ See `memory/test_credentials.md`. **Rotate before production.**
   - SMTP email provider (env-driven, safe console fallback in dev)
   - Google OAuth sign-in via Google Identity Services + ID-token verification
   - Cloudinary file storage with local fallback (`POST /api/uploads/{folder}` and `POST /api/chat/upload` unchanged)
-  - Pluggable payment provider — `stub` (default) or `stripe` via `PAYMENT_PROVIDER`
+  - Pluggable payment provider — `stub` (default), `razorpay`, or `stripe` via `PAYMENT_PROVIDER`
   - Security middleware: HSTS in prod, X-Frame-Options DENY, Permissions-Policy, Origin-based CSRF check
   - In-memory rate limiter on register / forgot-password / contact / OAuth
   - Production-safe logging with secret redaction
@@ -133,4 +133,4 @@ See `memory/test_credentials.md`. **Rotate before production.**
   - Expanded SEO: canonical, JSON-LD Organization + WebSite + Product, richer OG/Twitter, image sitemap
   - Vercel security headers + static asset immutable cache
   - `.env.example` for backend and frontend
-  - Detailed `DEPLOYMENT.md` covering SMTP email, Google OAuth, Cloudinary, Stripe activation
+  - Detailed `DEPLOYMENT.md` covering SMTP email, Google OAuth, Cloudinary, Razorpay/Stripe activation

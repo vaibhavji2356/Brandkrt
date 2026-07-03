@@ -82,6 +82,26 @@ const DELIVERABLE_FIELDS = [
   { key: "instagram_story",  label: "Instagram Story",  icon: Instagram, placeholder: "https://www.instagram.com/stories/…" },
 ];
 
+const RAZORPAY_CHECKOUT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
+
+function loadRazorpayCheckout() {
+  if (window.Razorpay) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${RAZORPAY_CHECKOUT_SRC}"]`);
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", reject, { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = RAZORPAY_CHECKOUT_SRC;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error("Could not load Razorpay Checkout"));
+    document.body.appendChild(script);
+  });
+}
+
 export default function DealDetails() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -200,8 +220,54 @@ export default function DealDetails() {
     setBusy(true);
     try {
       const { data } = await api.post("/payments/escrow", { deal_id: id, amount: Number(deal.amount) || 0 });
-      setPayment(data.payment || null);
-      toast.success("Escrow funded. Messaging is now unlocked.");
+      const createdPayment = data.payment || null;
+      const checkout = createdPayment?.checkout;
+      if (checkout?.provider === "razorpay") {
+        await loadRazorpayCheckout();
+        await new Promise((resolve, reject) => {
+          const rzp = new window.Razorpay({
+            key: checkout.key_id,
+            amount: checkout.amount,
+            currency: checkout.currency || "INR",
+            name: "BrandKrt",
+            description: campaign?.title ? `Escrow for ${campaign.title}` : "BrandKrt escrow payment",
+            image: `${window.location.origin}/assets/brandkrt-logo-original.jpeg`,
+            order_id: checkout.order_id,
+            prefill: {
+              name: user?.name || "",
+              email: user?.email || "",
+              contact: user?.phone || "",
+            },
+            notes: { deal_id: id, payment_id: createdPayment.id },
+            theme: { color: "#061b46" },
+            handler: async (response) => {
+              try {
+                const verified = await api.post("/payments/razorpay/verify", {
+                  payment_id: createdPayment.id,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                });
+                setPayment(verified.data.payment || null);
+                toast.success("Escrow funded. Messaging is now unlocked.");
+                resolve();
+              } catch (err) {
+                reject(err);
+              }
+            },
+            modal: {
+              ondismiss: () => reject(new Error("Payment cancelled before completion.")),
+            },
+          });
+          rzp.on("payment.failed", (response) => {
+            reject(new Error(response?.error?.description || "Razorpay payment failed."));
+          });
+          rzp.open();
+        });
+      } else {
+        setPayment(createdPayment);
+        toast.success("Escrow funded. Messaging is now unlocked.");
+      }
     } catch (err) {
       toast.error(formatApiError(err));
     }

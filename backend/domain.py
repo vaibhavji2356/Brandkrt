@@ -248,6 +248,13 @@ class PaymentCreateIn(BaseModel):
     amount: float = Field(ge=0)
 
 
+class RazorpayVerifyIn(BaseModel):
+    payment_id: str
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
 # ============== VERIFICATION ==============
 class VerificationIn(BaseModel):
     kind: Literal["brand", "influencer"]
@@ -541,31 +548,110 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(payload.deal_id)})
         if not deal:
             raise HTTPException(404, "Deal not found")
+        existing = await db.payments.find_one({
+            "deal_id": payload.deal_id,
+            "status": {"$in": ["pending", "escrowed", "released"]},
+        })
+        if existing:
+            out = doc_out(existing)
+            if existing.get("provider") == "razorpay" and existing.get("status") == "pending":
+                out["checkout"] = {
+                    "provider": "razorpay",
+                    "key_id": existing.get("provider_key_id"),
+                    "order_id": existing.get("transaction_id"),
+                    "amount": existing.get("amount_subunits"),
+                    "currency": existing.get("currency", "INR"),
+                }
+            return {"payment": out}
         now = now_utc()
         platform_fee = round(payload.amount * 0.08, 2)
         influencer_earning = round(payload.amount - platform_fee, 2)
-        # delegate to provider (stub by default; stripe when PAYMENT_PROVIDER=stripe)
+        # delegate to provider (stub by default; razorpay/stripe when configured)
         try:
             import payments as _payments  # noqa: WPS433
             pr = _payments.get_provider().create_escrow(amount=payload.amount, deal_id=payload.deal_id)
             txid = pr.get("transaction_id") or secrets.token_hex(8).upper()
             client_secret = pr.get("client_secret")
             provider_name = pr.get("provider", "stub")
-        except Exception:
+            provider_status = pr.get("status", "escrowed")
+        except Exception as exc:
+            configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").lower()
+            if configured_provider in {"stripe", "razorpay"}:
+                raise HTTPException(503, f"{configured_provider.title()} payment provider is not configured correctly") from exc
             txid = secrets.token_hex(8).upper()
             client_secret = None
             provider_name = "stub"
+            provider_status = "escrowed"
+            pr = {}
+        is_razorpay_pending = provider_name == "razorpay" and provider_status == "pending"
         doc = {"deal_id": payload.deal_id, "amount": payload.amount,
                "platform_fee": platform_fee, "influencer_earning": influencer_earning,
-               "release_status": "held", "transaction_id": txid,
+               "release_status": "pending" if is_razorpay_pending else "held", "transaction_id": txid,
                "provider": provider_name, "client_secret": client_secret,
-               "status": "escrowed", "created_at": now, "updated_at": now}
+               "status": "pending" if is_razorpay_pending else "escrowed",
+               "currency": pr.get("currency", "INR"),
+               "amount_subunits": pr.get("amount_subunits"),
+               "provider_key_id": pr.get("key_id"),
+               "receipt": pr.get("receipt"),
+               "created_at": now, "updated_at": now}
         res = await db.payments.insert_one(doc)
         await db.transactions.insert_one({
             "user_id": str(user["_id"]), "type": "escrow_in", "amount": payload.amount,
-            "ref": str(res.inserted_id), "status": "ok", "created_at": now,
+            "ref": str(res.inserted_id), "status": "pending" if is_razorpay_pending else "ok", "created_at": now,
         })
-        return {"payment": doc_out(await db.payments.find_one({"_id": res.inserted_id}))}
+        payment_out = doc_out(await db.payments.find_one({"_id": res.inserted_id}))
+        if is_razorpay_pending:
+            payment_out["checkout"] = {
+                "provider": "razorpay",
+                "key_id": pr.get("key_id"),
+                "order_id": txid,
+                "amount": pr.get("amount_subunits"),
+                "currency": pr.get("currency", "INR"),
+            }
+        return {"payment": payment_out}
+
+    @payment_router.post("/razorpay/verify")
+    async def _razorpay_verify(payload: RazorpayVerifyIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "brand", "admin")
+        pay = await db.payments.find_one({"_id": oid(payload.payment_id)})
+        if not pay:
+            raise HTTPException(404, "Payment not found")
+        if pay.get("provider") != "razorpay":
+            raise HTTPException(400, "Payment is not a Razorpay payment")
+        if pay.get("transaction_id") != payload.razorpay_order_id:
+            raise HTTPException(400, "Razorpay order does not match this payment")
+        try:
+            import payments as _payments  # noqa: WPS433
+            ok = _payments.get_provider().verify(
+                order_id=payload.razorpay_order_id,
+                payment_id=payload.razorpay_payment_id,
+                signature=payload.razorpay_signature,
+            )
+        except Exception as exc:
+            raise HTTPException(503, "Razorpay payment provider is not configured correctly") from exc
+        if not ok:
+            await db.payments.update_one(
+                {"_id": oid(payload.payment_id)},
+                {"$set": {"status": "verification_failed", "updated_at": now_utc()}},
+            )
+            raise HTTPException(400, "Razorpay signature verification failed")
+        now = now_utc()
+        await db.payments.update_one(
+            {"_id": oid(payload.payment_id)},
+            {"$set": {
+                "status": "escrowed",
+                "release_status": "held",
+                "provider_payment_id": payload.razorpay_payment_id,
+                "verified_at": now,
+                "updated_at": now,
+            }},
+        )
+        await db.transactions.update_one(
+            {"ref": payload.payment_id, "type": "escrow_in"},
+            {"$set": {"status": "ok", "provider_payment_id": payload.razorpay_payment_id, "updated_at": now}},
+        )
+        fresh = await db.payments.find_one({"_id": oid(payload.payment_id)})
+        return {"success": True, "payment": doc_out(fresh)}
 
     @payment_router.post("/{pid}/release")
     async def _release(pid: str, user: dict = Depends(get_current_user)):
@@ -573,6 +659,8 @@ def register_handlers():
         pay = await db.payments.find_one({"_id": oid(pid)})
         if not pay:
             raise HTTPException(404, "Payment not found")
+        if pay.get("status") == "pending":
+            raise HTTPException(400, "Payment must be completed before it can be released")
         # ask provider to capture (no-op for stub)
         try:
             import payments as _payments  # noqa: WPS433
