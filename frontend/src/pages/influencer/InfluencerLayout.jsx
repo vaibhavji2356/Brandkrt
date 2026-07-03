@@ -33,7 +33,9 @@ export default function InfluencerLayout() {
     if (loading) return;
     if (!user) {
       navigate("/login?from=/influencer", { replace: true });
-    } else if (user.role !== "influencer" && user.role !== "admin") {
+    } else if (user.role === "admin") {
+      navigate("/admin", { replace: true });
+    } else if (user.role !== "influencer") {
       navigate("/profile", { replace: true });
     }
   }, [user, loading, navigate]);

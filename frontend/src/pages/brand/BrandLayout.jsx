@@ -33,7 +33,9 @@ export default function BrandLayout() {
     if (loading) return;
     if (!user) {
       navigate("/login?from=/brand", { replace: true });
-    } else if (user.role !== "brand" && user.role !== "admin") {
+    } else if (user.role === "admin") {
+      navigate("/admin", { replace: true });
+    } else if (user.role !== "brand") {
       navigate("/profile", { replace: true });
     }
   }, [user, loading, navigate]);
