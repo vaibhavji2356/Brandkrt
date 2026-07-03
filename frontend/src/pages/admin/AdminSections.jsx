@@ -16,6 +16,11 @@ export function AdminUsers() {
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
   const [loading, setLoading] = useState(false);
+  const [active, setActive] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
   const load = async () => {
     try {
       setLoading(true);
@@ -28,8 +33,62 @@ export function AdminUsers() {
       setLoading(false);
     }
   };
+
+  const openUser = async (u) => {
+    try {
+      setBusy(true);
+      setActive(u);
+      setOpen(true);
+      const { data } = await api.get(`/admin/users/${u.id}`);
+      setDetail(data);
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const suspendUser = async (suspended) => {
+    if (!active) return;
+    try {
+      setBusy(true);
+      const { data } = await api.post(`/admin/users/${active.id}/suspend`, { suspended });
+      setDetail(data);
+      setActive(data.user);
+      setRows((list) => list.map((u) => (u.id === data.user.id ? data.user : u)));
+      toast.success(suspended ? "User suspended." : "User reactivated.");
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteUser = async () => {
+    if (!active) return;
+    if (!window.confirm(`Permanently delete ${active.email}? This cannot be undone.`)) return;
+    try {
+      setBusy(true);
+      await api.delete(`/admin/users/${active.id}`);
+      setRows((list) => list.filter((u) => u.id !== active.id));
+      setOpen(false);
+      setActive(null);
+      setDetail(null);
+      toast.success("User deleted.");
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, []);
+
+  const history = detail?.history || {};
+  const profile = detail?.profile || {};
+  const currentUser = detail?.user || active;
+
   return (
     <Section title="Users">
       <div className="flex gap-3">
@@ -42,23 +101,115 @@ export function AdminUsers() {
       <div className="rounded-2xl border border-border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-accent dark:bg-card text-left">
-            <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Verified</th><th className="px-4 py-3">Created</th></tr>
+            <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Verified</th><th className="px-4 py-3">Created</th></tr>
           </thead>
           <tbody>
             {rows.map((u) => (
-              <tr key={u.id} className="border-t border-border" data-testid={`user-row-${u.id}`}>
+              <tr key={u.id} onClick={() => openUser(u)} className="border-t border-border cursor-pointer hover:bg-accent/60" data-testid={`user-row-${u.id}`}>
                 <td className="px-4 py-3 font-medium text-primary dark:text-white">{u.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                 <td className="px-4 py-3 capitalize">{u.role}</td>
+                <td className="px-4 py-3"><StatusChip value={u.status || "active"} /></td>
                 <td className="px-4 py-3">{u.email_verified ? "Yes" : "No"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{(u.created_at || "").slice(0, 10)}</td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">{loading ? "Loading users..." : "No users found"}</td></tr>}
+            {!rows.length && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">{loading ? "Loading users..." : "No users found"}</td></tr>}
           </tbody>
         </table>
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto" data-testid="admin-user-detail">
+          <DialogHeader><DialogTitle>User profile</DialogTitle></DialogHeader>
+          {currentUser && (
+            <div className="space-y-6">
+              <div className="flex flex-col gap-4 rounded-2xl border border-border bg-background p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <div className="text-xl font-semibold text-primary dark:text-white">{currentUser.name || "Unnamed user"}</div>
+                  <div className="text-sm text-muted-foreground">{currentUser.email}</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <StatusChip value={currentUser.role} />
+                    <StatusChip value={currentUser.status || "active"} />
+                    <StatusChip value={currentUser.email_verified ? "email_verified" : "email_unverified"} />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(currentUser.status || "active") === "suspended" ? (
+                    <button onClick={() => suspendUser(false)} disabled={busy} className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60">Reactivate</button>
+                  ) : (
+                    <button onClick={() => suspendUser(true)} disabled={busy} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-60">Suspend</button>
+                  )}
+                  <button onClick={deleteUser} disabled={busy} className="rounded-full bg-destructive text-destructive-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60">Delete permanently</button>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-border p-4">
+                  <div className="text-sm font-semibold text-primary dark:text-white">Account details</div>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <InfoRow label="User ID" value={currentUser.id} />
+                    <InfoRow label="Role" value={currentUser.role} />
+                    <InfoRow label="Created" value={currentUser.created_at} />
+                    <InfoRow label="Email verified" value={currentUser.email_verified ? "Yes" : "No"} />
+                  </dl>
+                </div>
+                <div className="rounded-2xl border border-border p-4">
+                  <div className="text-sm font-semibold text-primary dark:text-white">Profile details</div>
+                  {profile ? (
+                    <dl className="mt-3 space-y-2 text-sm">
+                      {Object.entries(profile).filter(([key]) => !["_id", "id", "user_id", "created_at", "updated_at"].includes(key)).slice(0, 12).map(([key, value]) => (
+                        <InfoRow key={key} label={key.replaceAll("_", " ")} value={typeof value === "object" ? JSON.stringify(value) : value} />
+                      ))}
+                    </dl>
+                  ) : <p className="mt-3 text-sm text-muted-foreground">No profile created yet.</p>}
+                </div>
+              </div>
+
+              <HistoryBlock title="Activity logs" rows={history.activity_logs} fields={["action", "entity", "entity_id", "created_at"]} />
+              <HistoryBlock title="Admin actions" rows={history.admin_logs} fields={["action", "target", "created_at"]} />
+              <div className="grid gap-4 md:grid-cols-2">
+                <HistoryBlock title="Verification requests" rows={history.verification_requests} fields={["kind", "status", "schedule_call_at", "created_at"]} compact />
+                <HistoryBlock title="Withdrawals" rows={history.withdrawals} fields={["amount", "method", "status", "created_at"]} compact />
+                <HistoryBlock title="Campaigns" rows={history.campaigns} fields={["title", "status", "budget", "created_at"]} compact />
+                <HistoryBlock title="Deals" rows={history.deals} fields={["campaign_id", "status", "amount", "created_at"]} compact />
+              </div>
+            </div>
+          )}
+          {!currentUser && <p className="text-sm text-muted-foreground">{busy ? "Loading user..." : "No user selected."}</p>}
+        </DialogContent>
+      </Dialog>
     </Section>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <dt className="capitalize text-muted-foreground">{label}</dt>
+      <dd className="max-w-[65%] break-words text-right text-foreground/90">{String(value ?? "-")}</dd>
+    </div>
+  );
+}
+
+function HistoryBlock({ title, rows = [], fields, compact = false }) {
+  return (
+    <div className="rounded-2xl border border-border p-4">
+      <div className="text-sm font-semibold text-primary dark:text-white">{title}</div>
+      <div className={`mt-3 space-y-2 ${compact ? "max-h-56" : "max-h-72"} overflow-auto`}>
+        {rows.map((row) => (
+          <div key={row.id} className="rounded-xl bg-accent/60 px-3 py-2 text-xs">
+            {fields.map((field) => (
+              <div key={field} className="flex justify-between gap-3">
+                <span className="capitalize text-muted-foreground">{field.replaceAll("_", " ")}</span>
+                <span className="max-w-[65%] break-words text-right">{String(row[field] ?? "-")}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        {!rows.length && <p className="text-sm text-muted-foreground">No records.</p>}
+      </div>
+    </div>
   );
 }
 

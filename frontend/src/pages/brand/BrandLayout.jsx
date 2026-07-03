@@ -8,6 +8,10 @@ import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
 import { useAuth } from "@/context/AuthContext";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const NAV = [
   { to: "/brand", end: true, icon: LayoutDashboard, label: "Overview" },
@@ -95,31 +99,36 @@ export default function BrandLayout() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
-            <div className="h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center" data-testid="brand-avatar">
+            <div className="hidden md:flex h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold items-center justify-center" data-testid="brand-avatar">
               {initials}
             </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="md:hidden h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center" data-testid="brand-mobile-menu">
+                  {initials}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 max-h-[75vh] overflow-auto">
+                <DropdownMenuLabel className="flex flex-col">
+                  <span className="text-sm font-semibold">{user.name || "Brand"}</span>
+                  <span className="text-xs text-muted-foreground">{user.email}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {NAV.map((item) => (
+                  <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} data-testid={`brand-mobile-menu-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                    <item.icon className="mr-2 h-4 w-4" /> {item.label}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={async () => { await logout(); navigate("/"); }} data-testid="brand-mobile-logout">
+                  <LogOut className="mr-2 h-4 w-4" /> Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-card flex justify-between px-1 py-1" data-testid="brand-mobile-nav">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                `flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium ${
-                  isActive ? "text-secondary" : "text-muted-foreground"
-                }`
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              <span className="truncate max-w-[64px]">{item.label.split(" ")[0]}</span>
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="p-4 md:p-8 pb-24 md:pb-8">
+        <div className="p-4 md:p-8">
           <Outlet />
         </div>
       </main>

@@ -275,6 +275,10 @@ class WithdrawalDecisionIn(BaseModel):
     note: Optional[str] = None
 
 
+class AdminUserStatusIn(BaseModel):
+    suspended: bool = True
+
+
 # ============== REVIEW / REPORT ==============
 class ReviewIn(BaseModel):
     target_user_id: str
@@ -793,7 +797,87 @@ def register_handlers():
         if q:
             query["$or"] = [{"email": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]
         cur = db.users.find(query, {"password_hash": 0}).sort("created_at", -1).limit(min(limit, 200))
-        return {"users": [doc_out(x) async for x in cur]}
+        rows = []
+        async for row in cur:
+            out = doc_out(row)
+            out["status"] = out.get("status") or "active"
+            rows.append(out)
+        return {"users": rows}
+
+    async def _admin_user_detail_out(uid: str) -> dict:
+        target = await db.users.find_one({"_id": oid(uid)}, {"password_hash": 0})
+        if not target:
+            raise HTTPException(404, "User not found")
+        target_out = doc_out(target)
+        target_out["status"] = target_out.get("status") or "active"
+        profile = None
+        if target.get("role") == "brand":
+            profile = await db.brands.find_one({"user_id": uid})
+        elif target.get("role") == "influencer":
+            profile = await db.influencers.find_one({"user_id": uid})
+
+        activity = await db.activity_logs.find({"user_id": uid}).sort("created_at", -1).limit(100).to_list(100)
+        admin_history = await db.admin_logs.find({"target": uid}).sort("created_at", -1).limit(100).to_list(100)
+        verifications = await db.verification_requests.find({"user_id": uid}).sort("created_at", -1).limit(20).to_list(20)
+        withdrawals = await db.withdrawal_requests.find({"user_id": uid}).sort("created_at", -1).limit(20).to_list(20)
+        notifications = await db.notifications.find({"user_id": uid}).sort("created_at", -1).limit(20).to_list(20)
+        deals = await db.deals.find({"$or": [{"brand_id": uid}, {"influencer_id": uid}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
+        campaigns = await db.campaigns.find({"$or": [{"brand_id": uid}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
+        payments = await db.payments.find({"$or": [{"brand_id": uid}, {"influencer_id": uid}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
+
+        return {
+            "user": target_out,
+            "profile": doc_out(profile) if profile else None,
+            "history": {
+                "activity_logs": [doc_out(x) for x in activity],
+                "admin_logs": [doc_out(x) for x in admin_history],
+                "verification_requests": [doc_out(x) for x in verifications],
+                "withdrawals": [doc_out(x) for x in withdrawals],
+                "notifications": [doc_out(x) for x in notifications],
+                "deals": [doc_out(x) for x in deals],
+                "campaigns": [doc_out(x) for x in campaigns],
+                "payments": [doc_out(x) for x in payments],
+            },
+        }
+
+    @admin_router.get("/users/{uid}")
+    async def _admin_user_detail(uid: str, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        return await _admin_user_detail_out(uid)
+
+    @admin_router.post("/users/{uid}/suspend")
+    async def _admin_user_suspend(uid: str, payload: AdminUserStatusIn, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        if uid == str(user["_id"]):
+            raise HTTPException(400, "You cannot suspend your own admin account")
+        status = "suspended" if payload.suspended else "active"
+        now = now_utc()
+        res = await db.users.update_one({"_id": oid(uid)}, {"$set": {"status": status, "updated_at": now}})
+        if not res.matched_count:
+            raise HTTPException(404, "User not found")
+        await db.brands.update_one({"user_id": uid}, {"$set": {"status": status, "updated_at": now}})
+        await db.influencers.update_one({"user_id": uid}, {"$set": {"status": status, "updated_at": now}})
+        await log_admin(str(user["_id"]), f"user.{status}", uid)
+        return await _admin_user_detail_out(uid)
+
+    @admin_router.delete("/users/{uid}")
+    async def _admin_user_delete(uid: str, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        if uid == str(user["_id"]):
+            raise HTTPException(400, "You cannot delete your own admin account")
+        target = await db.users.find_one({"_id": oid(uid)}, {"password_hash": 0})
+        if not target:
+            raise HTTPException(404, "User not found")
+        await log_admin(str(user["_id"]), "user.delete", uid, {"email": target.get("email"), "role": target.get("role")})
+        await db.users.delete_one({"_id": oid(uid)})
+        await db.brands.delete_many({"user_id": uid})
+        await db.influencers.delete_many({"user_id": uid})
+        await db.verification_requests.delete_many({"user_id": uid})
+        await db.withdrawal_requests.delete_many({"user_id": uid})
+        await db.notifications.delete_many({"user_id": uid})
+        await db.activity_logs.delete_many({"user_id": uid})
+        await db.saved_influencers.delete_many({"$or": [{"user_id": uid}, {"influencer_id": uid}]})
+        return {"success": True}
 
     async def _verification_out(req: dict) -> dict:
         out = doc_out(req)
