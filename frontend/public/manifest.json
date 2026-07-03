@@ -2,7 +2,7 @@
   "short_name": "BrandKrt",
   "name": "BrandKrt — Connecting Brands With Creators",
   "icons": [
-    { "src": "/assets/brandkrt-icon.svg", "type": "image/svg+xml", "sizes": "512x512", "purpose": "any maskable" }
+    { "src": "/assets/brandkrt-logo-original.jpeg", "type": "image/jpeg", "sizes": "1024x1536", "purpose": "any" }
   ],
   "start_url": "/",
   "display": "standalone",

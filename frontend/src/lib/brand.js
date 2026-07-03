@@ -1,6 +1,6 @@
 export const LOGO = {
-  full: "/assets/brandkrt-og.svg",
-  icon: "/assets/brandkrt-icon.svg",
+  full: "/assets/brandkrt-logo-original.jpeg",
+  icon: "/assets/brandkrt-logo-original.jpeg",
 };
 
 export const BRAND = {
