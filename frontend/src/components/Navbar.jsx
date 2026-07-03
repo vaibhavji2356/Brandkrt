@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, LogOut, User as UserIcon, Settings as SettingsIcon, LayoutDashboard } from "lucide-react";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
@@ -23,6 +23,7 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -34,6 +35,19 @@ export default function Navbar() {
   const initials = (user?.name || user?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : user?.role === "influencer" ? "/influencer" : "/profile";
+  const isMarketingPage = ["/", "/about", "/contact", "/help", "/privacy", "/terms", "/refund"].includes(location.pathname);
+  const showAccountMenu = !!user && !isMarketingPage;
+
+  const go = (path) => {
+    setOpen(false);
+    navigate(path);
+  };
+
+  const signOut = async () => {
+    await logout();
+    setOpen(false);
+    navigate("/");
+  };
 
   return (
     <header
@@ -62,7 +76,7 @@ export default function Navbar() {
 
         <div className="hidden md:flex items-center gap-3">
           <ThemeToggle />
-          {user ? (
+          {showAccountMenu ? (
             <>
               <NotificationBell />
               <DropdownMenu>
@@ -78,7 +92,7 @@ export default function Navbar() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {(user.role === "influencer" || user.role === "admin" || user.role === "brand") && (
-                  <DropdownMenuItem data-testid="menu-dashboard" onClick={() => navigate(user.role === "admin" ? "/admin" : user.role === "brand" ? "/brand" : "/influencer")}>
+                  <DropdownMenuItem data-testid="menu-dashboard" onClick={() => navigate(dashboardPath)}>
                     <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                   </DropdownMenuItem>
                 )}
@@ -89,7 +103,7 @@ export default function Navbar() {
                   <SettingsIcon className="mr-2 h-4 w-4" /> Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem data-testid="menu-logout" onClick={async () => { await logout(); navigate("/"); }}>
+                <DropdownMenuItem data-testid="menu-logout" onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" /> Log out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -115,14 +129,45 @@ export default function Navbar() {
           )}
         </div>
 
-        <button
-          className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground"
-          onClick={() => setOpen((v) => !v)}
-          data-testid="navbar-mobile-toggle"
-          aria-label="Toggle menu"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="md:hidden flex items-center gap-2">
+          {showAccountMenu && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button data-testid="navbar-mobile-user-menu" className="h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center">
+                  {initials}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="flex flex-col">
+                  <span className="text-sm font-semibold">{user.name}</span>
+                  <span className="text-xs text-muted-foreground">{user.email}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem data-testid="mobile-account-dashboard" onClick={() => go(dashboardPath)}>
+                  <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem data-testid="mobile-account-profile" onClick={() => go("/profile")}>
+                  <UserIcon className="mr-2 h-4 w-4" /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem data-testid="mobile-account-settings" onClick={() => go("/settings")}>
+                  <SettingsIcon className="mr-2 h-4 w-4" /> Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem data-testid="mobile-account-logout" onClick={signOut}>
+                  <LogOut className="mr-2 h-4 w-4" /> Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <button
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground"
+            onClick={() => setOpen((v) => !v)}
+            data-testid="navbar-mobile-toggle"
+            aria-label="Toggle menu"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -141,36 +186,8 @@ export default function Navbar() {
             ))}
             <div className="flex items-center justify-between pt-2">
               <ThemeToggle />
-              {user ? (
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setOpen(false); navigate(dashboardPath); }}
-                    className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"
-                    data-testid="mobile-menu-dashboard"
-                  >
-                    <LayoutDashboard className="h-4 w-4" /> Dashboard
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setOpen(false); navigate("/profile"); }}
-                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold"
-                    data-testid="mobile-menu-profile"
-                  >
-                    <UserIcon className="h-4 w-4" /> Profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setOpen(false); navigate("/settings"); }}
-                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 text-sm font-semibold"
-                    data-testid="mobile-menu-settings"
-                  >
-                    <SettingsIcon className="h-4 w-4" /> Settings
-                  </button>
-                  <button onClick={async () => { await logout(); setOpen(false); navigate("/"); }} className="text-sm font-semibold rounded-full bg-primary text-primary-foreground px-5 py-2.5">
-                    Log out
-                  </button>
-                </div>
+              {showAccountMenu ? (
+                <div className="text-xs text-muted-foreground text-right">Account options are in the round profile button.</div>
               ) : (
                 <div className="flex gap-2">
                   <Link to="/login" onClick={() => setOpen(false)} className="text-sm font-medium px-4 py-2">Login</Link>
