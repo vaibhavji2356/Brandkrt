@@ -38,10 +38,12 @@ def welcome(name: str) -> dict:
     return {"subject": "Welcome to BrandKrt", "html": html, "text": text}
 
 
-def verify_email(link: str) -> dict:
+def verify_email(link: str, code: str | None = None) -> dict:
+    code_html = f"<p>Your OTP code is:</p><p style='font-size:28px;letter-spacing:8px;font-weight:700;color:#0A1F44'>{code}</p>" if code else ""
+    code_text = f"\nOTP code: {code}" if code else ""
     html = _shell("Verify your email",
-        f"<h1>Verify your email</h1><p>Confirm your email to activate your BrandKrt account. This link expires in 24 hours.</p><a class='btn' href='{link}'>Verify email</a><p class='muted'>Or paste this link into your browser: {link}</p>")
-    return {"subject": "Verify your BrandKrt email", "html": html, "text": f"Verify your email: {link}"}
+        f"<h1>Verify your email</h1><p>Confirm your email to activate your BrandKrt account. This link expires in 24 hours.</p>{code_html}<a class='btn' href='{link}'>Verify email</a><p class='muted'>Or paste this link into your browser: {link}</p>")
+    return {"subject": "Verify your BrandKrt email", "html": html, "text": f"Verify your email: {link}{code_text}"}
 
 
 def reset_password(link: str) -> dict:

@@ -185,6 +185,12 @@ class EmailService:
         msg = tpl(link)
         await self._send(to, msg["subject"], msg["text"], msg.get("html"))
 
+    async def send_signup_otp(self, to: str, code: str) -> None:
+        from email_templates import verify_email as tpl  # lazy import
+        link = f"{self.frontend_url}/verify-email"
+        msg = tpl(link, code)
+        await self._send(to, msg["subject"], msg["text"], msg.get("html"))
+
     async def send_password_reset(self, to: str, token: str) -> None:
         from email_templates import reset_password as tpl
         link = f"{self.frontend_url}/reset-password?token={token}"
@@ -298,7 +304,13 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     role: Role
+    phone: Optional[str] = None
+    otp_code: str = Field(min_length=4, max_length=12)
     accept_terms: bool = True
+
+
+class RegisterOtpIn(BaseModel):
+    email: EmailStr
 
 
 class LoginIn(BaseModel):
@@ -401,6 +413,29 @@ async def _clear_failed(identifier: str) -> None:
 # -----------------------------------------------------------------------------
 # Auth endpoints
 # -----------------------------------------------------------------------------
+@auth_router.post("/register/send-otp")
+async def send_register_otp(payload: RegisterOtpIn, _rl: None = Depends(_security.limiter_dependency("register_otp", limit=5, window=600))):
+    email = payload.email.lower().strip()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    now = datetime.now(timezone.utc)
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    await db.registration_otps.update_many(
+        {"email": email, "used": False},
+        {"$set": {"used": True, "updated_at": now}},
+    )
+    await db.registration_otps.insert_one({
+        "email": email,
+        "code": code,
+        "used": False,
+        "expires_at": now + timedelta(minutes=10),
+        "created_at": now,
+        "updated_at": now,
+    })
+    await email_service.send_signup_otp(email, code)
+    return {"success": True, "message": "OTP sent to your email inbox"}
+
+
 @auth_router.post("/register")
 async def register(payload: RegisterIn, response: Response):
     if not payload.accept_terms:
@@ -411,12 +446,19 @@ async def register(payload: RegisterIn, response: Response):
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
     now = datetime.now(timezone.utc)
+    otp = await db.registration_otps.find_one({"email": email, "code": payload.otp_code.strip(), "used": False})
+    if not otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP code")
+    if _aware(otp["expires_at"]) < now:
+        raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
+
     doc = {
         "email": email,
         "name": payload.name.strip(),
         "role": payload.role,
         "password_hash": hash_password(payload.password),
-        "email_verified": False,
+        "phone": (payload.phone or "").strip(),
+        "email_verified": True,
         "avatar_url": None,
         "cover_url": None,
         "created_at": now,
@@ -424,20 +466,13 @@ async def register(payload: RegisterIn, response: Response):
     }
     result = await db.users.insert_one(doc)
     user_id = str(result.inserted_id)
-
-    # email verification token
-    verify_token = secrets.token_urlsafe(32)
-    await db.verification_tokens.insert_one({
-        "token": verify_token, "user_id": user_id, "email": email,
-        "expires_at": now + timedelta(hours=24), "used": False, "created_at": now,
-    })
-    await email_service.send_verification(email, verify_token)
+    await db.registration_otps.update_one({"_id": otp["_id"]}, {"$set": {"used": True, "used_at": now}})
 
     access = create_access_token(user_id, email, payload.role)
     refresh = create_refresh_token(user_id)
     set_auth_cookies(response, access, refresh)
     doc["_id"] = result.inserted_id
-    return {"user": serialize_user(doc), "access_token": access}
+    return {"user": serialize_user(doc), "access_token": access, "email_verified": True}
 
 
 @auth_router.post("/login")
@@ -674,6 +709,8 @@ async def on_startup():
     await db.users.create_index("email", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.verification_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.registration_otps.create_index("expires_at", expireAfterSeconds=0)
+    await db.registration_otps.create_index([("email", 1), ("created_at", -1)])
     await db.login_attempts.create_index("identifier")
     await domain.setup_indexes(db)
     try:

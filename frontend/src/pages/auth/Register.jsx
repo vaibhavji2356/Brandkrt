@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff, Sparkles, Briefcase } from "lucide-react";
+import api from "@/lib/api";
 
 const ROLES = [
   { id: "influencer", title: "I'm a Creator", desc: "Earn from premium brand campaigns.", icon: Sparkles },
@@ -21,21 +22,45 @@ export default function Register() {
   const [role, setRole] = useState(initialRole);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [accept, setAccept] = useState(false);
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpSentTo, setOtpSentTo] = useState("");
   const [error, setError] = useState("");
+
+  const sendOtp = async () => {
+    setError("");
+    if (!email.trim()) { setError("Please enter your email first."); return; }
+    setSendingOtp(true);
+    try {
+      await api.post("/auth/register/send-otp", { email });
+      setOtpSentTo(email.trim().toLowerCase());
+      toast.success("OTP sent. Please check your inbox.");
+    } catch (err) {
+      setError(formatApiError(err));
+    } finally {
+      setSendingOtp(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
     if (!accept) { setError("Please accept the terms and privacy policy."); return; }
+    if (!otpSentTo || otpSentTo !== email.trim().toLowerCase()) {
+      setError("Please send OTP to this email before creating your account.");
+      return;
+    }
+    if (!otp.trim()) { setError("Please enter the OTP sent to your inbox."); return; }
     setSubmitting(true);
     try {
-      await register({ name, email, password, role, accept_terms: true });
-      toast.success("Account created — check your inbox to verify your email.");
-      navigate("/profile", { replace: true });
+      const u = await register({ name, email, phone, password, role, otp_code: otp, accept_terms: true });
+      toast.success("Account created and email verified.");
+      navigate(u.role === "brand" ? "/brand" : "/influencer", { replace: true });
     } catch (err) {
       setError(formatApiError(err));
     } finally {
@@ -76,7 +101,23 @@ export default function Register() {
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Email</label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" data-testid="register-email" className="mt-2" placeholder="you@brandkrt.com" />
+          <div className="mt-2 flex gap-2">
+            <Input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setOtpSentTo(""); }} required autoComplete="email" data-testid="register-email" placeholder="you@brandkrt.com" />
+            <button type="button" onClick={sendOtp} disabled={sendingOtp} className="shrink-0 rounded-full border border-border px-4 text-sm font-semibold hover:bg-accent disabled:opacity-60" data-testid="register-send-otp">
+              {sendingOtp ? "Sending..." : "Send OTP"}
+            </button>
+          </div>
+          {otpSentTo && <p className="mt-1 text-xs text-success">OTP sent to {otpSentTo}</p>}
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Email OTP</label>
+            <Input value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" data-testid="register-otp" className="mt-2" placeholder="6-digit code" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mobile number</label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" data-testid="register-phone" className="mt-2" placeholder="+91 98765 43210" />
+          </div>
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Password</label>
