@@ -5,8 +5,8 @@
   "buildCommand": "yarn build",
   "outputDirectory": "build",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://YOUR-RENDER-BACKEND.onrender.com/api/$1" },
-    { "source": "/uploads/(.*)", "destination": "https://YOUR-RENDER-BACKEND.onrender.com/uploads/$1" },
+    { "source": "/api/(.*)", "destination": "https://brandkrt.onrender.com/api/$1" },
+    { "source": "/uploads/(.*)", "destination": "https://brandkrt.onrender.com/uploads/$1" },
     { "source": "/((?!api/|uploads/|static/|.*\\..*).*)", "destination": "/index.html" }
   ],
   "headers": [

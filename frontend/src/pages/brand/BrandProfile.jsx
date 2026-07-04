@@ -149,11 +149,16 @@ export default function BrandProfile() {
     try {
       const payload = { ...form };
       ["id", "user_id", "status", "verification_status", "created_at", "updated_at"].forEach((k) => delete payload[k]);
-      await api.put("/brands/me", payload);
-      const { data } = await api.get("/brands/me");
-      const updatedBrand = data?.brand;
+      const saved = await api.put("/brands/me", payload);
+      let updatedBrand = saved.data?.brand;
+      try {
+        const { data } = await api.get("/brands/me");
+        updatedBrand = data?.brand || updatedBrand;
+      } catch (_) {
+        // The PUT response already contains the saved profile; avoid a false error if the follow-up read is slow.
+      }
       if (!updatedBrand?.id) {
-        throw new Error("Profile save could not be confirmed. Please try again.");
+        throw new Error("Business profile could not be saved. Please try again.");
       }
       setForm(hydrateBrand(updatedBrand));
       setVerified(updatedBrand.verification_status || verified);

@@ -54,6 +54,7 @@ export default function InfluencerProfile() {
   const coverRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [imageBroken, setImageBroken] = useState({ avatar: false });
   const [latestVerification, setLatestVerification] = useState(null);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -70,6 +71,7 @@ export default function InfluencerProfile() {
             ...inf,
             bank_details: { ...EMPTY.bank_details, ...(inf.bank_details || {}) },
           });
+          setImageBroken({ avatar: false });
           setVerified(inf.verification_status || "not_started");
         }
       } catch (_) { /* not yet created */ }
@@ -86,8 +88,10 @@ export default function InfluencerProfile() {
     fd.append("file", file);
     const { data } = await api.post("/uploads/profiles", fd, { headers: { "Content-Type": "multipart/form-data" } });
     const url = data.url;
-    if (kind === "avatar") set("profile_photo_url", url);
-    else set("cover_photo_url", url);
+    if (kind === "avatar") {
+      setImageBroken((prev) => ({ ...prev, avatar: false }));
+      set("profile_photo_url", url);
+    } else set("cover_photo_url", url);
   };
 
   const onPickAvatar = async (e) => {
@@ -177,8 +181,8 @@ export default function InfluencerProfile() {
         <div className="px-6 md:px-8 pb-6 md:pb-8">
           <div className="flex flex-col sm:flex-row sm:items-end sm:gap-6 -mt-12">
             <div className="relative h-24 w-24 rounded-2xl border-4 border-background bg-secondary text-secondary-foreground flex items-center justify-center text-2xl font-display font-semibold overflow-hidden shadow-luxe-sm" data-testid="profile-avatar">
-              {form.profile_photo_url
-                ? <img src={form.profile_photo_url} alt="" className="h-full w-full object-cover" />
+              {form.profile_photo_url && !imageBroken.avatar
+                ? <img src={form.profile_photo_url} alt="" className="h-full w-full object-cover" onError={() => setImageBroken((prev) => ({ ...prev, avatar: true }))} />
                 : initials}
               <button
                 type="button"

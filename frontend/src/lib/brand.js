@@ -12,7 +12,10 @@ export const BRAND = {
 };
 
 const rawBackendUrl = process.env.REACT_APP_BACKEND_URL?.trim();
-export const BACKEND_ORIGIN = rawBackendUrl ? rawBackendUrl.replace(/\/api\/?$/, "").replace(/\/$/, "") : "";
+const DEFAULT_BACKEND_ORIGIN = process.env.NODE_ENV === "production" ? "https://brandkrt.onrender.com" : "";
+export const BACKEND_ORIGIN = rawBackendUrl
+  ? rawBackendUrl.replace(/\/api\/?$/, "").replace(/\/$/, "")
+  : DEFAULT_BACKEND_ORIGIN;
 export const API = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : "/api";
 
 export function assetUrl(value) {
