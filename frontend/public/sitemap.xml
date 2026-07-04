@@ -3,6 +3,7 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/0.9">
   <url>
     <loc>https://brandkrt.com/</loc>
+    <lastmod>2026-07-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
@@ -10,12 +11,12 @@
       <image:caption>BrandKrt — premium influencer marketing marketplace</image:caption>
     </image:image>
   </url>
-  <url><loc>https://brandkrt.com/about</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://brandkrt.com/contact</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://brandkrt.com/help</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://brandkrt.com/register</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://brandkrt.com/login</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
-  <url><loc>https://brandkrt.com/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://brandkrt.com/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://brandkrt.com/refund</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://brandkrt.com/about</loc><lastmod>2026-07-04</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://brandkrt.com/contact</loc><lastmod>2026-07-04</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://brandkrt.com/help</loc><lastmod>2026-07-04</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://brandkrt.com/register</loc><lastmod>2026-07-04</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://brandkrt.com/login</loc><lastmod>2026-07-04</lastmod><changefreq>yearly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://brandkrt.com/privacy</loc><lastmod>2026-07-04</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://brandkrt.com/terms</loc><lastmod>2026-07-04</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://brandkrt.com/refund</loc><lastmod>2026-07-04</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>
