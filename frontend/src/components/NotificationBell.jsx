@@ -15,7 +15,16 @@ export default function NotificationBell() {
     catch (_) { /* not logged in */ }
   };
 
-  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    load();
+    const t = setInterval(load, 8000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
 
   const markRead = async (id) => {
     await api.post(`/notifications/${id}/read`);

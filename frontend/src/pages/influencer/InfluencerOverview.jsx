@@ -40,24 +40,37 @@ export default function InfluencerOverview() {
   const [verificationNotes, setVerificationNotes] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [d, p, n, me, v] = await Promise.all([
-          api.get("/deals"),
-          api.get("/payments"),
-          api.get("/notifications"),
-          api.get("/influencers/me"),
-          api.get("/verification/mine"),
-        ]);
-        setDeals(d.data.deals || []);
-        setPayments(p.data.payments || []);
-        setNotifications(n.data.notifications || []);
-        setInfluencer(me.data.influencer || null);
-        setVerificationRequests(v.data.requests || []);
-      } catch (_) { /* noop */ }
+  const load = async ({ quiet = false } = {}) => {
+    try {
+      const [d, p, n, me, v] = await Promise.all([
+        api.get("/deals"),
+        api.get("/payments"),
+        api.get("/notifications"),
+        api.get("/influencers/me"),
+        api.get("/verification/mine"),
+      ]);
+      setDeals(d.data.deals || []);
+      setPayments(p.data.payments || []);
+      setNotifications(n.data.notifications || []);
+      setInfluencer(me.data.influencer || null);
+      setVerificationRequests(v.data.requests || []);
+    } catch (err) {
+      if (!quiet) toast.error(formatApiError(err));
+    } finally {
       setLoading(false);
-    })();
+    }
+  };
+
+  useEffect(() => {
+    load();
+    const t = setInterval(() => load({ quiet: true }), 8000);
+    const onFocus = () => load({ quiet: true });
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const dealIds = useMemo(() => new Set(deals.map((d) => d.id)), [deals]);
@@ -131,6 +144,7 @@ export default function InfluencerOverview() {
       setVerificationContact({ name: "", phone: "" });
       setVerificationNotes("");
       toast.success(data.already_pending ? "Verification request is already pending." : "Verification request sent to admin.");
+      load({ quiet: true });
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {

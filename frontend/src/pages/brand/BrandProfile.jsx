@@ -149,7 +149,17 @@ export default function BrandProfile() {
       ["id", "user_id", "status", "verification_status", "created_at", "updated_at"].forEach((k) => delete payload[k]);
       const { data } = await api.put("/brands/me", payload);
       const updatedBrand = data?.brand;
-      if (updatedBrand) setVerified(updatedBrand.verification_status || verified);
+      if (updatedBrand) {
+        setForm({
+          ...EMPTY,
+          ...updatedBrand,
+          bank_details: { ...EMPTY.bank_details, ...(updatedBrand.bank_details || {}) },
+          product_categories: updatedBrand.product_categories || [],
+          product_images: updatedBrand.product_images || [],
+          documents: updatedBrand.documents || [],
+        });
+        setVerified(updatedBrand.verification_status || verified);
+      }
       toast.success("Business profile saved.");
     } catch (err) { toast.error(formatApiError(err)); }
     finally { setSaving(false); }

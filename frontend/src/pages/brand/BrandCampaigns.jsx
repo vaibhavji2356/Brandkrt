@@ -52,6 +52,7 @@ const EMPTY_CAMPAIGN = {
 
 export default function BrandCampaigns() {
   const [campaigns, setCampaigns] = useState([]);
+  const [brand, setBrand] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [params, setParams] = useSearchParams();
@@ -61,18 +62,39 @@ export default function BrandCampaigns() {
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/campaigns");
-      setCampaigns(data.campaigns || []);
+      const [brandRes, campaignRes] = await Promise.all([
+        api.get("/brands/me"),
+        api.get("/campaigns"),
+      ]);
+      setBrand(brandRes.data?.brand || null);
+      setCampaigns(campaignRes.data.campaigns || []);
     } catch (err) { toast.error(formatApiError(err)); }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
   useEffect(() => { setShowNew(params.get("new") === "1"); }, [params]);
+  useEffect(() => {
+    if (!loading && showNew && !brand) {
+      toast.error("Please save your Business Profile before creating a campaign.");
+      closeNew();
+      navigate("/brand/profile");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, showNew, brand]);
 
   const filtered = useMemo(() => (
     filter === "all" ? campaigns : campaigns.filter((c) => c.status === filter)
   ), [campaigns, filter]);
+
+  const openNew = () => {
+    if (!brand) {
+      toast.error("Please save your Business Profile before creating a campaign.");
+      navigate("/brand/profile");
+      return;
+    }
+    setShowNew(true);
+  };
 
   const closeNew = () => { setShowNew(false); params.delete("new"); setParams(params, { replace: true }); };
 
@@ -84,7 +106,7 @@ export default function BrandCampaigns() {
           <p className="text-sm text-muted-foreground mt-1">Plan, launch and track every creator campaign in one place.</p>
         </div>
         <button
-          onClick={() => setShowNew(true)}
+          onClick={openNew}
           data-testid="campaign-new-btn"
           className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-5 py-2.5 text-sm font-semibold"
         >
@@ -115,7 +137,7 @@ export default function BrandCampaigns() {
           icon={Megaphone}
           title="No campaigns yet"
           description="Create your first campaign in a minute — pick a platform, share the brief, set a budget, and invite creators."
-          action={<button onClick={() => setShowNew(true)} className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"><Plus className="h-4 w-4" /> Create campaign</button>}
+          action={<button onClick={openNew} className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold"><Plus className="h-4 w-4" /> Create campaign</button>}
           testId="campaigns-empty"
         />
       )}
@@ -145,7 +167,7 @@ export default function BrandCampaigns() {
         ))}
       </div>
 
-      <NewCampaignDialog open={showNew} onClose={closeNew} onCreated={(c) => { setCampaigns((arr) => [c, ...arr]); closeNew(); navigate(`/brand/campaigns/${c.id}`); }} />
+      <NewCampaignDialog open={showNew && !!brand} onClose={closeNew} onCreated={(c) => { setCampaigns((arr) => [c, ...arr]); closeNew(); navigate(`/brand/campaigns/${c.id}`); }} />
     </div>
   );
 }

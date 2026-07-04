@@ -2,11 +2,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Megaphone, CheckCircle2, ShieldCheck, Wallet, Clock, ArrowRight,
-  Calendar, Activity, Sparkles,
+  Calendar, Activity, Sparkles, BadgeCheck, Loader2,
 } from "lucide-react";
-import api from "@/lib/api";
+import { toast } from "sonner";
+import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { StatusChip, EmptyState } from "@/components/State";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 function StatCard({ icon: Icon, label, value, hint, testId, tone = "default" }) {
   const cls = tone === "gold" ? "border-secondary/40 bg-accent" : "";
@@ -41,26 +45,47 @@ export default function BrandOverview() {
   const [deals, setDeals] = useState([]);
   const [payments, setPayments] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [verificationRequests, setVerificationRequests] = useState([]);
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [verificationFiles, setVerificationFiles] = useState({ business: null, identity: null, other: null });
+  const [verificationContact, setVerificationContact] = useState({ name: "", phone: "" });
+  const [verificationNotes, setVerificationNotes] = useState("");
+  const [startingVerification, setStartingVerification] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [b, c, d, p, n] = await Promise.all([
-          api.get("/brands/me"),
-          api.get("/campaigns"),
-          api.get("/deals"),
-          api.get("/payments"),
-          api.get("/notifications"),
-        ]);
-        setBrand(b.data?.brand || null);
-        setCampaigns(c.data.campaigns || []);
-        setDeals(d.data.deals || []);
-        setPayments(p.data.payments || []);
-        setNotifications(n.data.notifications || []);
-      } catch (_) { /* noop */ }
+  const load = async ({ quiet = false } = {}) => {
+    try {
+      const [b, c, d, p, n, v] = await Promise.all([
+        api.get("/brands/me"),
+        api.get("/campaigns"),
+        api.get("/deals"),
+        api.get("/payments"),
+        api.get("/notifications"),
+        api.get("/verification/mine"),
+      ]);
+      setBrand(b.data?.brand || null);
+      setCampaigns(c.data.campaigns || []);
+      setDeals(d.data.deals || []);
+      setPayments(p.data.payments || []);
+      setNotifications(n.data.notifications || []);
+      setVerificationRequests(v.data.requests || []);
+    } catch (err) {
+      if (!quiet) toast.error(formatApiError(err));
+    } finally {
       setLoading(false);
-    })();
+    }
+  };
+
+  useEffect(() => {
+    load();
+    const t = setInterval(() => load({ quiet: true }), 8000);
+    const onFocus = () => load({ quiet: true });
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const campaignIds = useMemo(() => new Set(campaigns.map((c) => c.id)), [campaigns]);
@@ -89,6 +114,65 @@ export default function BrandOverview() {
 
   const recentDeals = myDeals.slice(0, 6);
   const recentNotifs = notifications.slice(0, 5);
+  const latestVerification = verificationRequests.find((r) => r.kind === "brand");
+  const verificationStatus = ["approved", "verified"].includes(brand?.verification_status)
+    ? "verified"
+    : latestVerification?.status || "not_started";
+  const hasPendingVerification = verificationStatus === "pending";
+  const isVerificationInProgress = verificationStatus === "in_progress";
+  const callTime = latestVerification?.schedule_call_at;
+
+  const submitVerification = async () => {
+    if (!brand) {
+      toast.error("Please save your Business Profile before starting verification.");
+      return;
+    }
+    if (!verificationFiles.business || !verificationFiles.identity) {
+      toast.error("Please upload business proof and owner identity proof.");
+      return;
+    }
+    if (!verificationContact.name.trim() || !verificationContact.phone.trim()) {
+      toast.error("Please enter your contact name and WhatsApp phone number.");
+      return;
+    }
+
+    setStartingVerification(true);
+    try {
+      const uploadDoc = async (file, type, label) => {
+        if (!file) return null;
+        const fd = new FormData();
+        fd.append("file", file);
+        const { data } = await api.post("/uploads/verification", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        return { type, label, url: data.url, name: file.name };
+      };
+      const documents = (await Promise.all([
+        uploadDoc(verificationFiles.business, "business_proof", "Business proof"),
+        uploadDoc(verificationFiles.identity, "owner_identity", "Owner identity proof"),
+        uploadDoc(verificationFiles.other, "supporting_document", "Supporting document"),
+      ])).filter(Boolean);
+      const { data } = await api.post("/verification", {
+        kind: "brand",
+        documents,
+        contact_name: verificationContact.name.trim(),
+        contact_phone: verificationContact.phone.trim(),
+        notes: verificationNotes || "Brand submitted business verification documents from the dashboard.",
+      });
+      if (data.request) {
+        setVerificationRequests((rows) => [data.request, ...rows.filter((row) => row.id !== data.request.id)]);
+        setBrand((current) => current ? { ...current, verification_status: data.request.status || "pending" } : current);
+      }
+      setVerificationOpen(false);
+      setVerificationFiles({ business: null, identity: null, other: null });
+      setVerificationContact({ name: "", phone: "" });
+      setVerificationNotes("");
+      toast.success(data.already_pending ? "Verification request is already pending." : "Verification request sent to admin.");
+      load({ quiet: true });
+    } catch (err) {
+      toast.error(formatApiError(err));
+    } finally {
+      setStartingVerification(false);
+    }
+  };
 
   if (loading) return <div className="text-muted-foreground">Loading…</div>;
 
@@ -123,6 +207,46 @@ export default function BrandOverview() {
           <Link to="/brand/profile" className="inline-flex items-center gap-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/90 px-4 py-2 text-sm font-semibold whitespace-nowrap">
             Set up profile <ArrowRight className="h-4 w-4" />
           </Link>
+        </div>
+      )}
+
+      {brand && (
+        <div className="rounded-2xl border border-border bg-card p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4" data-testid="brand-verification-card">
+          <div className="flex items-start gap-3">
+            <BadgeCheck className="h-5 w-5 text-secondary mt-0.5" />
+            <div>
+              <div className="font-semibold text-primary dark:text-white">
+                {verificationStatus === "verified" ? "You're a verified business" : isVerificationInProgress ? "Business verification in progress" : hasPendingVerification ? "Business verification pending" : "Verify your business"}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {verificationStatus === "verified"
+                  ? "Your brand has the verified badge. Creators can trust campaign invites from your team."
+                  : isVerificationInProgress && callTime
+                    ? `WhatsApp video call scheduled for ${new Date(callTime).toLocaleString()}.`
+                    : isVerificationInProgress
+                      ? "Admin is reviewing your documents. Your WhatsApp video call will be scheduled here."
+                      : hasPendingVerification
+                        ? "Your documents are waiting for admin review."
+                        : "Upload business proof, owner identity proof, and supporting documents for admin review."}
+              </div>
+            </div>
+          </div>
+          {verificationStatus === "verified" ? (
+            <Link to="/brand/profile" className="inline-flex items-center gap-2 rounded-full border border-border bg-background hover:bg-accent px-4 py-2 text-sm font-semibold whitespace-nowrap">
+              View profile <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setVerificationOpen(true)}
+              disabled={startingVerification || hasPendingVerification || isVerificationInProgress}
+              className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 text-sm font-semibold whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+              data-testid="brand-start-verification-btn"
+            >
+              {startingVerification ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
+              {isVerificationInProgress ? "In Progress" : hasPendingVerification ? "Request pending" : "Start Verification"}
+            </button>
+          )}
         </div>
       )}
 
@@ -215,6 +339,100 @@ export default function BrandOverview() {
           ))}
         </div>
       </div>
+
+      <Dialog open={verificationOpen} onOpenChange={setVerificationOpen}>
+        <DialogContent className="max-w-xl" data-testid="brand-verification-dialog">
+          <DialogHeader>
+            <DialogTitle>Start Business Verification</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Contact name *</label>
+                <Input
+                  value={verificationContact.name}
+                  onChange={(event) => setVerificationContact((contact) => ({ ...contact, name: event.target.value }))}
+                  className="mt-2"
+                  placeholder={brand?.owner_name || user?.name || "Owner or manager name"}
+                  data-testid="brand-verification-contact-name"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">WhatsApp phone *</label>
+                <Input
+                  value={verificationContact.phone}
+                  onChange={(event) => setVerificationContact((contact) => ({ ...contact, phone: event.target.value }))}
+                  className="mt-2"
+                  placeholder={brand?.phone || "+91 98765 43210"}
+                  data-testid="brand-verification-contact-phone"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Business proof *</label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="mt-2"
+                onChange={(event) => setVerificationFiles((files) => ({ ...files, business: event.target.files?.[0] || null }))}
+                data-testid="brand-verification-business-input"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">GST certificate, business registration proof, shop license, or equivalent document.</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Owner identity proof *</label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="mt-2"
+                onChange={(event) => setVerificationFiles((files) => ({ ...files, identity: event.target.files?.[0] || null }))}
+                data-testid="brand-verification-identity-input"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Use a redacted Aadhaar or equivalent identity document.</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Other supporting document</label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                className="mt-2"
+                onChange={(event) => setVerificationFiles((files) => ({ ...files, other: event.target.files?.[0] || null }))}
+                data-testid="brand-verification-other-input"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Notes for admin</label>
+              <Textarea
+                rows={3}
+                value={verificationNotes}
+                onChange={(event) => setVerificationNotes(event.target.value)}
+                className="mt-2"
+                placeholder="Share business context, registered entity name, or anything the admin should check."
+                data-testid="brand-verification-notes-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setVerificationOpen(false)}
+              className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submitVerification}
+              disabled={startingVerification}
+              className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              data-testid="brand-verification-submit-btn"
+            >
+              {startingVerification && <Loader2 className="h-4 w-4 animate-spin" />}
+              Submit for Review
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
