@@ -126,9 +126,10 @@ export default function DealDetails() {
   const load = async () => {
     setLoading(true);
     try {
-      const [d, p] = await Promise.all([
+      const [d, p, a] = await Promise.all([
         api.get("/deals"),
         api.get("/payments"),
+        api.get("/agreements").catch(() => ({ data: { agreements: [] } })),
       ]);
       const found = (d.data.deals || []).find((x) => x.id === id);
       if (!found) {
@@ -145,7 +146,17 @@ export default function DealDetails() {
         screenshot_url:   found.deliverables_links?.screenshot_url || "",
         notes:            found.deliverables_links?.notes || "",
       });
-      const myPay = (p.data.payments || []).find((pp) => pp.deal_id === id) || null;
+      const payments = p.data.payments || [];
+      const agreements = a.data.agreements || [];
+      const linkedAgreement = agreements.find((ag) => (
+        ag.campaign_id && ag.campaign_id === found.campaign_id
+      ) || (
+        Number(ag.payment_amount || 0) === Number(found.amount || 0) && !ag.campaign_id
+      ));
+      const myPay = payments.find((pp) => pp.deal_id === id)
+        || (found.escrow_payment_id ? payments.find((pp) => pp.id === found.escrow_payment_id) : null)
+        || (linkedAgreement ? payments.find((pp) => pp.agreement_id === linkedAgreement.id) : null)
+        || null;
       setPayment(myPay);
       if (found.campaign_id) {
         try {
@@ -496,7 +507,7 @@ export default function DealDetails() {
             amount={deal.amount}
             role={role}
             onFund={isBrand ? fundEscrow : undefined}
-            onRelease={isBrand && payment ? releasePayment : undefined}
+            onRelease={undefined}
             busy={busy}
           />
 

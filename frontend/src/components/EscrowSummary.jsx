@@ -17,10 +17,11 @@ export default function EscrowSummary({ payment, amount = 0, role = "brand", onF
   const status = payment?.release_status || payment?.status || "pending";
   const stage = stageFromStatus(status);
   const stages = [
-    { key: "pending",  label: "Escrow Pending",  description: "Brand needs to fund the escrow.", icon: Wallet,        active: stage === "pending" },
-    { key: "funded",   label: "Escrow Funded",   description: "Funds are safely held by BrandKrt.", icon: ShieldCheck, active: stage === "funded" },
-    { key: "locked",   label: "Payment Locked",  description: "Messaging unlocked. Funds release on approval.", icon: Lock, active: stage === "locked" },
-    { key: "released", label: "Payment Released",description: "Creator earnings paid out.", icon: CheckCircle2,     active: stage === "released" },
+    { key: "pending", label: "Escrow Pending", description: "Brand needs to fund the escrow.", icon: Wallet, active: stage === "pending" },
+    { key: "funded", label: "Escrow Funded", description: "Funds are safely held by BrandKrt.", icon: ShieldCheck, active: stage === "funded" },
+    { key: "locked", label: "Work & Brand Review", description: "Messaging is unlocked. Creator can deliver work.", icon: Lock, active: stage === "locked" },
+    { key: "release_requested", label: "Release Requested", description: "Brand approved the work. Admin releases payout next.", icon: ShieldCheck, active: stage === "release_requested" },
+    { key: "released", label: "Payment Released", description: "Creator earnings paid out.", icon: CheckCircle2, active: stage === "released" },
   ];
 
   const gross = Number(payment?.amount ?? amount ?? 0);
@@ -83,7 +84,7 @@ export default function EscrowSummary({ payment, amount = 0, role = "brand", onF
         </button>
       )}
 
-      {role === "brand" && stage !== "released" && stage !== "pending" && onRelease && (
+      {role === "admin" && stage !== "released" && stage !== "pending" && onRelease && (
         <button
           type="button"
           onClick={onRelease}
@@ -99,7 +100,7 @@ export default function EscrowSummary({ payment, amount = 0, role = "brand", onF
         <p className="mt-5 text-xs text-muted-foreground">Waiting for the brand to fund escrow. Messaging unlocks the moment escrow is funded.</p>
       )}
       {role === "influencer" && stage !== "pending" && stage !== "released" && (
-        <p className="mt-5 text-xs text-muted-foreground">Funds are locked and guaranteed. Your earnings of ₹{net.toLocaleString()} release once the brand approves the deliverables.</p>
+        <p className="mt-5 text-xs text-muted-foreground">Funds are safely held by BrandKrt. Your earnings of INR {net.toLocaleString()} release after brand approval and admin payout.</p>
       )}
     </div>
   );
@@ -119,11 +120,12 @@ function Money({ label, value, tone = "default" }) {
 
 function stageFromStatus(s) {
   if (!s || s === "pending") return "pending";
-  if (s === "escrowed" || s === "held") return "funded";
   if (s === "released") return "released";
+  if (s === "release_requested") return "release_requested";
+  if (s === "escrowed" || s === "held") return "locked";
   return "locked";
 }
 
 function stageOrder(k) {
-  return { pending: 0, funded: 1, locked: 1, released: 2 }[k] ?? 0;
+  return { pending: 0, funded: 1, locked: 2, release_requested: 3, released: 4 }[k] ?? 0;
 }

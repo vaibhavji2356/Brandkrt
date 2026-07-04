@@ -20,24 +20,20 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict
 db = None  # type: ignore  # populated by init()
 get_current_user = None  # type: ignore
 
-
 def init(database, current_user_dep):
     global db, get_current_user
     db = database
     get_current_user = current_user_dep
 
-
 # ---------------- helpers ----------------
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
-
 
 def oid(s: str) -> ObjectId:
     try:
         return ObjectId(s)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid id")
-
 
 def doc_out(doc: dict) -> dict:
     if not doc:
@@ -51,11 +47,9 @@ def doc_out(doc: dict) -> dict:
             d[k] = v.isoformat()
     return d
 
-
 async def require_role(user: dict, *roles: str) -> None:
     if user.get("role") not in roles:
         raise HTTPException(status_code=403, detail="Forbidden")
-
 
 async def log_activity(user_id: Optional[str], action: str, entity: str, entity_id: Optional[str] = None, meta: Optional[dict] = None):
     await db.activity_logs.insert_one({
@@ -63,13 +57,11 @@ async def log_activity(user_id: Optional[str], action: str, entity: str, entity_
         "meta": meta or {}, "created_at": now_utc(),
     })
 
-
 async def log_admin(admin_id: str, action: str, target: str, meta: Optional[dict] = None):
     await db.admin_logs.insert_one({
         "admin_id": admin_id, "action": action, "target": target,
         "meta": meta or {}, "created_at": now_utc(),
     })
-
 
 async def notify(user_id: str, type_: str, title: str, body: str = "", meta: Optional[dict] = None):
     await db.notifications.insert_one({
@@ -77,7 +69,6 @@ async def notify(user_id: str, type_: str, title: str, body: str = "", meta: Opt
         "meta": meta or {}, "read": False, "status": "active",
         "created_at": now_utc(), "updated_at": now_utc(),
     })
-
 
 async def find_brand_for_user(user: dict) -> Optional[dict]:
     """Return the brand profile for a user, preferring the current string user_id."""
@@ -94,7 +85,6 @@ async def find_brand_for_user(user: dict) -> Optional[dict]:
             return legacy
     return None
 
-
 async def setup_indexes(database):
     await database.brands.create_index("user_id", unique=True)
     await database.influencers.create_index("user_id", unique=True)
@@ -103,6 +93,7 @@ async def setup_indexes(database):
     await database.deals.create_index([("campaign_id", 1), ("status", 1)])
     await database.deals.create_index([("influencer_id", 1), ("status", 1)])
     await database.payments.create_index([("deal_id", 1)])
+    await database.payments.create_index([("agreement_id", 1)])
     await database.transactions.create_index([("user_id", 1), ("created_at", -1)])
     await database.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
     await database.messages.create_index([("deal_id", 1), ("created_at", 1)])
@@ -112,7 +103,6 @@ async def setup_indexes(database):
     await database.reports.create_index([("reporter_id", 1), ("status", 1)])
     await database.activity_logs.create_index([("user_id", 1), ("created_at", -1)])
     await database.admin_logs.create_index([("created_at", -1)])
-
 
 # ---------------- routers ----------------
 brand_router = APIRouter(prefix="/brands", tags=["brands"])
@@ -128,7 +118,6 @@ review_router = APIRouter(prefix="/reviews", tags=["reviews"])
 report_router = APIRouter(prefix="/reports", tags=["reports"])
 upload_router = APIRouter(prefix="/uploads", tags=["uploads"])
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
-
 
 # ============== BRAND PROFILE ==============
 class BrandProfileIn(BaseModel):
@@ -159,7 +148,6 @@ class BrandProfileIn(BaseModel):
     bank_details: Optional[dict] = None
     upi: Optional[str] = None
 
-
 # ============== INFLUENCER PROFILE ==============
 class InfluencerProfileIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -187,7 +175,6 @@ class InfluencerProfileIn(BaseModel):
     gst: Optional[str] = None
     portfolio: List[dict] = []
 
-
 # ============== CAMPAIGN ==============
 class CampaignIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -209,7 +196,6 @@ class CampaignIn(BaseModel):
     preferred_language: Optional[str] = None
     preferred_location: Optional[str] = None
 
-
 # ============== DEAL ==============
 DEAL_STATUSES = [
     "offer_sent", "offer_accepted",
@@ -221,13 +207,11 @@ DEAL_STATUSES = [
     "completed", "cancelled",
 ]
 
-
 class DealCreateIn(BaseModel):
     campaign_id: str
     influencer_id: str
     amount: float = Field(ge=0)
     note: Optional[str] = None
-
 
 class DealStatusIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -242,19 +226,16 @@ class DealStatusIn(BaseModel):
     deliverables: Optional[dict] = None
     note: Optional[str] = None
 
-
 # ============== PAYMENT (escrow stub) ==============
 class PaymentCreateIn(BaseModel):
     deal_id: str
     amount: float = Field(ge=0)
-
 
 class RazorpayVerifyIn(BaseModel):
     payment_id: str
     razorpay_order_id: str
     razorpay_payment_id: str
     razorpay_signature: str
-
 
 # ============== VERIFICATION ==============
 class VerificationIn(BaseModel):
@@ -264,13 +245,11 @@ class VerificationIn(BaseModel):
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
 
-
 class VerificationDecisionIn(BaseModel):
     decision: Literal["in_progress", "verified", "rejected"]
     notes: Optional[str] = None
     schedule_call_at: Optional[str] = None
     call_completed: bool = False
-
 
 # ============== WITHDRAWAL ==============
 class WithdrawalIn(BaseModel):
@@ -278,15 +257,12 @@ class WithdrawalIn(BaseModel):
     method: Literal["bank", "upi"]
     details: dict
 
-
 class WithdrawalDecisionIn(BaseModel):
     decision: Literal["approved", "rejected"]
     note: Optional[str] = None
 
-
 class AdminUserStatusIn(BaseModel):
     suspended: bool = True
-
 
 # ============== REVIEW / REPORT ==============
 class ReviewIn(BaseModel):
@@ -294,22 +270,79 @@ class ReviewIn(BaseModel):
     rating: int = Field(ge=1, le=5)
     comment: Optional[str] = None
 
-
 class ReportIn(BaseModel):
     target_user_id: str
     reason: str
     details: Optional[str] = None
-
 
 # ============== MESSAGES ==============
 class MessageIn(BaseModel):
     deal_id: str
     body: str = Field(min_length=1, max_length=2000)
 
-
 # ============== Concrete handlers (registered after init) ==============
 def register_handlers():
     """Bind handlers using db and get_current_user from init()."""
+
+    async def _notify_admins(type_: str, title: str, body: str = "", meta: Optional[dict] = None):
+        admins = db.users.find({"role": "admin"}, {"_id": 1})
+        async for admin in admins:
+            await notify(str(admin["_id"]), type_, title, body, meta or {})
+
+    async def _payment_admin_out(payment: dict) -> dict:
+        out = doc_out(payment)
+        deal = None
+        agreement = None
+        campaign = None
+        brand_profile = None
+        creator_profile = None
+        brand_user = None
+        creator_user = None
+
+        if payment.get("deal_id"):
+            deal = await db.deals.find_one({"_id": oid(payment["deal_id"])})
+        if payment.get("agreement_id"):
+            agreement = await db.agreements.find_one({"_id": oid(payment["agreement_id"])})
+
+        campaign_id = payment.get("campaign_id") or (deal or {}).get("campaign_id") or (agreement or {}).get("campaign_id")
+        if campaign_id:
+            campaign = await db.campaigns.find_one({"_id": oid(campaign_id)})
+
+        brand_id = payment.get("brand_id") or (deal or {}).get("brand_id")
+        if brand_id:
+            brand_profile = await db.brands.find_one({"_id": oid(brand_id)})
+        if not brand_profile and agreement and agreement.get("brand_user_id"):
+            brand_profile = await db.brands.find_one({"user_id": agreement["brand_user_id"]})
+
+        creator_id = payment.get("influencer_id") or (deal or {}).get("influencer_id")
+        if creator_id:
+            creator_profile = await db.influencers.find_one({"_id": oid(creator_id)})
+        if not creator_profile and agreement and agreement.get("influencer_user_id"):
+            creator_profile = await db.influencers.find_one({"user_id": agreement["influencer_user_id"]})
+
+        brand_user_id = (brand_profile or {}).get("user_id") or (agreement or {}).get("brand_user_id")
+        creator_user_id = (creator_profile or {}).get("user_id") or (agreement or {}).get("influencer_user_id")
+        if brand_user_id:
+            try:
+                brand_user = await db.users.find_one({"_id": ObjectId(brand_user_id)}, {"password_hash": 0})
+            except Exception:
+                brand_user = None
+        if creator_user_id:
+            try:
+                creator_user = await db.users.find_one({"_id": ObjectId(creator_user_id)}, {"password_hash": 0})
+            except Exception:
+                creator_user = None
+
+        out.update({
+            "deal": doc_out(deal) if deal else None,
+            "agreement": doc_out(agreement) if agreement else None,
+            "campaign": doc_out(campaign) if campaign else None,
+            "brand": doc_out(brand_profile) if brand_profile else None,
+            "creator": doc_out(creator_profile) if creator_profile else None,
+            "brand_user": doc_out(brand_user) if brand_user else None,
+            "creator_user": doc_out(creator_user) if creator_user else None,
+        })
+        return out
 
     # ----- BRAND -----
     @brand_router.put("/me", operation_id="upsert_my_brand")
@@ -534,7 +567,23 @@ def register_handlers():
                 iuid = await _inf_user_id()
                 if iuid:
                     await notify(iuid, "deal.completed", "Deal completed",
-                                 "Your campaign has been marked completed.", meta)
+                                 "Your campaign has been approved. Admin will release your escrow payout.", meta)
+                pay = await db.payments.find_one({
+                    "deal_id": did,
+                    "status": {"$in": ["escrowed"]},
+                    "release_status": {"$in": ["held", "pending", None]},
+                })
+                if pay:
+                    await db.payments.update_one(
+                        {"_id": pay["_id"]},
+                        {"$set": {"release_status": "release_requested", "release_requested_at": now, "updated_at": now}},
+                    )
+                    await _notify_admins(
+                        "escrow.release_requested",
+                        "Escrow release requested",
+                        "A brand approved creator work. Review escrow and release creator payout.",
+                        {"deal_id": did, "payment_id": str(pay["_id"])},
+                    )
         except Exception:
             pass
 
@@ -585,7 +634,9 @@ def register_handlers():
             provider_status = "escrowed"
             pr = {}
         is_razorpay_pending = provider_name == "razorpay" and provider_status == "pending"
-        doc = {"deal_id": payload.deal_id, "amount": payload.amount,
+        doc = {"deal_id": payload.deal_id, "campaign_id": deal.get("campaign_id"),
+               "brand_id": deal.get("brand_id"), "influencer_id": deal.get("influencer_id"),
+               "amount": payload.amount,
                "platform_fee": platform_fee, "influencer_earning": influencer_earning,
                "release_status": "pending" if is_razorpay_pending else "held", "transaction_id": txid,
                "provider": provider_name, "client_secret": client_secret,
@@ -677,41 +728,55 @@ def register_handlers():
 
     @payment_router.post("/{pid}/release")
     async def _release(pid: str, user: dict = Depends(get_current_user)):
-        await require_role(user, "admin", "brand")
+        await require_role(user, "admin")
         pay = await db.payments.find_one({"_id": oid(pid)})
         if not pay:
             raise HTTPException(404, "Payment not found")
         if pay.get("status") == "pending":
             raise HTTPException(400, "Payment must be completed before it can be released")
-        # ask provider to capture (no-op for stub)
         try:
             import payments as _payments  # noqa: WPS433
             _payments.get_provider().release(transaction_id=pay.get("transaction_id") or "")
         except Exception:
             pass
+        now = now_utc()
         await db.payments.update_one(
             {"_id": oid(pid)},
-            {"$set": {"release_status": "released", "status": "released", "updated_at": now_utc()}},
+            {"$set": {
+                "release_status": "released",
+                "status": "released",
+                "released_at": now,
+                "released_by": str(user["_id"]),
+                "updated_at": now,
+            }},
         )
-        # notify the creator that funds are released
         try:
-            deal = await db.deals.find_one({"_id": oid(pay["deal_id"])}) if pay.get("deal_id") else None
-            if deal and deal.get("influencer_id"):
-                inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])})
-                if inf:
-                    earning = pay.get("influencer_earning", 0)
-                    await notify(
-                        inf["user_id"],
-                        "payment.released",
-                        "Payment released",
-                        f"Your earnings of \u20b9{earning} for this campaign are now in your wallet.",
-                        {"deal_id": str(deal["_id"]), "payment_id": pid},
-                    )
+            creator_user_id = None
+            meta = {"payment_id": pid}
+            if pay.get("deal_id"):
+                deal = await db.deals.find_one({"_id": oid(pay["deal_id"])})
+                if deal and deal.get("influencer_id"):
+                    inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])})
+                    creator_user_id = inf.get("user_id") if inf else None
+                    meta["deal_id"] = str(deal["_id"])
+            if not creator_user_id and pay.get("agreement_id"):
+                agreement = await db.agreements.find_one({"_id": oid(pay["agreement_id"])})
+                creator_user_id = agreement.get("influencer_user_id") if agreement else None
+                meta["agreement_id"] = pay["agreement_id"]
+            if creator_user_id:
+                earning = pay.get("influencer_earning", 0)
+                await notify(
+                    creator_user_id,
+                    "payment.released",
+                    "Payment released",
+                    f"Your creator payout of INR {earning} has been released after BrandKrt platform fees.",
+                    meta,
+                )
         except Exception:
             pass
         await log_admin(str(user["_id"]), "payment.release", pid)
-        return {"success": True}
-
+        fresh = await db.payments.find_one({"_id": oid(pid)})
+        return {"success": True, "payment": doc_out(fresh)}
     @payment_router.get("")
     async def _list_payments(user: dict = Depends(get_current_user)):
         cur = db.payments.find({}).sort("created_at", -1).limit(100)
@@ -843,6 +908,30 @@ def register_handlers():
     async def _ensure_admin(user: dict):
         await require_role(user, "admin")
 
+    @admin_router.get("/escrow")
+    async def _admin_escrow(user: dict = Depends(get_current_user), status: str = "held"):
+        await _ensure_admin(user)
+        status = (status or "held").lower()
+        if status == "all":
+            query = {}
+        elif status == "held":
+            query = {"status": "escrowed", "release_status": {"$in": ["held", "pending", None]}}
+        elif status == "release_requested":
+            query = {"release_status": "release_requested"}
+        elif status == "released":
+            query = {"status": "released"}
+        else:
+            query = {"$or": [{"status": status}, {"release_status": status}]}
+        cur = db.payments.find(query).sort("created_at", -1).limit(200)
+        return {"payments": [await _payment_admin_out(payment) async for payment in cur]}
+
+    @admin_router.get("/escrow/{pid}")
+    async def _admin_escrow_detail(pid: str, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        pay = await db.payments.find_one({"_id": oid(pid)})
+        if not pay:
+            raise HTTPException(404, "Payment not found")
+        return {"payment": await _payment_admin_out(pay)}
     @admin_router.get("/overview")
     async def _admin_overview(user: dict = Depends(get_current_user)):
         await _ensure_admin(user)
@@ -1122,7 +1211,6 @@ def register_handlers():
         col = db.admin_logs if kind == "admin" else db.activity_logs
         cur = col.find({}).sort("created_at", -1).limit(min(limit, 500))
         return {"logs": [doc_out(x) async for x in cur]}
-
 
 ALL_ROUTERS = [
     brand_router, influencer_router, campaign_router, deal_router, payment_router,

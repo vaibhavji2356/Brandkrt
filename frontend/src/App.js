@@ -24,7 +24,7 @@ import Profile from "@/pages/Profile";
 import Settings from "@/pages/Settings";
 import AdminLayout from "@/pages/admin/AdminLayout";
 import AdminOverview from "@/pages/admin/AdminOverview";
-import { AdminUsers, AdminVerification, AdminWithdrawals, AdminReports, AdminLogs } from "@/pages/admin/AdminSections";
+import { AdminUsers, AdminVerification, AdminEscrow, AdminWithdrawals, AdminReports, AdminLogs } from "@/pages/admin/AdminSections";
 
 import InfluencerLayout from "@/pages/influencer/InfluencerLayout";
 import InfluencerOverview from "@/pages/influencer/InfluencerOverview";
@@ -91,6 +91,7 @@ export default function App() {
                 <Route index element={<AdminOverview />} />
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="verification" element={<AdminVerification />} />
+                <Route path="escrow" element={<AdminEscrow />} />
                 <Route path="withdrawals" element={<AdminWithdrawals />} />
                 <Route path="reports" element={<AdminReports />} />
                 <Route path="logs" element={<AdminLogs />} />

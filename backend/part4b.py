@@ -722,10 +722,29 @@ def register_handlers():
             provider_name = "stub"
             provider_status = "escrowed"
 
+
+        linked_deal = None
+        if agreement.get("campaign_id"):
+            linked_deal = await db.deals.find_one({
+                "campaign_id": agreement.get("campaign_id"),
+                "amount": amount,
+            })
+        if not linked_deal:
+            brand_profile = await db.brands.find_one({"user_id": agreement.get("brand_user_id")})
+            creator_profile = await db.influencers.find_one({"user_id": agreement.get("influencer_user_id")})
+            deal_query = {"amount": amount}
+            if brand_profile:
+                deal_query["brand_id"] = str(brand_profile["_id"])
+            if creator_profile:
+                deal_query["influencer_id"] = str(creator_profile["_id"])
+            linked_deal = await db.deals.find_one(deal_query)
         is_razorpay_pending = provider_name == "razorpay" and provider_status == "pending"
         payment_doc = {
-            "deal_id": None,
+            "deal_id": str(linked_deal["_id"]) if linked_deal else None,
             "agreement_id": aid,
+            "campaign_id": agreement.get("campaign_id") or (linked_deal or {}).get("campaign_id"),
+            "brand_id": (linked_deal or {}).get("brand_id"),
+            "influencer_id": (linked_deal or {}).get("influencer_id"),
             "amount": amount,
             "platform_fee": platform_fee,
             "influencer_earning": influencer_earning,
@@ -758,6 +777,15 @@ def register_handlers():
                 "updated_at": now,
             }},
         )
+        if linked_deal:
+            await db.deals.update_one(
+                {"_id": linked_deal["_id"]},
+                {"$set": {
+                    "payment_status": "pending" if is_razorpay_pending else "escrowed",
+                    "escrow_payment_id": str(res.inserted_id),
+                    "updated_at": now,
+                }},
+            )
         if not is_razorpay_pending:
             await notify(
                 agreement["influencer_user_id"],

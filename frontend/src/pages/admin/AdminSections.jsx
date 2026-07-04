@@ -432,6 +432,167 @@ function SimpleList({ title, endpoint, columns, testidPrefix }) {
   );
 }
 
+
+function money(value) {
+  return `INR ${Number(value || 0).toLocaleString()}`;
+}
+
+function profileName(profile, user, fallback) {
+  return profile?.company_name || profile?.username || profile?.name || user?.name || fallback || "-";
+}
+
+export function AdminEscrow() {
+  const [tab, setTab] = useState("held");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [active, setActive] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = async (status = tab) => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/admin/escrow", { params: { status } });
+      setRows(data.payments || []);
+    } catch (e) {
+      setRows([]);
+      toast.error(formatApiError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(tab); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const release = async (payment) => {
+    if (!payment) return;
+    if (!window.confirm("Release creator payout now? BrandKrt platform fee will stay recorded.")) return;
+    try {
+      setBusy(true);
+      await api.post(`/payments/${payment.id}/release`);
+      toast.success("Creator payout released.");
+      setActive(null);
+      await load(tab);
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tabs = [
+    ["held", "Held"],
+    ["release_requested", "Release requested"],
+    ["released", "Released"],
+    ["all", "All"],
+  ];
+
+  return (
+    <Section title="Escrow control">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          {tabs.map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value={tab} className="mt-6 space-y-3">
+          {rows.map((p) => (
+            <div key={p.id} className="rounded-2xl border border-border bg-card p-5" data-testid={`escrow-row-${p.id}`}>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-primary dark:text-white">{p.campaign?.title || p.agreement?.campaign_name || "Escrow payment"}</h3>
+                    <StatusChip value={p.release_status || p.status} />
+                  </div>
+                  <div className="grid gap-2 text-sm text-foreground/80 md:grid-cols-2">
+                    <InfoRow label="Brand" value={`${profileName(p.brand, p.brand_user, p.agreement?.brand_name)} (${p.brand_user?.email || "no email"})`} />
+                    <InfoRow label="Creator" value={`${profileName(p.creator, p.creator_user, p.agreement?.influencer_name)} (${p.creator_user?.email || "no email"})`} />
+                    <InfoRow label="Deal" value={p.deal_id || "-"} />
+                    <InfoRow label="Agreement" value={p.agreement_id || "-"} />
+                    <InfoRow label="Campaign" value={p.campaign_id || p.campaign?.id || "-"} />
+                    <InfoRow label="Transaction" value={p.transaction_id || "-"} />
+                  </div>
+                </div>
+                <button onClick={() => setActive(p)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent">Open details</button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <Metric label="Gross amount" value={money(p.amount)} />
+                <Metric label="Platform fee" value={money(p.platform_fee)} />
+                <Metric label="Creator payout" value={money(p.influencer_earning)} tone="gold" />
+              </div>
+            </div>
+          ))}
+          {!rows.length && <p className="text-sm text-muted-foreground">{loading ? "Loading escrow records..." : "No escrow records in this state."}</p>}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={!!active} onOpenChange={(open) => !open && setActive(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto" data-testid="admin-escrow-detail">
+          <DialogHeader><DialogTitle>Escrow details</DialogTitle></DialogHeader>
+          {active && (
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-3">
+                <Metric label="Gross amount" value={money(active.amount)} />
+                <Metric label="Platform fee retained" value={money(active.platform_fee)} />
+                <Metric label="Creator payout" value={money(active.influencer_earning)} tone="gold" />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <DetailCard title="Brand" rows={[
+                  ["Name", profileName(active.brand, active.brand_user, active.agreement?.brand_name)],
+                  ["Email", active.brand_user?.email],
+                  ["Phone", active.brand?.phone || active.brand_user?.phone],
+                  ["Business", active.brand?.business_category],
+                ]} />
+                <DetailCard title="Creator payout details" rows={[
+                  ["Name", profileName(active.creator, active.creator_user, active.agreement?.influencer_name)],
+                  ["Email", active.creator_user?.email],
+                  ["Phone", active.creator?.phone || active.creator_user?.phone],
+                  ["UPI", active.creator?.upi_id],
+                  ["Account holder", active.creator?.account_holder_name],
+                  ["Bank", active.creator?.bank_name],
+                  ["Account number", active.creator?.account_number],
+                  ["IFSC", active.creator?.ifsc],
+                ]} />
+              </div>
+              <DetailCard title="Campaign and escrow" rows={[
+                ["Campaign", active.campaign?.title || active.agreement?.campaign_name],
+                ["Deliverables", active.agreement?.deliverables || active.campaign?.deliverables],
+                ["Timeline", active.agreement?.timeline || active.campaign?.deadline],
+                ["Deal status", active.deal?.status],
+                ["Payment status", active.status],
+                ["Release status", active.release_status],
+                ["Paid at", active.verified_at || active.created_at],
+                ["Release requested", active.release_requested_at],
+              ]} />
+              {(active.release_status === "release_requested" || active.release_status === "held") && active.status === "escrowed" && (
+                <button onClick={() => release(active)} disabled={busy} className="w-full rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60" data-testid="admin-release-escrow">
+                  Release creator payout
+                </button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Section>
+  );
+}
+
+function Metric({ label, value, tone = "default" }) {
+  return (
+    <div className={`rounded-xl border border-border p-4 ${tone === "gold" ? "bg-accent border-secondary/40" : "bg-background"}`}>
+      <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-primary dark:text-white">{value}</div>
+    </div>
+  );
+}
+
+function DetailCard({ title, rows }) {
+  return (
+    <div className="rounded-2xl border border-border bg-background p-4">
+      <div className="text-sm font-semibold text-primary dark:text-white">{title}</div>
+      <dl className="mt-3 space-y-2 text-sm">
+        {rows.map(([label, value]) => <InfoRow key={label} label={label} value={value || "-"} />)}
+      </dl>
+    </div>
+  );
+}
 export const AdminWithdrawals = () => <SimpleList title="Withdrawal requests" endpoint="/admin/withdrawals" testidPrefix="wd-row" columns={[
   { key: "user_id", label: "User" }, { key: "amount", label: "Amount" }, { key: "method", label: "Method" }, { key: "status", label: "Status" }, { key: "created_at", label: "Created" },
 ]} />;
