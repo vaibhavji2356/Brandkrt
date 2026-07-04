@@ -160,21 +160,6 @@ class BrandProfileIn(BaseModel):
     upi: Optional[str] = None
 
 
-@brand_router.put("/me")
-async def upsert_my_brand(payload: BrandProfileIn, user: dict = Depends(lambda: None)):
-    pass  # bound below in init via closure
-
-
-@brand_router.get("/me")
-async def get_my_brand(user: dict = Depends(lambda: None)):
-    pass
-
-
-@brand_router.get("")
-async def list_brands(user: dict = Depends(lambda: None)):
-    pass
-
-
 # ============== INFLUENCER PROFILE ==============
 class InfluencerProfileIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
