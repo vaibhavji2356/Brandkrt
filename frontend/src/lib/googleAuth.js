@@ -44,6 +44,34 @@ export function loadGoogleIdentity() {
   return _loaded;
 }
 
+export async function renderGoogleSignInButton(containerEl, { clientId = getGoogleClientId(), onCredential, width } = {}) {
+  if (!clientId) {
+    throw new Error("Google sign-in is not configured (client ID missing)");
+  }
+  if (!containerEl) {
+    throw new Error("Google sign-in button container missing");
+  }
+  const google = await loadGoogleIdentity();
+  google.accounts.id.initialize({
+    client_id: clientId,
+    ux_mode: "popup",
+    auto_select: false,
+    callback: (resp) => {
+      if (resp && resp.credential) onCredential?.(resp.credential);
+    },
+  });
+  containerEl.innerHTML = "";
+  google.accounts.id.renderButton(containerEl, {
+    type: "standard",
+    theme: "outline",
+    size: "large",
+    shape: "pill",
+    logo_alignment: "left",
+    text: "continue_with",
+    width: Math.min(width || containerEl.offsetWidth || 360, 400),
+  });
+}
+
 /**
  * Triggers the Google account chooser and resolves with the ID-token credential.
  * Uses GIS button rendering inside the given container element (preferred) — if
@@ -59,12 +87,14 @@ export async function requestGoogleCredential({ containerEl, clientId = getGoogl
       google.accounts.id.initialize({
         client_id: clientId,
         ux_mode: "popup",
+        auto_select: false,
         callback: (resp) => {
           if (resp && resp.credential) resolve(resp.credential);
           else reject(new Error("No credential returned from Google"));
         },
       });
       if (containerEl) {
+        containerEl.innerHTML = "";
         google.accounts.id.renderButton(containerEl, {
           type: "standard",
           theme: "outline",
@@ -72,9 +102,8 @@ export async function requestGoogleCredential({ containerEl, clientId = getGoogl
           shape: "pill",
           logo_alignment: "left",
           text: "continue_with",
+          width: Math.min(containerEl.offsetWidth || 360, 400),
         });
-        // Also offer one-tap (silent)
-        try { google.accounts.id.prompt(); } catch (_) { /* ignore */ }
       } else {
         google.accounts.id.prompt();
       }
