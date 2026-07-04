@@ -100,8 +100,8 @@ class RazorpayProvider(PaymentProvider):
     name = "razorpay"
 
     def __init__(self) -> None:
-        self.key_id = os.environ.get("RAZORPAY_KEY_ID")
-        self.key_secret = os.environ.get("RAZORPAY_KEY_SECRET")
+        self.key_id = _env("RAZORPAY_KEY_ID")
+        self.key_secret = _env("RAZORPAY_KEY_SECRET")
         if not self.key_id or not self.key_secret:
             raise RuntimeError("RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET env vars are required")
 
@@ -147,11 +147,21 @@ class RazorpayProvider(PaymentProvider):
 _PROVIDER: Optional[PaymentProvider] = None
 
 
+def _env(name: str) -> Optional[str]:
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+    return value or None
+
+
 def get_provider() -> PaymentProvider:
     global _PROVIDER
     if _PROVIDER is not None:
         return _PROVIDER
-    name = (os.environ.get("PAYMENT_PROVIDER") or "stub").lower()
+    name = (_env("PAYMENT_PROVIDER") or "stub").lower()
     try:
         if name == "stripe":
             _PROVIDER = StripeProvider()

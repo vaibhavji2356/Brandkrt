@@ -576,9 +576,9 @@ def register_handlers():
             provider_name = pr.get("provider", "stub")
             provider_status = pr.get("status", "escrowed")
         except Exception as exc:
-            configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").lower()
+            configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").strip().strip("'\"").lower()
             if configured_provider in {"stripe", "razorpay"}:
-                raise HTTPException(503, f"{configured_provider.title()} payment provider is not configured correctly") from exc
+                raise HTTPException(503, f"{configured_provider.title()} payment setup error: {exc}") from exc
             txid = secrets.token_hex(8).upper()
             client_secret = None
             provider_name = "stub"
