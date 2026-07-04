@@ -56,11 +56,13 @@ export default function InfluencerCampaigns() {
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return deals;
-    if (filter === "in_progress") return deals.filter((d) => IN_PROGRESS_SET.has(canonicalStatus(d.status)));
-    if (filter === "published") return deals.filter((d) => ["published", "promotion_live"].includes(canonicalStatus(d.status)));
-    return deals.filter((d) => canonicalStatus(d.status) === filter);
-  }, [deals, filter]);
+    const isCancelled = (d) => canonicalStatus(d.status) === "cancelled" || campaigns[d.campaign_id]?.status === "cancelled";
+    if (filter === "all") return deals.filter((d) => !isCancelled(d));
+    if (filter === "cancelled") return deals.filter(isCancelled);
+    if (filter === "in_progress") return deals.filter((d) => !isCancelled(d) && IN_PROGRESS_SET.has(canonicalStatus(d.status)));
+    if (filter === "published") return deals.filter((d) => !isCancelled(d) && ["published", "promotion_live"].includes(canonicalStatus(d.status)));
+    return deals.filter((d) => !isCancelled(d) && canonicalStatus(d.status) === filter);
+  }, [deals, filter, campaigns]);
 
   return (
     <div className="space-y-6" data-testid="influencer-campaigns">
@@ -118,11 +120,11 @@ export default function InfluencerCampaigns() {
                     {c?.platform || "platform"} · ₹{Number(d.amount || 0).toLocaleString()}
                   </p>
                 </div>
-                <StatusChip value={d.status} />
+                <StatusChip value={campaigns[d.campaign_id]?.status === "cancelled" ? "cancelled" : d.status} />
               </div>
               {d.note && <p className="mt-3 text-sm text-muted-foreground line-clamp-3">{d.note}</p>}
               <div className="mt-4">
-                <DealProgressBar status={d.status} />
+                <DealProgressBar status={campaigns[d.campaign_id]?.status === "cancelled" ? "cancelled" : d.status} />
               </div>
               <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-secondary">
                 Open deal <ArrowRight className="h-3 w-3" />

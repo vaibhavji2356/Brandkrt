@@ -458,9 +458,40 @@ def register_handlers():
 
     @campaign_router.patch("/{cid}/status")
     async def _campaign_status(cid: str, status: str, user: dict = Depends(get_current_user)):
+        await require_role(user, "brand", "admin")
         if status not in ["draft", "active", "paused", "completed", "cancelled"]:
             raise HTTPException(400, "Invalid status")
-        await db.campaigns.update_one({"_id": oid(cid)}, {"$set": {"status": status, "updated_at": now_utc()}})
+        campaign = await db.campaigns.find_one({"_id": oid(cid)})
+        if not campaign:
+            raise HTTPException(404, "Campaign not found")
+        if user.get("role") == "brand":
+            brand = await find_brand_for_user(user)
+            if not brand or campaign.get("brand_id") != str(brand["_id"]):
+                raise HTTPException(403, "Not allowed")
+        now = now_utc()
+        await db.campaigns.update_one({"_id": oid(cid)}, {"$set": {"status": status, "updated_at": now}})
+        if status == "cancelled":
+            history_entry = {"status": "cancelled", "by": str(user["_id"]), "role": user.get("role"), "at": now}
+            active_statuses = {"$nin": ["cancelled", "completed"]}
+            await db.deals.update_many(
+                {"campaign_id": cid, "status": active_statuses},
+                {"$set": {"status": "cancelled", "updated_at": now}, "$push": {"status_history": history_entry}},
+            )
+            await db.agreements.update_many(
+                {"campaign_id": cid, "status": active_statuses},
+                {"$set": {"status": "cancelled", "updated_at": now}},
+            )
+            async for deal in db.deals.find({"campaign_id": cid}):
+                if deal.get("influencer_id"):
+                    inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])})
+                    if inf:
+                        await notify(
+                            inf.get("user_id"),
+                            "campaign.cancelled",
+                            "Campaign cancelled",
+                            f"{campaign.get('title', 'A campaign')} was cancelled by the brand.",
+                            {"campaign_id": cid, "deal_id": str(deal["_id"])},
+                        )
         return {"success": True}
 
     # ----- DEALS -----
@@ -495,7 +526,15 @@ def register_handlers():
             brand = await find_brand_for_user(user)
             query["brand_id"] = str(brand["_id"]) if brand else "__none__"
         cur = db.deals.find(query).sort("created_at", -1).limit(100)
-        return {"deals": [doc_out(x) async for x in cur]}
+        out = []
+        async for x in cur:
+            item = doc_out(x)
+            if x.get("campaign_id"):
+                campaign = await db.campaigns.find_one({"_id": oid(x["campaign_id"])}, {"status": 1})
+                if campaign and campaign.get("status") == "cancelled":
+                    item["status"] = "cancelled"
+            out.append(item)
+        return {"deals": out}
 
     @deal_router.patch("/{did}/status")
     async def _deal_status(did: str, payload: DealStatusIn, user: dict = Depends(get_current_user)):
@@ -568,10 +607,23 @@ def register_handlers():
                 if iuid:
                     await notify(iuid, "deal.completed", "Deal completed",
                                  "Your campaign has been approved. Admin will release your escrow payout.", meta)
-                pay = await db.payments.find_one({
-                    "deal_id": did,
+                agreement_ids = [
+                    str(x["_id"]) async for x in db.agreements.find(
+                        {"campaign_id": deal.get("campaign_id"), "influencer_user_id": iuid}
+                    )
+                ]
+                payment_query = {
                     "status": {"$in": ["escrowed"]},
                     "release_status": {"$in": ["held", "pending", None]},
+                    "$or": [
+                        {"deal_id": did},
+                        {"_id": oid(deal["escrow_payment_id"])} if deal.get("escrow_payment_id") else {"_id": None},
+                        {"agreement_id": {"$in": agreement_ids}} if agreement_ids else {"_id": None},
+                        {"campaign_id": deal.get("campaign_id"), "influencer_id": deal.get("influencer_id")},
+                    ],
+                }
+                pay = await db.payments.find_one({
+                    **payment_query,
                 })
                 if pay:
                     await db.payments.update_one(

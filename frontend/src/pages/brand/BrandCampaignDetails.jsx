@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
   ArrowLeft, Calendar, IndianRupee, Globe2, Tag, Users, ImageIcon, Link as LinkIcon,
-  Play, Pause, X as XIcon, CheckCircle2, ShieldCheck, Lock,
+  Play, Pause, X as XIcon, CheckCircle2, Lock,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { StatusChip, EmptyState } from "@/components/State";
@@ -32,20 +32,23 @@ export default function BrandCampaignDetails() {
   const [campaign, setCampaign] = useState(null);
   const [deals, setDeals] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [agreements, setAgreements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [c, d, p] = await Promise.all([
+      const [c, d, p, a] = await Promise.all([
         api.get(`/campaigns/${id}`),
         api.get("/deals"),
         api.get("/payments"),
+        api.get("/agreements").catch(() => ({ data: { agreements: [] } })),
       ]);
       setCampaign(c.data.campaign);
       setDeals((d.data.deals || []).filter((x) => x.campaign_id === id));
       setPayments(p.data.payments || []);
+      setAgreements(a.data.agreements || []);
     } catch (err) {
       toast.error(formatApiError(err));
       navigate("/brand/campaigns");
@@ -56,10 +59,25 @@ export default function BrandCampaignDetails() {
   useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [id]);
 
   const dealIds = useMemo(() => new Set(deals.map((d) => d.id)), [deals]);
-  const myPayments = useMemo(() => payments.filter((p) => dealIds.has(p.deal_id)), [payments, dealIds]);
+  const agreementIds = useMemo(() => {
+    const dealAmounts = new Set(deals.map((d) => Number(d.amount || 0)));
+    return new Set(agreements
+      .filter((a) => (
+        a.campaign_id === id
+        || a.campaign === campaign?.title
+        || a.campaign_name === campaign?.title
+        || dealAmounts.has(Number(a.payment_amount || 0))
+      ))
+      .map((a) => a.id));
+  }, [agreements, deals, campaign, id]);
+  const myPayments = useMemo(() => payments.filter((p) => (
+    dealIds.has(p.deal_id)
+    || agreementIds.has(p.agreement_id)
+    || p.campaign_id === id
+  )), [payments, dealIds, agreementIds, id]);
 
   const escrowed = myPayments
-    .filter((p) => p.status === "escrowed" || p.release_status === "held")
+    .filter((p) => p.status === "escrowed" || ["held", "pending", "release_requested"].includes(p.release_status))
     .reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const released = myPayments
     .filter((p) => p.status === "released" || p.release_status === "released")
@@ -72,16 +90,6 @@ export default function BrandCampaignDetails() {
       await api.patch(`/campaigns/${id}/status`, null, { params: { status: to } });
       toast.success(`Campaign moved to ${to}.`);
       setCampaign((c) => ({ ...c, status: to }));
-    } catch (err) { toast.error(formatApiError(err)); }
-    setBusy(false);
-  };
-
-  const releasePayment = async (pid) => {
-    setBusy(true);
-    try {
-      await api.post(`/payments/${pid}/release`);
-      toast.success("Payment released to creator.");
-      load();
     } catch (err) { toast.error(formatApiError(err)); }
     setBusy(false);
   };
@@ -219,14 +227,14 @@ export default function BrandCampaignDetails() {
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">TXN {p.transaction_id || p.id}</div>
                 {(p.release_status === "held" || p.status === "escrowed") && (
-                  <button
-                    onClick={() => releasePayment(p.id)}
-                    disabled={busy}
-                    data-testid={`release-${p.id}`}
-                    className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                  >
-                    <ShieldCheck className="h-3 w-3" /> Release to creator
-                  </button>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Held in escrow. After brand approval, admin releases creator payout.
+                  </p>
+                )}
+                {p.release_status === "release_requested" && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Release requested. Admin needs to review this payout.
+                  </p>
                 )}
               </div>
             ))}

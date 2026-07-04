@@ -172,7 +172,19 @@ export default function DealDetails() {
 
   useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [id]);
 
-  const actions = useMemo(() => (deal ? nextActions(deal.status, role) : []), [deal, role]);
+  const isEscrowFunded = Boolean(payment && (
+    payment.status === "escrowed"
+    || payment.status === "released"
+    || ["held", "release_requested", "released"].includes(payment.release_status)
+  ));
+  const actions = useMemo(() => {
+    if (!deal) return [];
+    const raw = nextActions(deal.status, role);
+    if (canonicalStatus(deal.status) === "offer_accepted" && isBrand && !isEscrowFunded) {
+      return raw.filter((a) => a.to === "cancelled");
+    }
+    return raw;
+  }, [deal, role, isBrand, isEscrowFunded]);
 
   const setStatus = async (to, confirmText) => {
     if (confirmText && !window.confirm(confirmText)) return;
@@ -180,10 +192,16 @@ export default function DealDetails() {
     try {
       const payload = { status: to };
       if (actionNote.trim()) payload.note = actionNote.trim();
+      if (to === "content_submitted" && isInfluencer) {
+        payload.deliverables = Object.fromEntries(
+          Object.entries(links).map(([k, v]) => [k, v?.trim() || null])
+        );
+      }
       const { data } = await api.patch(`/deals/${id}/status`, payload);
       if (data.deal) setDeal(data.deal); else setDeal((d) => ({ ...d, status: to }));
       setActionNote("");
       toast.success(`Status updated → ${to.replace(/_/g, " ")}`);
+      await load();
     } catch (err) {
       toast.error(formatApiError(err));
     }
@@ -357,7 +375,12 @@ export default function DealDetails() {
             <h3 className="text-sm font-semibold text-primary dark:text-white">Lifecycle</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Twelve-step Brand ↔ Creator pipeline. Status updates notify the other side automatically.</p>
             <div className="mt-5">
-              <DealTimeline status={deal.status} />
+              <DealTimeline
+                status={deal.status}
+                actions={actions}
+                busy={busy}
+                onAction={(action) => setStatus(action.to, action.confirm)}
+              />
             </div>
           </div>
 
@@ -468,6 +491,8 @@ export default function DealDetails() {
             <p className="text-xs text-muted-foreground mt-0.5">
               {actions.length > 0
                 ? `You can move this deal forward. Status changes notify the other side instantly.`
+                : canonicalStatus(deal.status) === "offer_accepted" && isBrand && !isEscrowFunded
+                  ? "Fund escrow before shipping product or starting work."
                 : isClosed
                   ? "This deal is closed. No further actions are required."
                   : "Waiting on the other party to take the next step."}

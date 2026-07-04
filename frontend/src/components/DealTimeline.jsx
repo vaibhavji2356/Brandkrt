@@ -50,10 +50,14 @@ export function pipelineIndex(status) {
  * - `direction="vertical"` (default) or `direction="horizontal"`
  * - Renders the full 12-step pipeline + a side note when cancelled.
  */
-export default function DealTimeline({ status, direction = "vertical", className = "" }) {
+export default function DealTimeline({ status, direction = "vertical", className = "", actions = [], busy = false, onAction }) {
   const canon = canonicalStatus(status);
   const activeIdx = pipelineIndex(canon);
   const isCancelled = canon === "cancelled";
+  const actionByStep = actions.reduce((map, action) => {
+    map[action.to] = action;
+    return map;
+  }, {});
 
   if (direction === "horizontal") {
     return (
@@ -61,7 +65,18 @@ export default function DealTimeline({ status, direction = "vertical", className
         <div className="flex gap-2 overflow-x-auto pb-2">
           {PIPELINE.map((step, i) => {
             const state = stateFor(i, activeIdx, isCancelled);
-            return <Node key={step.key} step={step} state={state} index={i} compact />;
+            return (
+              <Node
+                key={step.key}
+                step={step}
+                state={state}
+                index={i}
+                compact
+                action={actionByStep[step.key]}
+                busy={busy}
+                onAction={onAction}
+              />
+            );
           })}
         </div>
         {isCancelled && <CancelledBanner />}
@@ -75,7 +90,17 @@ export default function DealTimeline({ status, direction = "vertical", className
       <ol className="space-y-3">
         {PIPELINE.map((step, i) => {
           const state = stateFor(i, activeIdx, isCancelled);
-          return <Node key={step.key} step={step} state={state} index={i} />;
+          return (
+            <Node
+              key={step.key}
+              step={step}
+              state={state}
+              index={i}
+              action={actionByStep[step.key]}
+              busy={busy}
+              onAction={onAction}
+            />
+          );
         })}
       </ol>
       {isCancelled && <CancelledBanner />}
@@ -90,8 +115,10 @@ function stateFor(i, activeIdx, isCancelled) {
   return "pending";
 }
 
-function Node({ step, state, index, compact = false }) {
+function Node({ step, state, index, compact = false, action, busy = false, onAction }) {
   const Icon = step.icon;
+  const ActionIcon = action?.icon || CheckCircle2;
+  const showAction = action && state !== "done" && state !== "cancelled" && onAction;
   const dot =
     state === "done" ? "bg-secondary text-secondary-foreground border-secondary"
     : state === "active" ? "bg-primary text-primary-foreground border-primary shadow-luxe-sm"
@@ -137,6 +164,19 @@ function Node({ step, state, index, compact = false }) {
           {state === "done" && <span className="text-[10px] font-semibold uppercase tracking-wider text-success">Done</span>}
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">{step.description}</p>
+        {showAction && (
+          <button
+            type="button"
+            onClick={() => onAction(action)}
+            disabled={busy}
+            data-testid={`timeline-action-${action.to}`}
+            className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
+              action.tone === "primary" ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border border-border hover:bg-accent"
+            }`}
+          >
+            <ActionIcon className="h-3.5 w-3.5" /> {action.label}
+          </button>
+        )}
       </div>
     </motion.li>
   );
