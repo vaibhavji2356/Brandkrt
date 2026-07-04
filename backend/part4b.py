@@ -279,6 +279,25 @@ def register_handlers():
     # =========================================================
     # CONVERSATIONS / CHAT
     # =========================================================
+    async def _agreement_escrow_payment(agreement_id: str) -> Optional[dict]:
+        return await db.payments.find_one({
+            "agreement_id": agreement_id,
+            "status": {"$in": ["escrowed", "released"]},
+        })
+
+    async def _conversation_lock_reason(conv: dict) -> Optional[str]:
+        if conv.get("context_type") != "agreement" or not conv.get("context_id"):
+            return None
+        payment = await _agreement_escrow_payment(conv["context_id"])
+        if payment:
+            return None
+        return "Messaging unlocks after the brand funds escrow for this agreement."
+
+    async def _require_conversation_unlocked(conv: dict) -> None:
+        reason = await _conversation_lock_reason(conv)
+        if reason:
+            raise HTTPException(403, reason)
+
     async def _ensure_conversation(participants: List[str], context_type: str, context_id: Optional[str],
                                    title: Optional[str] = None) -> dict:
         parts = sorted(list({p for p in participants if p}))
@@ -330,6 +349,10 @@ def register_handlers():
                 pass
         out["peers"] = peers
         out["unread_count"] = (conv.get("unread") or {}).get(me_id, 0)
+        lock_reason = await _conversation_lock_reason(conv)
+        out["locked"] = bool(lock_reason)
+        out["lock_reason"] = lock_reason
+        out["next_step"] = "brand_fund_escrow" if lock_reason else None
         return out
 
     @conv_router.get("")
@@ -408,6 +431,7 @@ def register_handlers():
             raise HTTPException(404, "Conversation not found")
         if uid not in conv.get("participants", []) and user.get("role") != "admin":
             raise HTTPException(403, "Forbidden")
+        await _require_conversation_unlocked(conv)
         query: dict = {"conversation_id": conv_id}
         if q:
             query["body"] = {"$regex": q, "$options": "i"}
@@ -422,6 +446,7 @@ def register_handlers():
             raise HTTPException(404, "Conversation not found")
         if uid not in conv.get("participants", []):
             raise HTTPException(403, "Forbidden")
+        await _require_conversation_unlocked(conv)
         body = (payload.body or "").strip()
         attachments = payload.attachments or []
         if not body and not attachments:
@@ -633,7 +658,7 @@ def register_handlers():
         await notify(
             doc["brand_user_id"], "contract.accepted",
             "Agreement accepted",
-            f"{doc.get('influencer_name')} signed the agreement for '{doc.get('campaign') or 'your campaign'}'.",
+            f"{doc.get('influencer_name')} signed the agreement. Fund escrow to unlock messaging and start work.",
             {"agreement_id": aid},
         )
         # auto-open conversation between the two parties
@@ -644,6 +669,114 @@ def register_handlers():
         )
         fresh = await db.agreements.find_one({"_id": oid(aid)})
         return {"success": True, "agreement": doc_out(fresh)}
+
+    @agreement_router.post("/{aid}/fund")
+    async def _fund_agreement(aid: str, user: dict = Depends(get_current_user)):
+        await require_role(user, "brand", "admin")
+        uid = str(user["_id"])
+        agreement = await db.agreements.find_one({"_id": oid(aid)})
+        if not agreement:
+            raise HTTPException(404, "Agreement not found")
+        if uid != agreement.get("brand_user_id") and user.get("role") != "admin":
+            raise HTTPException(403, "Only the brand can fund this agreement")
+        if agreement.get("status") not in ("accepted", "completed"):
+            raise HTTPException(400, "Escrow can be funded after the creator signs the agreement")
+
+        existing = await db.payments.find_one({
+            "agreement_id": aid,
+            "status": {"$in": ["pending", "escrowed", "released"]},
+        })
+        if existing:
+            out = doc_out(existing)
+            if existing.get("provider") == "razorpay" and existing.get("status") == "pending":
+                out["checkout"] = {
+                    "provider": "razorpay",
+                    "key_id": existing.get("provider_key_id"),
+                    "order_id": existing.get("transaction_id"),
+                    "amount": existing.get("amount_subunits"),
+                    "currency": existing.get("currency", "INR"),
+                }
+            return {"payment": out}
+
+        amount = float(agreement.get("payment_amount") or 0)
+        if amount <= 0:
+            raise HTTPException(400, "Agreement amount must be greater than zero")
+
+        now = now_utc()
+        platform_fee = float(agreement.get("platform_fee") or round(amount * 0.08, 2))
+        influencer_earning = float(agreement.get("net_to_influencer") or round(amount - platform_fee, 2))
+        try:
+            import payments as _payments  # noqa: WPS433
+            pr = _payments.get_provider().create_escrow(amount=amount, deal_id=aid)
+            txid = pr.get("transaction_id") or secrets.token_hex(8).upper()
+            client_secret = pr.get("client_secret")
+            provider_name = pr.get("provider", "stub")
+            provider_status = pr.get("status", "escrowed")
+        except Exception as exc:
+            configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").lower()
+            if configured_provider in {"stripe", "razorpay"}:
+                raise HTTPException(503, f"{configured_provider.title()} payment provider is not configured correctly") from exc
+            pr = {}
+            txid = secrets.token_hex(8).upper()
+            client_secret = None
+            provider_name = "stub"
+            provider_status = "escrowed"
+
+        is_razorpay_pending = provider_name == "razorpay" and provider_status == "pending"
+        payment_doc = {
+            "deal_id": None,
+            "agreement_id": aid,
+            "amount": amount,
+            "platform_fee": platform_fee,
+            "influencer_earning": influencer_earning,
+            "release_status": "pending" if is_razorpay_pending else "held",
+            "transaction_id": txid,
+            "provider": provider_name,
+            "client_secret": client_secret,
+            "status": "pending" if is_razorpay_pending else "escrowed",
+            "currency": pr.get("currency", "INR"),
+            "amount_subunits": pr.get("amount_subunits"),
+            "provider_key_id": pr.get("key_id"),
+            "receipt": pr.get("receipt"),
+            "created_at": now,
+            "updated_at": now,
+        }
+        res = await db.payments.insert_one(payment_doc)
+        await db.transactions.insert_one({
+            "user_id": uid,
+            "type": "escrow_in",
+            "amount": amount,
+            "ref": str(res.inserted_id),
+            "status": "pending" if is_razorpay_pending else "ok",
+            "created_at": now,
+        })
+        await db.agreements.update_one(
+            {"_id": oid(aid)},
+            {"$set": {
+                "payment_status": "pending" if is_razorpay_pending else "escrowed",
+                "escrow_payment_id": str(res.inserted_id),
+                "updated_at": now,
+            }},
+        )
+        if not is_razorpay_pending:
+            await notify(
+                agreement["influencer_user_id"],
+                "payment.escrowed",
+                "Escrow funded",
+                f"{agreement.get('brand_name')} funded escrow. Messaging is now unlocked.",
+                {"agreement_id": aid, "payment_id": str(res.inserted_id)},
+            )
+
+        payment_out = doc_out(await db.payments.find_one({"_id": res.inserted_id}))
+        if is_razorpay_pending:
+            payment_out["checkout"] = {
+                "provider": "razorpay",
+                "key_id": pr.get("key_id"),
+                "order_id": txid,
+                "amount": pr.get("amount_subunits"),
+                "currency": pr.get("currency", "INR"),
+            }
+        return {"payment": payment_out}
 
     @agreement_router.post("/{aid}/reject")
     async def _reject_agreement(aid: str, payload: AgreementSignIn, user: dict = Depends(get_current_user)):

@@ -651,6 +651,27 @@ def register_handlers():
             {"ref": payload.payment_id, "type": "escrow_in"},
             {"$set": {"status": "ok", "provider_payment_id": payload.razorpay_payment_id, "updated_at": now}},
         )
+        if pay.get("agreement_id"):
+            await db.agreements.update_one(
+                {"_id": oid(pay["agreement_id"])},
+                {"$set": {
+                    "payment_status": "escrowed",
+                    "escrow_payment_id": payload.payment_id,
+                    "updated_at": now,
+                }},
+            )
+            try:
+                agreement = await db.agreements.find_one({"_id": oid(pay["agreement_id"])})
+                if agreement:
+                    await notify(
+                        agreement.get("influencer_user_id"),
+                        "payment.escrowed",
+                        "Escrow funded",
+                        f"{agreement.get('brand_name')} funded escrow. Messaging is now unlocked.",
+                        {"agreement_id": pay["agreement_id"], "payment_id": payload.payment_id},
+                    )
+            except Exception:
+                pass
         fresh = await db.payments.find_one({"_id": oid(payload.payment_id)})
         return {"success": True, "payment": doc_out(fresh)}
 

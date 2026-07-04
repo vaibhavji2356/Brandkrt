@@ -215,11 +215,7 @@ export function InfluencerCard({ inf, isSaved, onToggleSave, onOpen, onInvite, h
   return (
     <div className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-4 hover:-translate-y-0.5 hover:shadow-luxe-sm transition-all" data-testid={`inf-card-${inf.id}`}>
       <div className="flex items-start gap-4">
-        <div className="h-14 w-14 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center overflow-hidden text-lg font-display font-semibold shrink-0">
-          {inf.profile_photo_url
-            ? <img src={inf.profile_photo_url} alt="" className="h-full w-full object-cover" />
-            : initials}
-        </div>
+        <CreatorAvatar src={inf.profile_photo_url} initials={initials} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold text-primary dark:text-white truncate">{inf.username || "Creator"}</h3>
@@ -260,6 +256,24 @@ export function InfluencerCard({ inf, isSaved, onToggleSave, onOpen, onInvite, h
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+function CreatorAvatar({ src, initials }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = src && !failed;
+  return (
+    <div className="h-14 w-14 rounded-2xl bg-secondary text-secondary-foreground flex items-center justify-center overflow-hidden text-lg font-display font-semibold shrink-0">
+      {showImage ? (
+        <img
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+          loading="lazy"
+        />
+      ) : initials}
     </div>
   );
 }

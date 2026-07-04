@@ -22,7 +22,21 @@ export function assetUrl(value) {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
-  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
+  if (/^(data:|blob:)/i.test(trimmed)) return trimmed;
+  if (/^https?:/i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const isUpload = url.pathname.startsWith("/uploads/");
+      const isAppHost = ["brandkrt.com", "www.brandkrt.com"].includes(url.hostname)
+        || (typeof window !== "undefined" && url.hostname === window.location.hostname);
+      if (isUpload && isAppHost && BACKEND_ORIGIN) {
+        return `${BACKEND_ORIGIN}${url.pathname}${url.search}`;
+      }
+    } catch (_) {
+      return trimmed;
+    }
+    return trimmed;
+  }
   if (trimmed.startsWith("/uploads/")) {
     const origin = BACKEND_ORIGIN || (typeof window !== "undefined" ? window.location.origin : "");
     return `${origin}${trimmed}`;

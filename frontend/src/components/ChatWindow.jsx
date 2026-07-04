@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Send, Paperclip, Image as ImageIcon, Search, X as XIcon, Loader2, CheckCheck, MessageCircle,
-  FileText, Download, ArrowLeft,
+  FileText, Download, ArrowLeft, Lock as LockIcon,
 } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
   const [showSearch, setShowSearch] = useState(false);
   const [query, setQuery] = useState("");
   const [typingPeers, setTypingPeers] = useState([]);
+  const [locked, setLocked] = useState("");
   const fileRef = useRef(null);
   const imageRef = useRef(null);
   const scrollRef = useRef(null);
@@ -50,17 +51,24 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
     try {
       const { data } = await api.get(`/conversations/${conversation.id}/messages`, { params: { q: query || undefined } });
       setMessages(data.messages || []);
+      setLocked("");
       // mark as read
       api.post(`/conversations/${conversation.id}/read`).catch(() => {});
       onUpdated?.();
     } catch (err) {
-      toast.error(formatApiError(err));
+      if (err?.response?.status === 403) {
+        setLocked(formatApiError(err));
+        setMessages([]);
+      } else {
+        toast.error(formatApiError(err));
+      }
     }
     setLoading(false);
   };
 
   useEffect(() => {
     if (!conversation?.id) return;
+    setLocked(conversation.locked ? (conversation.lock_reason || "Messaging is locked for this conversation.") : "");
     load();
     const id = setInterval(load, 6000);
     return () => clearInterval(id);
@@ -90,13 +98,14 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
   }, [messages.length]);
 
   const handleTyping = () => {
-    if (!conversation?.id) return;
+    if (!conversation?.id || locked) return;
     if (typingTimerRef.current) return; // throttle to once per ~3s
     api.post(`/conversations/${conversation.id}/typing`).catch(() => {});
     typingTimerRef.current = setTimeout(() => { typingTimerRef.current = null; }, 3000);
   };
 
   const uploadFile = async (file, kindHint) => {
+    if (locked) return toast.error(locked);
     const fd = new FormData();
     fd.append("file", file);
     try {
@@ -119,6 +128,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
 
   const send = async () => {
     if (!conversation?.id) return;
+    if (locked) return toast.error(locked);
     const text = body.trim();
     if (!text && pending.length === 0) return;
     setSending(true);
@@ -173,6 +183,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
   const headerName = peer?.name || conversation.title || "Conversation";
   const initials = (headerName || "?").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const typingActive = typingPeers.length > 0;
+  const isLocked = !!locked;
 
   return (
     <div className="flex-1 min-w-0 flex flex-col bg-background" data-testid="chat-window">
@@ -187,7 +198,9 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
         <div className="min-w-0">
           <div className="text-sm font-semibold text-primary dark:text-white truncate">{headerName}</div>
           <div className="text-xs text-muted-foreground truncate">
-            {typingActive ? (
+            {isLocked ? (
+              <span className="inline-flex items-center gap-1"><LockIcon className="h-3 w-3" /> Locked until escrow payment</span>
+            ) : typingActive ? (
               <span className="text-secondary inline-flex items-center gap-1">
                 <span className="inline-flex gap-0.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-secondary animate-bounce [animation-delay:-0.2s]" />
@@ -235,13 +248,20 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
         {loading && messages.length === 0 && (
           <div className="text-center text-sm text-muted-foreground">Loading messages…</div>
         )}
-        {!loading && messages.length === 0 && (
+        {isLocked && (
+          <div className="mx-auto max-w-md rounded-2xl border border-secondary/30 bg-accent p-5 text-center" data-testid="chat-locked">
+            <LockIcon className="h-9 w-9 mx-auto text-secondary" />
+            <h3 className="mt-3 text-base font-semibold text-primary dark:text-white">Payment required before messaging</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{locked}</p>
+          </div>
+        )}
+        {!isLocked && !loading && messages.length === 0 && (
           <div className="text-center py-10" data-testid="chat-thread-empty">
             <MessageCircle className="h-10 w-10 mx-auto text-muted-foreground" />
             <p className="mt-3 text-sm text-muted-foreground">No messages yet. Send the first message to get started.</p>
           </div>
         )}
-        {grouped.map((item) => {
+        {!isLocked && grouped.map((item) => {
           if (item.kind === "divider") {
             return (
               <div key={item.key} className="flex items-center justify-center my-4">
@@ -280,7 +300,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
       </div>
 
       {/* Pending attachments */}
-      {pending.length > 0 && (
+      {!isLocked && pending.length > 0 && (
         <div className="px-4 py-2 border-t border-border bg-card flex gap-2 flex-wrap" data-testid="chat-pending">
           {pending.map((p, i) => (
             <div key={i} className="relative h-16 w-16 rounded-lg border border-border overflow-hidden bg-background">
@@ -306,6 +326,12 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
       )}
 
       {/* Composer */}
+      {isLocked ? (
+        <div className="border-t border-border bg-card p-3 text-sm text-muted-foreground flex items-center gap-2">
+          <LockIcon className="h-4 w-4 text-secondary" />
+          Chat will open automatically after the brand funds escrow.
+        </div>
+      ) : (
       <div className="border-t border-border bg-card p-3 flex items-end gap-2">
         <button
           type="button"
@@ -347,6 +373,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </button>
       </div>
+      )}
     </div>
   );
 }
