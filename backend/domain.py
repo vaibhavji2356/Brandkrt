@@ -79,6 +79,22 @@ async def notify(user_id: str, type_: str, title: str, body: str = "", meta: Opt
     })
 
 
+async def find_brand_for_user(user: dict) -> Optional[dict]:
+    """Return the brand profile for a user, preferring the current string user_id."""
+    uid = str(user["_id"])
+    doc = await db.brands.find_one({"user_id": uid})
+    if doc:
+        return doc
+    raw_id = user.get("_id")
+    if isinstance(raw_id, ObjectId):
+        legacy = await db.brands.find_one({"user_id": raw_id})
+        if legacy:
+            await db.brands.update_one({"_id": legacy["_id"]}, {"$set": {"user_id": uid, "updated_at": now_utc()}})
+            legacy["user_id"] = uid
+            return legacy
+    return None
+
+
 async def setup_indexes(database):
     await database.brands.create_index("user_id", unique=True)
     await database.influencers.create_index("user_id", unique=True)
@@ -317,7 +333,7 @@ def register_handlers():
         now = now_utc()
         data = payload.model_dump()
         data.update({"user_id": str(user["_id"]), "status": "active", "updated_at": now})
-        existing = await db.brands.find_one({"user_id": str(user["_id"])})
+        existing = await find_brand_for_user(user)
         if existing:
             await db.brands.update_one({"_id": existing["_id"]}, {"$set": data})
             doc = await db.brands.find_one({"_id": existing["_id"]})
@@ -331,7 +347,7 @@ def register_handlers():
 
     @brand_router.get("/me", operation_id="get_my_brand")
     async def _get_my_brand(user: dict = Depends(get_current_user)):
-        doc = await db.brands.find_one({"user_id": str(user["_id"])})
+        doc = await find_brand_for_user(user)
         return {"brand": doc_out(doc) if doc else None}
 
     @brand_router.get("", operation_id="list_brands")
@@ -394,7 +410,7 @@ def register_handlers():
     @campaign_router.post("")
     async def _create_campaign(payload: CampaignIn, user: dict = Depends(get_current_user)):
         await require_role(user, "brand", "admin")
-        brand = await db.brands.find_one({"user_id": str(user["_id"])})
+        brand = await find_brand_for_user(user)
         if not brand and user.get("role") != "admin":
             raise HTTPException(400, "Create your brand profile first")
         now = now_utc()
@@ -408,7 +424,7 @@ def register_handlers():
     async def _list_campaigns(user: dict = Depends(get_current_user), status: Optional[str] = None, limit: int = 50):
         query = {}
         if user.get("role") == "brand":
-            brand = await db.brands.find_one({"user_id": str(user["_id"])})
+            brand = await find_brand_for_user(user)
             query["brand_id"] = str(brand["_id"]) if brand else "__none__"
         if status:
             query["status"] = status
@@ -458,7 +474,7 @@ def register_handlers():
             inf = await db.influencers.find_one({"user_id": str(user["_id"])})
             query["influencer_id"] = str(inf["_id"]) if inf else "__none__"
         elif user.get("role") == "brand":
-            brand = await db.brands.find_one({"user_id": str(user["_id"])})
+            brand = await find_brand_for_user(user)
             query["brand_id"] = str(brand["_id"]) if brand else "__none__"
         cur = db.deals.find(query).sort("created_at", -1).limit(100)
         return {"deals": [doc_out(x) async for x in cur]}

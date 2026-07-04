@@ -45,6 +45,15 @@ const EMPTY = {
   upi: "",
 };
 
+const hydrateBrand = (brand = {}) => ({
+  ...EMPTY,
+  ...brand,
+  bank_details: { ...EMPTY.bank_details, ...(brand.bank_details || {}) },
+  product_categories: brand.product_categories || [],
+  product_images: brand.product_images || [],
+  documents: brand.documents || [],
+});
+
 export default function BrandProfile() {
   const { user } = useAuth();
   const [form, setForm] = useState(EMPTY);
@@ -68,14 +77,7 @@ export default function BrandProfile() {
         const { data } = await api.get("/brands/me");
         const brand = data?.brand;
         if (brand) {
-          setForm({
-            ...EMPTY,
-            ...brand,
-            bank_details: { ...EMPTY.bank_details, ...(brand.bank_details || {}) },
-            product_categories: brand.product_categories || [],
-            product_images: brand.product_images || [],
-            documents: brand.documents || [],
-          });
+          setForm(hydrateBrand(brand));
           setVerified(brand.verification_status || "pending");
         } else if (user?.name) {
           set("company_name", user.name);
@@ -147,19 +149,14 @@ export default function BrandProfile() {
     try {
       const payload = { ...form };
       ["id", "user_id", "status", "verification_status", "created_at", "updated_at"].forEach((k) => delete payload[k]);
-      const { data } = await api.put("/brands/me", payload);
+      await api.put("/brands/me", payload);
+      const { data } = await api.get("/brands/me");
       const updatedBrand = data?.brand;
-      if (updatedBrand) {
-        setForm({
-          ...EMPTY,
-          ...updatedBrand,
-          bank_details: { ...EMPTY.bank_details, ...(updatedBrand.bank_details || {}) },
-          product_categories: updatedBrand.product_categories || [],
-          product_images: updatedBrand.product_images || [],
-          documents: updatedBrand.documents || [],
-        });
-        setVerified(updatedBrand.verification_status || verified);
+      if (!updatedBrand?.id) {
+        throw new Error("Profile save could not be confirmed. Please try again.");
       }
+      setForm(hydrateBrand(updatedBrand));
+      setVerified(updatedBrand.verification_status || verified);
       toast.success("Business profile saved.");
     } catch (err) { toast.error(formatApiError(err)); }
     finally { setSaving(false); }
