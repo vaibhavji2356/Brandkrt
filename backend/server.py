@@ -76,18 +76,7 @@ _is_prod = os.environ.get("APP_ENV", "development").lower() != "development"
 app.add_middleware(_security.SecurityHeadersMiddleware, prod=_is_prod)
 # 2) origin-based CSRF guard for state-changing requests
 app.add_middleware(_security.OriginCSRFMiddleware, allow_origins=cors_origins)
-# 3) outermost — CORS (handles preflight + tags every response with ACAO)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=_cors_origin_regex,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
-)
-
+# CORS is attached at the end of this module so it remains outermost.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("brandkrt")
 
@@ -781,5 +770,20 @@ _uploads_dir = _os.environ.get("UPLOAD_ROOT", "./uploads")
 _os.makedirs(_uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
-# (CORS, SecurityHeaders and OriginCSRF middlewares are attached at the top of
-# this file, immediately after `app = FastAPI(...)`, BEFORE any router include.)
+@app.options("/{full_path:path}", include_in_schema=False)
+async def cors_preflight(full_path: str):
+    return Response(status_code=204)
+
+
+# Final middleware layer: keep CORS outermost so preflight and error responses
+# from auth/security routes always include Access-Control-Allow-Origin.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_origin_regex=_cors_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
+)
