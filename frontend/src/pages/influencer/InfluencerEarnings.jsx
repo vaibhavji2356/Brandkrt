@@ -194,7 +194,7 @@ export default function InfluencerEarnings() {
               )}
               {myPayments.map((p) => (
                 <div key={p.id} className="py-3 flex items-center justify-between gap-3" data-testid={`payment-${p.id}`}>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-primary dark:text-white truncate">
                       ₹{Number(p.influencer_earning || 0).toLocaleString()} <span className="text-xs text-muted-foreground font-normal">net (gross ₹{Number(p.amount || 0).toLocaleString()}, fee ₹{Number(p.platform_fee || 0).toLocaleString()})</span>
                     </div>
@@ -215,14 +215,47 @@ export default function InfluencerEarnings() {
                 <p className="py-4 text-sm text-muted-foreground">No withdrawals yet.</p>
               )}
               {withdrawals.map((w) => (
-                <div key={w.id} className="py-3 flex items-center justify-between gap-3" data-testid={`withdrawal-${w.id}`}>
-                  <div className="min-w-0">
+                <div key={w.id} className="py-3 flex items-start justify-between gap-3" data-testid={`withdrawal-${w.id}`}>
+                  <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-primary dark:text-white truncate">
                       ₹{Number(w.amount).toLocaleString()} via {w.method?.toUpperCase()}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {w.created_at ? new Date(w.created_at).toLocaleString() : ""}
                     </div>
+                    {(w.payout_status || w.payout_id || w.manual_payout?.reference || w.manual_payout?.screenshot_url || w.manual_payout?.note) && (
+                      <div className="mt-2 space-y-1 rounded-xl border border-border bg-accent/40 px-3 py-2 text-xs">
+                        {w.payout_status && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="font-semibold text-muted-foreground">Payout status:</span>
+                            <span className="capitalize text-foreground">{String(w.payout_status).replaceAll("_", " ")}</span>
+                          </div>
+                        )}
+                        {w.payout_id && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="font-semibold text-muted-foreground">Payout ID:</span>
+                            <span className="break-all text-foreground">{w.payout_id}</span>
+                          </div>
+                        )}
+                        {w.manual_payout?.reference && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="font-semibold text-muted-foreground">Payment reference:</span>
+                            <span className="break-all text-foreground">{w.manual_payout.reference}</span>
+                          </div>
+                        )}
+                        {w.manual_payout?.note && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="font-semibold text-muted-foreground">Admin note:</span>
+                            <span className="text-foreground">{w.manual_payout.note}</span>
+                          </div>
+                        )}
+                        {w.manual_payout?.screenshot_url && (
+                          <a href={w.manual_payout.screenshot_url} target="_blank" rel="noreferrer" className="inline-flex font-semibold text-secondary hover:underline">
+                            View payment screenshot
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <StatusChip value={w.status} />
                 </div>

@@ -56,6 +56,27 @@ export default function NotificationBell() {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-primary dark:text-white truncate">{n.title}</div>
                 {n.body && <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</div>}
+                {(n.meta?.reference || n.meta?.screenshot_url) && (
+                  <div className="mt-2 space-y-1 rounded-lg border border-border bg-background/70 px-2 py-1.5 text-[11px]">
+                    {n.meta?.reference && (
+                      <div className="break-all">
+                        <span className="font-semibold text-muted-foreground">Ref: </span>
+                        <span className="text-foreground">{n.meta.reference}</span>
+                      </div>
+                    )}
+                    {n.meta?.screenshot_url && (
+                      <a
+                        href={n.meta.screenshot_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex font-semibold text-secondary hover:underline"
+                      >
+                        View screenshot
+                      </a>
+                    )}
+                  </div>
+                )}
                 <div className="text-[10px] uppercase tracking-wider text-secondary mt-1">{n.type}</div>
               </div>
               {!n.read && (

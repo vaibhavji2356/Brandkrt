@@ -132,6 +132,26 @@ export default function InfluencerNotifications() {
                 {!n.read && <span className="text-[10px] uppercase tracking-wider text-secondary">• new</span>}
               </div>
               {n.body && <p className="mt-1 text-sm text-muted-foreground">{n.body}</p>}
+              {(n.meta?.reference || n.meta?.screenshot_url) && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-background/70 px-3 py-2 text-xs">
+                  {n.meta?.reference && (
+                    <span className="min-w-0">
+                      <span className="font-semibold text-muted-foreground">Reference: </span>
+                      <span className="break-all text-foreground">{n.meta.reference}</span>
+                    </span>
+                  )}
+                  {n.meta?.screenshot_url && (
+                    <a
+                      href={n.meta.screenshot_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-secondary hover:underline"
+                    >
+                      View payment screenshot
+                    </a>
+                  )}
+                </div>
+              )}
               <p className="mt-2 text-xs text-muted-foreground">{timeAgo(n.created_at)}</p>
             </div>
             {!n.read && (
