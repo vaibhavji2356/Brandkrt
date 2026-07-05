@@ -261,6 +261,11 @@ class WithdrawalDecisionIn(BaseModel):
     decision: Literal["approved", "rejected"]
     note: Optional[str] = None
 
+class ManualPayoutIn(BaseModel):
+    reference: Optional[str] = None
+    screenshot_url: Optional[str] = None
+    note: Optional[str] = None
+
 class AdminUserStatusIn(BaseModel):
     suspended: bool = True
 
@@ -1371,6 +1376,63 @@ def register_handlers():
         await log_admin(str(user["_id"]), "withdrawal.payout", rid, {"payout_id": payout.get("payout_id"), "status": provider_status})
         fresh = await db.withdrawal_requests.find_one({"_id": oid(rid)})
         return {"success": app_status == "released", "request": await _withdrawal_admin_out(fresh)}
+
+    @admin_router.post("/withdrawals/{rid}/manual-payout")
+    async def _admin_wd_manual_payout(rid: str, payload: ManualPayoutIn, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        req = await db.withdrawal_requests.find_one({"_id": oid(rid)})
+        if not req:
+            raise HTTPException(404, "Withdrawal request not found")
+        if req.get("status") == "released":
+            raise HTTPException(400, "This withdrawal is already marked as released")
+        if req.get("status") == "rejected":
+            raise HTTPException(400, "Rejected withdrawal requests cannot be paid")
+
+        now = now_utc()
+        manual = {
+            "reference": payload.reference,
+            "screenshot_url": payload.screenshot_url,
+            "note": payload.note,
+            "marked_by": str(user["_id"]),
+            "marked_at": now,
+        }
+        update = {
+            "status": "released",
+            "payout_status": "manual_paid",
+            "payout_provider": "manual",
+            "payout_method": req.get("method"),
+            "manual_payout": manual,
+            "processed_at": now,
+            "processed_by": str(user["_id"]),
+            "admin_note": payload.note or "Marked paid manually",
+            "updated_at": now,
+        }
+        await db.withdrawal_requests.update_one({"_id": oid(rid)}, {"$set": update})
+        await db.transactions.insert_one({
+            "user_id": req.get("user_id"),
+            "type": "withdrawal_payout",
+            "amount": req.get("amount"),
+            "method": req.get("method"),
+            "status": "manual_paid",
+            "provider": "manual",
+            "withdrawal_id": rid,
+            "reference": payload.reference,
+            "screenshot_url": payload.screenshot_url,
+            "created_at": now,
+        })
+        body = f"INR {req.get('amount')} has been marked as paid to your {req.get('method')}."
+        if payload.reference:
+            body += f" Reference: {payload.reference}."
+        await notify(
+            req["user_id"],
+            "withdrawal.released",
+            "Payout marked successful",
+            body,
+            {"withdrawal_id": rid, "reference": payload.reference, "screenshot_url": payload.screenshot_url, "manual": True},
+        )
+        await log_admin(str(user["_id"]), "withdrawal.manual_payout", rid, {"reference": payload.reference, "screenshot_url": payload.screenshot_url})
+        fresh = await db.withdrawal_requests.find_one({"_id": oid(rid)})
+        return {"success": True, "request": await _withdrawal_admin_out(fresh)}
 
     @admin_router.get("/reports")
     async def _admin_reports(user: dict = Depends(get_current_user), status: str = "open"):

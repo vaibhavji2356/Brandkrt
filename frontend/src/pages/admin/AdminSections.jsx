@@ -599,6 +599,7 @@ export function AdminWithdrawals() {
   const [active, setActive] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [manual, setManual] = useState({ reference: "", screenshot_url: "", note: "" });
 
   const load = async (status = tab) => {
     try {
@@ -650,6 +651,32 @@ export function AdminWithdrawals() {
     }
   };
 
+  const markManual = async (request) => {
+    if (!request) return;
+    if (!manual.reference && !window.confirm("No UTR/reference added. Mark this payout as manually paid anyway?")) return;
+    try {
+      setBusy(true);
+      const { data } = await api.post(`/admin/withdrawals/${request.id}/manual-payout`, manual);
+      toast.success("Manual payout marked successful.");
+      setManual({ reference: "", screenshot_url: "", note: "" });
+      if (active?.id === request.id) setActive(data.request || null);
+      await load(tab);
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDetails = (request) => {
+    setActive(request);
+    setManual({
+      reference: request.manual_payout?.reference || "",
+      screenshot_url: request.manual_payout?.screenshot_url || "",
+      note: request.manual_payout?.note || "",
+    });
+  };
+
   const tabs = [
     ["pending", "Pending"],
     ["approved", "Approved"],
@@ -683,7 +710,7 @@ export function AdminWithdrawals() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => setActive(request)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent">Open details</button>
+                  <button onClick={() => openDetails(request)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent">Open details</button>
                   {request.status === "pending" && (
                     <button onClick={() => decide(request, "approved")} disabled={busy} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-60">
                       Approve
@@ -741,6 +768,29 @@ export function AdminWithdrawals() {
                 ["Processed at", active.processed_at],
                 ["Admin note", active.admin_note],
               ]} />
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <div className="text-sm font-semibold text-primary dark:text-white">Manual payment proof</div>
+                <p className="mt-1 text-xs text-muted-foreground">Use this after paying the creator from UPI/bank app. The creator will see the payout as successful.</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">UTR / Reference</label>
+                    <Input value={manual.reference} onChange={(e) => setManual({ ...manual, reference: e.target.value })} placeholder="UPI ref / bank UTR" className="mt-2" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Screenshot URL</label>
+                    <Input value={manual.screenshot_url} onChange={(e) => setManual({ ...manual, screenshot_url: e.target.value })} placeholder="Payment screenshot link" className="mt-2" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Note</label>
+                    <Input value={manual.note} onChange={(e) => setManual({ ...manual, note: e.target.value })} placeholder="Paid manually after bank/UPI transfer" className="mt-2" />
+                  </div>
+                </div>
+                {active.manual_payout?.screenshot_url && (
+                  <a href={active.manual_payout.screenshot_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex text-sm font-semibold text-secondary">
+                    Open saved screenshot
+                  </a>
+                )}
+              </div>
               <DialogFooter>
                 {active.status === "pending" && (
                   <button onClick={() => decide(active, "rejected")} disabled={busy} className="rounded-full bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-60">
@@ -755,6 +805,11 @@ export function AdminWithdrawals() {
                 {["pending", "approved"].includes(active.status) && (
                   <button onClick={() => pay(active)} disabled={busy} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
                     Pay via RazorpayX
+                  </button>
+                )}
+                {["pending", "approved"].includes(active.status) && (
+                  <button onClick={() => markManual(active)} disabled={busy} className="rounded-full bg-secondary px-4 py-2 text-sm font-semibold text-secondary-foreground disabled:opacity-60">
+                    Mark paid manually
                   </button>
                 )}
               </DialogFooter>
