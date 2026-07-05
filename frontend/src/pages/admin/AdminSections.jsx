@@ -544,11 +544,11 @@ export function AdminEscrow() {
                   ["Name", profileName(active.creator, active.creator_user, active.agreement?.influencer_name)],
                   ["Email", active.creator_user?.email],
                   ["Phone", active.creator?.phone || active.creator_user?.phone],
-                  ["UPI", active.creator?.upi_id],
-                  ["Account holder", active.creator?.account_holder_name],
-                  ["Bank", active.creator?.bank_name],
-                  ["Account number", active.creator?.account_number],
-                  ["IFSC", active.creator?.ifsc],
+                  ["UPI", active.creator?.upi],
+                  ["Account holder", active.creator?.bank_details?.account_name],
+                  ["Bank", active.creator?.bank_details?.bank_name],
+                  ["Account number", active.creator?.bank_details?.account_number],
+                  ["IFSC", active.creator?.bank_details?.ifsc],
                 ]} />
               </div>
               <DetailCard title="Campaign and escrow" rows={[
@@ -593,9 +593,185 @@ function DetailCard({ title, rows }) {
     </div>
   );
 }
-export const AdminWithdrawals = () => <SimpleList title="Withdrawal requests" endpoint="/admin/withdrawals" testidPrefix="wd-row" columns={[
-  { key: "user_id", label: "User" }, { key: "amount", label: "Amount" }, { key: "method", label: "Method" }, { key: "status", label: "Status" }, { key: "created_at", label: "Created" },
-]} />;
+export function AdminWithdrawals() {
+  const [tab, setTab] = useState("pending");
+  const [rows, setRows] = useState([]);
+  const [active, setActive] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = async (status = tab) => {
+    try {
+      setLoading(true);
+      const { data } = await api.get("/admin/withdrawals", { params: { status } });
+      setRows(data.requests || []);
+    } catch (e) {
+      setRows([]);
+      toast.error(formatApiError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(tab); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const decide = async (request, decision) => {
+    if (!request) return;
+    try {
+      setBusy(true);
+      const { data } = await api.post(`/admin/withdrawals/${request.id}/decision`, {
+        decision,
+        note: decision === "approved" ? "Approved for RazorpayX payout" : "Rejected by admin",
+      });
+      toast.success(decision === "approved" ? "Withdrawal approved." : "Withdrawal rejected.");
+      if (active?.id === request.id) setActive(data.request || null);
+      await load(tab);
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pay = async (request) => {
+    if (!request) return;
+    const detail = payoutSummary(request);
+    if (!window.confirm(`Send ${money(request.amount)} to ${profileName(request.creator, request.user, request.user_id)} via ${detail}?`)) return;
+    try {
+      setBusy(true);
+      const { data } = await api.post(`/admin/withdrawals/${request.id}/payout`);
+      toast.success("RazorpayX payout triggered.");
+      if (active?.id === request.id) setActive(data.request || null);
+      await load(tab);
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tabs = [
+    ["pending", "Pending"],
+    ["approved", "Approved"],
+    ["released", "Released"],
+    ["rejected", "Rejected"],
+    ["failed", "Failed"],
+    ["all", "All"],
+  ];
+
+  return (
+    <Section title="Withdrawal payouts">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          {tabs.map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}
+        </TabsList>
+        <TabsContent value={tab} className="mt-6 space-y-3">
+          {rows.map((request) => (
+            <div key={request.id} className="rounded-2xl border border-border bg-card p-5" data-testid={`wd-row-${request.id}`}>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-primary dark:text-white">{profileName(request.creator, request.user, "Creator payout")}</h3>
+                    <StatusChip value={request.status} />
+                    {request.payout_status && <StatusChip value={request.payout_status} />}
+                  </div>
+                  <div className="grid gap-2 text-sm text-foreground/80 md:grid-cols-2">
+                    <InfoRow label="Email" value={request.user?.email || "-"} />
+                    <InfoRow label="Phone" value={request.creator?.phone || request.user?.phone || "-"} />
+                    <InfoRow label="Method" value={request.method === "upi" ? "UPI" : "Bank transfer"} />
+                    <InfoRow label="Destination" value={payoutSummary(request)} />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => setActive(request)} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent">Open details</button>
+                  {request.status === "pending" && (
+                    <button onClick={() => decide(request, "approved")} disabled={busy} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-60">
+                      Approve
+                    </button>
+                  )}
+                  {["pending", "approved"].includes(request.status) && (
+                    <button onClick={() => pay(request)} disabled={busy} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60" data-testid={`wd-pay-${request.id}`}>
+                      Pay via RazorpayX
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <Metric label="Amount to creator" value={money(request.amount)} tone="gold" />
+                <Metric label="Requested on" value={(request.created_at || "").slice(0, 10) || "-"} />
+                <Metric label="Payout id" value={request.payout_id || "-"} />
+              </div>
+            </div>
+          ))}
+          {!rows.length && <p className="text-sm text-muted-foreground">{loading ? "Loading withdrawals..." : "No withdrawal requests in this state."}</p>}
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={!!active} onOpenChange={(open) => !open && setActive(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-auto" data-testid="admin-withdrawal-detail">
+          <DialogHeader><DialogTitle>Withdrawal payout</DialogTitle></DialogHeader>
+          {active && (
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-3">
+                <Metric label="Amount" value={money(active.amount)} tone="gold" />
+                <Metric label="Status" value={active.status || "-"} />
+                <Metric label="Provider status" value={active.payout_status || "-"} />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <DetailCard title="Creator" rows={[
+                  ["Name", profileName(active.creator, active.user, active.user_id)],
+                  ["Email", active.user?.email],
+                  ["Phone", active.creator?.phone || active.user?.phone],
+                  ["User ID", active.user_id],
+                ]} />
+                <DetailCard title="Payout details" rows={[
+                  ["Method", active.method === "upi" ? "UPI" : "Bank transfer"],
+                  ["UPI", active.payout_details?.upi],
+                  ["Account holder", active.payout_details?.account_name],
+                  ["Bank", active.payout_details?.bank_name],
+                  ["Account number", active.payout_details?.account_number],
+                  ["IFSC", active.payout_details?.ifsc],
+                ]} />
+              </div>
+              <DetailCard title="RazorpayX payout" rows={[
+                ["Payout ID", active.payout_id],
+                ["Payout mode", active.payout_mode],
+                ["Fund account ID", active.payout_fund_account_id],
+                ["Contact ID", active.payout_contact_id],
+                ["Processed at", active.processed_at],
+                ["Admin note", active.admin_note],
+              ]} />
+              <DialogFooter>
+                {active.status === "pending" && (
+                  <button onClick={() => decide(active, "rejected")} disabled={busy} className="rounded-full bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground disabled:opacity-60">
+                    Reject
+                  </button>
+                )}
+                {active.status === "pending" && (
+                  <button onClick={() => decide(active, "approved")} disabled={busy} className="rounded-full border border-border px-4 py-2 text-sm font-semibold hover:bg-accent disabled:opacity-60">
+                    Approve
+                  </button>
+                )}
+                {["pending", "approved"].includes(active.status) && (
+                  <button onClick={() => pay(active)} disabled={busy} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+                    Pay via RazorpayX
+                  </button>
+                )}
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Section>
+  );
+}
+
+function payoutSummary(request) {
+  const details = request?.payout_details || {};
+  if (request?.method === "upi") return details.upi || "UPI missing";
+  const ending = details.account_number ? `A/C ${String(details.account_number).slice(-4)}` : "account missing";
+  return `${details.bank_name || "Bank"} - ${ending}${details.ifsc ? ` - ${details.ifsc}` : ""}`;
+}
 
 export const AdminReports = () => <SimpleList title="Reports" endpoint="/admin/reports" testidPrefix="report-row" columns={[
   { key: "reporter_id", label: "Reporter" }, { key: "target_user_id", label: "Target" }, { key: "reason", label: "Reason" }, { key: "status", label: "Status" }, { key: "created_at", label: "Created" },

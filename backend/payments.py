@@ -34,6 +34,17 @@ class PaymentProvider:
     def verify(self, *, order_id: str, payment_id: str, signature: str) -> bool:
         raise NotImplementedError
 
+    def create_payout(
+        self,
+        *,
+        amount: float,
+        method: str,
+        details: dict,
+        contact: dict,
+        reference_id: str,
+    ) -> PaymentResult:
+        raise NotImplementedError
+
 
 class StubProvider(PaymentProvider):
     name = "stub"
@@ -52,6 +63,24 @@ class StubProvider(PaymentProvider):
 
     def verify(self, *, order_id: str, payment_id: str, signature: str) -> bool:
         return True
+
+    def create_payout(
+        self,
+        *,
+        amount: float,
+        method: str,
+        details: dict,
+        contact: dict,
+        reference_id: str,
+    ) -> PaymentResult:
+        return PaymentResult(
+            payout_id=secrets.token_hex(8).upper(),
+            status="processed",
+            provider=self.name,
+            amount=amount,
+            method=method,
+            reference_id=reference_id,
+        )
 
 
 class StripeProvider(PaymentProvider):
@@ -102,6 +131,7 @@ class RazorpayProvider(PaymentProvider):
     def __init__(self) -> None:
         self.key_id = _env("RAZORPAY_KEY_ID")
         self.key_secret = _env("RAZORPAY_KEY_SECRET")
+        self.x_account_number = _env("RAZORPAYX_ACCOUNT_NUMBER")
         if not self.key_id or not self.key_secret:
             raise RuntimeError("RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET env vars are required")
 
@@ -142,6 +172,110 @@ class RazorpayProvider(PaymentProvider):
         payload = f"{order_id}|{payment_id}".encode("utf-8")
         digest = hmac.new(self.key_secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(digest, signature or "")
+
+    def create_payout(
+        self,
+        *,
+        amount: float,
+        method: str,
+        details: dict,
+        contact: dict,
+        reference_id: str,
+    ) -> PaymentResult:
+        if not self.x_account_number:
+            raise RuntimeError("RAZORPAYX_ACCOUNT_NUMBER env var is required for creator payouts")
+        units = int(round(float(amount) * 100))
+        if units <= 0:
+            raise RuntimeError("RazorpayX payout amount must be greater than zero")
+
+        contact_response = requests.post(
+            "https://api.razorpay.com/v1/contacts",
+            auth=(self.key_id, self.key_secret),
+            json={
+                "name": contact.get("name") or "BrandKrt Creator",
+                "email": contact.get("email"),
+                "contact": contact.get("phone"),
+                "type": "vendor",
+                "reference_id": (contact.get("reference_id") or reference_id)[:40],
+                "notes": {"platform": "brandkrt"},
+            },
+            timeout=20,
+        )
+        if contact_response.status_code >= 400:
+            raise RuntimeError(f"RazorpayX contact creation failed: {contact_response.text[:300]}")
+        contact_id = contact_response.json()["id"]
+
+        method = (method or "").lower()
+        if method == "upi":
+            upi = (details.get("upi") or details.get("vpa") or "").strip()
+            if not upi:
+                raise RuntimeError("Creator UPI ID is required for UPI payout")
+            fund_payload = {
+                "contact_id": contact_id,
+                "account_type": "vpa",
+                "vpa": {"address": upi},
+            }
+            payout_mode = "UPI"
+        else:
+            account_name = (details.get("account_name") or details.get("account_holder_name") or contact.get("name") or "").strip()
+            account_number = (details.get("account_number") or "").strip()
+            ifsc = (details.get("ifsc") or details.get("ifsc_code") or "").strip().upper()
+            if not account_name or not account_number or not ifsc:
+                raise RuntimeError("Creator account holder name, account number and IFSC are required for bank payout")
+            fund_payload = {
+                "contact_id": contact_id,
+                "account_type": "bank_account",
+                "bank_account": {
+                    "name": account_name,
+                    "ifsc": ifsc,
+                    "account_number": account_number,
+                },
+            }
+            payout_mode = (_env("RAZORPAYX_BANK_PAYOUT_MODE") or "IMPS").upper()
+
+        fund_response = requests.post(
+            "https://api.razorpay.com/v1/fund_accounts",
+            auth=(self.key_id, self.key_secret),
+            json=fund_payload,
+            timeout=20,
+        )
+        if fund_response.status_code >= 400:
+            raise RuntimeError(f"RazorpayX fund account creation failed: {fund_response.text[:300]}")
+        fund_account_id = fund_response.json()["id"]
+
+        idem = f"bkrt_wd_{reference_id}_{secrets.token_hex(4)}"[:64]
+        payout_response = requests.post(
+            "https://api.razorpay.com/v1/payouts",
+            auth=(self.key_id, self.key_secret),
+            headers={"X-Payout-Idempotency": idem},
+            json={
+                "account_number": self.x_account_number,
+                "fund_account_id": fund_account_id,
+                "amount": units,
+                "currency": "INR",
+                "mode": payout_mode,
+                "purpose": "payout",
+                "queue_if_low_balance": True,
+                "reference_id": reference_id[:40],
+                "narration": "BrandKrt creator payout",
+                "notes": {"platform": "brandkrt", "withdrawal_id": reference_id},
+            },
+            timeout=30,
+        )
+        if payout_response.status_code >= 400:
+            raise RuntimeError(f"RazorpayX payout failed: {payout_response.text[:300]}")
+        payout = payout_response.json()
+        return PaymentResult(
+            payout_id=payout.get("id"),
+            status=payout.get("status", "processing"),
+            provider=self.name,
+            amount=amount,
+            method=method,
+            reference_id=reference_id,
+            fund_account_id=fund_account_id,
+            contact_id=contact_id,
+            mode=payout_mode,
+        )
 
 
 _PROVIDER: Optional[PaymentProvider] = None

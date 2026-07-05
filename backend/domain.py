@@ -1240,16 +1240,137 @@ def register_handlers():
     @admin_router.get("/withdrawals")
     async def _admin_wd(user: dict = Depends(get_current_user), status: str = "pending"):
         await _ensure_admin(user)
-        cur = db.withdrawal_requests.find({"status": status}).sort("created_at", -1).limit(100)
-        return {"requests": [doc_out(x) async for x in cur]}
+        status = (status or "pending").lower()
+        query = {} if status == "all" else {"status": status}
+        cur = db.withdrawal_requests.find(query).sort("created_at", -1).limit(200)
+        return {"requests": [await _withdrawal_admin_out(x) async for x in cur]}
 
     @admin_router.post("/withdrawals/{rid}/decision")
     async def _admin_wd_decide(rid: str, payload: WithdrawalDecisionIn, user: dict = Depends(get_current_user)):
         await _ensure_admin(user)
-        await db.withdrawal_requests.update_one({"_id": oid(rid)},
-                                                {"$set": {"status": payload.decision, "admin_note": payload.note, "updated_at": now_utc()}})
+        req = await db.withdrawal_requests.find_one({"_id": oid(rid)})
+        if not req:
+            raise HTTPException(404, "Withdrawal request not found")
+        await db.withdrawal_requests.update_one(
+            {"_id": oid(rid)},
+            {"$set": {"status": payload.decision, "admin_note": payload.note, "updated_at": now_utc()}},
+        )
+        if payload.decision == "rejected":
+            await notify(req["user_id"], "withdrawal.rejected", "Payout request rejected", payload.note or "Please check your payout details and request again.", {"withdrawal_id": rid})
+        else:
+            await notify(req["user_id"], "withdrawal.approved", "Payout request approved", "Admin approved your payout. It will be released shortly.", {"withdrawal_id": rid})
         await log_admin(str(user["_id"]), f"withdrawal.{payload.decision}", rid)
-        return {"success": True}
+        fresh = await db.withdrawal_requests.find_one({"_id": oid(rid)})
+        return {"success": True, "request": await _withdrawal_admin_out(fresh)}
+
+    async def _withdrawal_admin_out(req: dict) -> dict:
+        out = doc_out(req)
+        uid = req.get("user_id")
+        user_doc = None
+        profile = None
+        if uid:
+            try:
+                user_doc = await db.users.find_one({"_id": oid(uid)}, {"password_hash": 0})
+            except Exception:
+                user_doc = None
+            profile = await db.influencers.find_one({"user_id": uid})
+            if not profile:
+                profile = await db.brands.find_one({"user_id": uid})
+
+        details = dict(req.get("details") or {})
+        bank = dict((profile or {}).get("bank_details") or {})
+        method = (req.get("method") or "").lower()
+        if method == "upi":
+            payout_details = {
+                "upi": details.get("upi") or details.get("vpa") or (profile or {}).get("upi") or (profile or {}).get("upi_id") or "",
+            }
+        else:
+            payout_details = {
+                "account_name": details.get("account_name") or details.get("account_holder_name") or bank.get("account_name") or bank.get("account_holder_name") or (profile or {}).get("username") or (user_doc or {}).get("name") or "",
+                "bank_name": details.get("bank_name") or bank.get("bank_name") or "",
+                "account_number": details.get("account_number") or bank.get("account_number") or "",
+                "ifsc": details.get("ifsc") or details.get("ifsc_code") or bank.get("ifsc") or bank.get("ifsc_code") or "",
+            }
+        out.update({
+            "user": doc_out(user_doc) if user_doc else None,
+            "creator": doc_out(profile) if profile else None,
+            "payout_details": payout_details,
+        })
+        return out
+
+    @admin_router.post("/withdrawals/{rid}/payout")
+    async def _admin_wd_payout(rid: str, user: dict = Depends(get_current_user)):
+        await _ensure_admin(user)
+        req = await db.withdrawal_requests.find_one({"_id": oid(rid)})
+        if not req:
+            raise HTTPException(404, "Withdrawal request not found")
+        if req.get("status") in {"released", "processing"} or req.get("payout_id"):
+            raise HTTPException(400, "This payout was already sent or is processing")
+        if req.get("status") == "rejected":
+            raise HTTPException(400, "Rejected withdrawal requests cannot be paid")
+
+        hydrated = await _withdrawal_admin_out(req)
+        details = hydrated.get("payout_details") or {}
+        target_user = hydrated.get("user") or {}
+        creator = hydrated.get("creator") or {}
+        contact = {
+            "name": creator.get("username") or creator.get("company_name") or target_user.get("name") or target_user.get("email") or "BrandKrt Creator",
+            "email": target_user.get("email"),
+            "phone": creator.get("phone") or target_user.get("phone"),
+            "reference_id": req.get("user_id") or rid,
+        }
+
+        try:
+            import payments as _payments  # noqa: WPS433
+            payout = _payments.get_provider().create_payout(
+                amount=float(req.get("amount") or 0),
+                method=req.get("method") or "upi",
+                details=details,
+                contact=contact,
+                reference_id=rid,
+            )
+        except Exception as e:
+            raise HTTPException(503, f"RazorpayX payout failed: {e}")
+
+        provider_status = (payout.get("status") or "processing").lower()
+        app_status = "failed" if provider_status in {"failed", "rejected", "reversed"} else "released"
+        now = now_utc()
+        update = {
+            "status": app_status,
+            "payout_status": provider_status,
+            "payout_id": payout.get("payout_id"),
+            "payout_provider": payout.get("provider"),
+            "payout_method": payout.get("method") or req.get("method"),
+            "payout_mode": payout.get("mode"),
+            "payout_contact_id": payout.get("contact_id"),
+            "payout_fund_account_id": payout.get("fund_account_id"),
+            "processed_at": now,
+            "processed_by": str(user["_id"]),
+            "admin_note": "Paid via RazorpayX",
+            "updated_at": now,
+        }
+        await db.withdrawal_requests.update_one({"_id": oid(rid)}, {"$set": update})
+        await db.transactions.insert_one({
+            "user_id": req.get("user_id"),
+            "type": "withdrawal_payout",
+            "amount": req.get("amount"),
+            "method": req.get("method"),
+            "status": provider_status,
+            "provider": payout.get("provider"),
+            "payout_id": payout.get("payout_id"),
+            "withdrawal_id": rid,
+            "created_at": now,
+        })
+        await notify(
+            req["user_id"],
+            "withdrawal.released" if app_status == "released" else "withdrawal.failed",
+            "Payout sent" if app_status == "released" else "Payout failed",
+            f"INR {req.get('amount')} has been sent to your {req.get('method')} via RazorpayX." if app_status == "released" else "Admin could not complete your payout. Please check your details.",
+            {"withdrawal_id": rid, "payout_id": payout.get("payout_id")},
+        )
+        await log_admin(str(user["_id"]), "withdrawal.payout", rid, {"payout_id": payout.get("payout_id"), "status": provider_status})
+        fresh = await db.withdrawal_requests.find_one({"_id": oid(rid)})
+        return {"success": app_status == "released", "request": await _withdrawal_admin_out(fresh)}
 
     @admin_router.get("/reports")
     async def _admin_reports(user: dict = Depends(get_current_user), status: str = "open"):
