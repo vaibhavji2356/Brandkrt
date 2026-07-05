@@ -13,7 +13,8 @@ from datetime import datetime, timezone
 from typing import Any, Optional, List, Literal
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from bson.binary import Binary
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 # These are wired in server.py
@@ -103,6 +104,7 @@ async def setup_indexes(database):
     await database.reports.create_index([("reporter_id", 1), ("status", 1)])
     await database.activity_logs.create_index([("user_id", 1), ("created_at", -1)])
     await database.admin_logs.create_index([("created_at", -1)])
+    await database.uploads.create_index([("owner_id", 1), ("created_at", -1)])
 
 # ---------------- routers ----------------
 brand_router = APIRouter(prefix="/brands", tags=["brands"])
@@ -934,31 +936,76 @@ def register_handlers():
         res = await db.reports.insert_one(doc)
         return {"report": doc_out(await db.reports.find_one({"_id": res.inserted_id}))}
 
-    # ----- UPLOADS (Cloudinary in prod, local fallback in dev — Part 5) -----
+    # ----- UPLOADS (Mongo-backed so Render restarts do not break images) -----
     UPLOAD_ROOT = os.environ.get("UPLOAD_ROOT", "./uploads")
     FOLDERS = ["profiles", "brand_logos", "products", "verification", "contracts", "invoices", "chat"]
+    MAX_DB_UPLOAD_BYTES = int(os.environ.get("MONGO_UPLOAD_MAX_MB", "8")) * 1024 * 1024
     for f in FOLDERS:
         os.makedirs(os.path.join(UPLOAD_ROOT, f), exist_ok=True)
 
+    def _public_backend_origin(request: Request) -> str:
+        configured = (
+            os.environ.get("PUBLIC_BACKEND_URL")
+            or os.environ.get("BACKEND_URL")
+            or os.environ.get("API_BASE_URL")
+        )
+        if configured:
+            origin = configured.strip().rstrip("/")
+            return origin[:-4] if origin.endswith("/api") else origin
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+        return f"{proto}://{host}".rstrip("/")
+
+    def _upload_public_url(request: Request, upload_id: ObjectId) -> str:
+        return f"{_public_backend_origin(request)}/api/uploads/{upload_id}"
+
+    @upload_router.get("/{file_id}")
+    async def _get_upload(file_id: str):
+        if not ObjectId.is_valid(file_id):
+            raise HTTPException(404, "File not found")
+        doc = await db.uploads.find_one({"_id": ObjectId(file_id)})
+        if not doc:
+            raise HTTPException(404, "File not found")
+        return Response(
+            content=bytes(doc.get("data") or b""),
+            media_type=doc.get("content_type") or "application/octet-stream",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+
     @upload_router.post("/{folder}")
-    async def _upload(folder: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    async def _upload(request: Request, folder: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
         if folder not in FOLDERS:
             raise HTTPException(400, "Unknown folder")
         data = await file.read()
+        if len(data) > MAX_DB_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"File exceeds {MAX_DB_UPLOAD_BYTES // (1024 * 1024)}MB limit")
+        filename = file.filename or "file"
+        content_type = file.content_type or "application/octet-stream"
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        image_exts = {"jpg", "jpeg", "png", "webp", "gif", "avif", "svg"}
+        kind = "image" if content_type.startswith("image/") or ext in image_exts else "file"
+        now = now_utc()
         try:
-            import storage  # noqa: WPS433
-            res = await storage.save_upload(file_bytes=data, original_name=file.filename or "file", folder=folder)
-        except HTTPException:
-            raise
+            inserted = await db.uploads.insert_one({
+                "owner_id": str(user["_id"]),
+                "folder": folder,
+                "filename": filename,
+                "content_type": content_type,
+                "kind": kind,
+                "size": len(data),
+                "data": Binary(data),
+                "created_at": now,
+                "updated_at": now,
+            })
         except Exception as e:
             raise HTTPException(500, f"Upload failed: {e}")
         return {
-            "url": res["url"],
+            "url": _upload_public_url(request, inserted.inserted_id),
             "folder": folder,
-            "filename": res.get("name") or file.filename,
-            "kind": res.get("kind"),
-            "size": res.get("size"),
-            "provider": res.get("provider"),
+            "filename": filename,
+            "kind": kind,
+            "size": len(data),
+            "provider": "mongodb",
         }
 
     # ----- ADMIN -----
