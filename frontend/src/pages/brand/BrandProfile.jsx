@@ -98,7 +98,14 @@ export default function BrandProfile() {
   const pickLogo = async (e) => {
     const f = e.target.files?.[0]; if (!f) return;
     setUploading((u) => ({ ...u, logo: true }));
-    try { const url = await uploadOne(f, "brand_logos"); set("logo_url", url); toast.success("Logo updated."); }
+    try {
+      const url = await uploadOne(f, "brand_logos");
+      set("logo_url", url);
+      window.dispatchEvent(new CustomEvent("brandkrt:profile-image-updated", {
+        detail: { role: "brand", avatarUrl: url },
+      }));
+      toast.success("Logo updated.");
+    }
     catch (err) { toast.error(formatApiError(err)); }
     finally { setUploading((u) => ({ ...u, logo: false })); e.target.value = ""; }
   };

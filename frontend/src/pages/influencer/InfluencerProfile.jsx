@@ -91,6 +91,9 @@ export default function InfluencerProfile() {
     if (kind === "avatar") {
       setImageBroken((prev) => ({ ...prev, avatar: false }));
       set("profile_photo_url", url);
+      window.dispatchEvent(new CustomEvent("brandkrt:profile-image-updated", {
+        detail: { role: "influencer", avatarUrl: url },
+      }));
     } else set("cover_photo_url", url);
   };
 

@@ -367,6 +367,13 @@ def register_handlers():
             data["verification_status"] = "not_started"
             res = await db.brands.insert_one(data)
             doc = await db.brands.find_one({"_id": res.inserted_id})
+        user_media = {"updated_at": now}
+        if data.get("logo_url"):
+            user_media["avatar_url"] = data["logo_url"]
+        if data.get("cover_url"):
+            user_media["cover_url"] = data["cover_url"]
+        if len(user_media) > 1:
+            await db.users.update_one({"_id": user["_id"]}, {"$set": user_media})
         await log_activity(str(user["_id"]), "brand.upsert", "brand", str(doc["_id"]))
         return {"brand": doc_out(doc)}
 
@@ -406,6 +413,13 @@ def register_handlers():
             data["verification_status"] = "not_started"
             res = await db.influencers.insert_one(data)
             doc = await db.influencers.find_one({"_id": res.inserted_id})
+        user_media = {"updated_at": now}
+        if data.get("profile_photo_url"):
+            user_media["avatar_url"] = data["profile_photo_url"]
+        if data.get("cover_photo_url"):
+            user_media["cover_url"] = data["cover_photo_url"]
+        if len(user_media) > 1:
+            await db.users.update_one({"_id": user["_id"]}, {"$set": user_media})
         await log_activity(str(user["_id"]), "influencer.upsert", "influencer", str(doc["_id"]))
         return {"influencer": doc_out(doc)}
 

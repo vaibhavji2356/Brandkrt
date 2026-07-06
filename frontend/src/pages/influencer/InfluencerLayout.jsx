@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, UserCircle2, Megaphone, Wallet, Bell, LogOut, ChevronRight,
@@ -7,7 +7,9 @@ import {
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
+import UserAvatar from "@/components/UserAvatar";
 import { useAuth } from "@/context/AuthContext";
+import api from "@/lib/api";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -28,6 +30,7 @@ const NAV = [
 export default function InfluencerLayout() {
   const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
+  const [avatarUrl, setAvatarUrl] = useState("");
 
   useEffect(() => {
     if (loading) return;
@@ -40,6 +43,34 @@ export default function InfluencerLayout() {
     }
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    if (!user || user.role !== "influencer") return undefined;
+    let alive = true;
+
+    const loadAvatar = async () => {
+      try {
+        const { data } = await api.get("/influencers/me");
+        const nextUrl = data?.influencer?.profile_photo_url || user.avatar_url || "";
+        if (alive) setAvatarUrl(nextUrl);
+      } catch (_) {
+        if (alive) setAvatarUrl(user.avatar_url || "");
+      }
+    };
+
+    const onAvatarUpdated = (event) => {
+      if (event.detail?.role === "influencer") {
+        setAvatarUrl(event.detail.avatarUrl || "");
+      }
+    };
+
+    loadAvatar();
+    window.addEventListener("brandkrt:profile-image-updated", onAvatarUpdated);
+    return () => {
+      alive = false;
+      window.removeEventListener("brandkrt:profile-image-updated", onAvatarUpdated);
+    };
+  }, [user]);
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -49,6 +80,7 @@ export default function InfluencerLayout() {
   }
 
   const initials = (user?.name || user?.email || "U").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+  const headerAvatar = avatarUrl || user?.avatar_url || "";
 
   return (
     <div className="min-h-screen flex bg-background" data-testid="influencer-layout">
@@ -103,13 +135,16 @@ export default function InfluencerLayout() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <NotificationBell />
-            <div className="hidden md:flex h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold items-center justify-center" data-testid="influencer-avatar">
-              {initials}
-            </div>
+            <UserAvatar
+              src={headerAvatar}
+              initials={initials}
+              className="hidden md:flex h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold items-center justify-center"
+              testId="influencer-avatar"
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="md:hidden h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center" data-testid="influencer-mobile-menu">
-                  {initials}
+                  {headerAvatar ? <img src={headerAvatar} alt="" className="h-full w-full rounded-full object-cover" /> : initials}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 max-h-[75vh] overflow-auto">
