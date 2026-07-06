@@ -37,7 +37,7 @@ export default function Register() {
     if (!email.trim()) { setError("Please enter your email first."); return; }
     setSendingOtp(true);
     try {
-      await api.post("/auth/register/send-otp", { email });
+      await api.post("/auth/register/send-otp", { email }, { __retryOnNetwork: true, __maxRetries: 2 });
       setOtpSentTo(email.trim().toLowerCase());
       toast.success("OTP sent. Please check your inbox.");
     } catch (err) {

@@ -2,10 +2,35 @@ import axios from "axios";
 import { API, normalizeAssetUrls } from "./brand";
 
 const TOKEN_KEY = "brandkrt_access_token";
+const DEFAULT_TIMEOUT_MS = 75000;
+const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const RETRYABLE_METHODS = new Set(["get", "head", "options"]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isNetworkOrColdStartError(error) {
+  if (!error) return false;
+  if (!error.response) return true;
+  return RETRYABLE_STATUSES.has(error.response.status);
+}
+
+function canRetryRequest(error) {
+  const config = error?.config;
+  if (!config) return false;
+  const method = (config.method || "get").toLowerCase();
+  const retryCount = config.__retryCount || 0;
+  const maxRetries = config.__maxRetries ?? (config.__retryOnNetwork ? 2 : 3);
+  const optedIn = Boolean(config.__retryOnNetwork);
+  const isRetryableMethod = RETRYABLE_METHODS.has(method);
+  return retryCount < maxRetries && (isRetryableMethod || optedIn) && isNetworkOrColdStartError(error);
+}
 
 const api = axios.create({
   baseURL: API,
   withCredentials: true,
+  timeout: Number(process.env.REACT_APP_API_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
   headers: { "Content-Type": "application/json" },
 });
 
@@ -22,6 +47,14 @@ api.interceptors.response.use((response) => {
   response.data = normalizeAssetUrls(response.data);
   return response;
 }, async (error) => {
+  if (canRetryRequest(error)) {
+    const config = error.config;
+    config.__retryCount = (config.__retryCount || 0) + 1;
+    const delay = Math.min(1000 * 2 ** (config.__retryCount - 1), 5000);
+    await sleep(delay);
+    return api(config);
+  }
+
   const status = error?.response?.status;
   const config = error?.config;
   const hasStoredToken = typeof window !== "undefined" && window.localStorage.getItem(TOKEN_KEY);

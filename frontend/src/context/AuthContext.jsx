@@ -10,21 +10,28 @@ function saveAccessToken(token) {
   else window.localStorage.removeItem(TOKEN_KEY);
 }
 
+function isAuthDenied(error) {
+  const status = error?.response?.status;
+  return status === 401 || status === 403;
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);     // user object | null
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
-      const { data } = await api.get("/auth/me");
+      const { data } = await api.get("/auth/me", { __retryOnNetwork: true, __maxRetries: 4 });
       setUser(data.user);
     } catch (e) {
       try {
-        const { data } = await api.post("/auth/refresh");
+        const { data } = await api.post("/auth/refresh", null, { __retryOnNetwork: true, __maxRetries: 2 });
         saveAccessToken(data.access_token);
         setUser(data.user);
       } catch (refreshErr) {
-        saveAccessToken(null);
+        if (isAuthDenied(e) || isAuthDenied(refreshErr)) {
+          saveAccessToken(null);
+        }
         setUser(null);
       }
     } finally {
@@ -35,14 +42,14 @@ export function AuthProvider({ children }) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const login = async (email, password, remember_me = false) => {
-    const { data } = await api.post("/auth/login", { email, password, remember_me });
+    const { data } = await api.post("/auth/login", { email, password, remember_me }, { __retryOnNetwork: true, __maxRetries: 2 });
     saveAccessToken(data.access_token);
     setUser(data.user);
     return data.user;
   };
 
   const googleSignIn = async (credential) => {
-    const { data } = await api.post("/auth/google", { credential });
+    const { data } = await api.post("/auth/google", { credential }, { __retryOnNetwork: true, __maxRetries: 2 });
     saveAccessToken(data.access_token);
     setUser(data.user);
     return data.user;
