@@ -25,6 +25,7 @@ function StatCard({ icon: Icon, label, value, hint, testId }) {
 }
 
 const ACTIVE_STATUSES = new Set(["offer_sent", "offer_accepted", "product_shipped", "promotion_pending", "promotion_live"]);
+const MAX_VERIFICATION_FILES = 4;
 
 export default function InfluencerOverview() {
   const { user } = useAuth();
@@ -35,7 +36,7 @@ export default function InfluencerOverview() {
   const [verificationRequests, setVerificationRequests] = useState([]);
   const [startingVerification, setStartingVerification] = useState(false);
   const [verificationOpen, setVerificationOpen] = useState(false);
-  const [verificationFiles, setVerificationFiles] = useState({ insights: null, identity: null, other: null });
+  const [verificationFiles, setVerificationFiles] = useState({ aadhaar: [], instagram: [], youtube: [], facebook: [] });
   const [verificationContact, setVerificationContact] = useState({ name: "", phone: "" });
   const [verificationNotes, setVerificationNotes] = useState("");
   const [loading, setLoading] = useState(true);
@@ -106,8 +107,9 @@ export default function InfluencerOverview() {
       toast.error("Please complete your Creator Profile before starting verification.");
       return;
     }
-    if (!verificationFiles.insights || !verificationFiles.identity) {
-      toast.error("Please upload account insights and proof of identity.");
+    const hasInsights = ["instagram", "youtube", "facebook"].some((key) => verificationFiles[key].length > 0);
+    if (verificationFiles.aadhaar.length === 0 || !hasInsights) {
+      toast.error("Please upload Aadhaar and at least one platform insight.");
       return;
     }
     if (!verificationContact.name.trim() || !verificationContact.phone.trim()) {
@@ -117,17 +119,19 @@ export default function InfluencerOverview() {
 
     setStartingVerification(true);
     try {
-      const uploadDoc = async (file, type, label) => {
+      const uploadDoc = async (file, type, label, index) => {
         if (!file) return null;
         const fd = new FormData();
         fd.append("file", file);
         const { data } = await api.post("/uploads/verification", fd, { headers: { "Content-Type": "multipart/form-data" } });
-        return { type, label, url: data.url, name: file.name };
+        return { type, label, url: data.url, name: file.name, index };
       };
+      const uploadGroup = (files, type, label) => files.map((file, index) => uploadDoc(file, type, label, index + 1));
       const documents = (await Promise.all([
-        uploadDoc(verificationFiles.insights, "account_insights", "Account insights"),
-        uploadDoc(verificationFiles.identity, "identity_proof", "Proof of identity"),
-        uploadDoc(verificationFiles.other, "supporting_document", "Supporting document"),
+        ...uploadGroup(verificationFiles.aadhaar, "aadhaar_card", "Aadhaar card"),
+        ...uploadGroup(verificationFiles.instagram, "instagram_insights", "Instagram insights"),
+        ...uploadGroup(verificationFiles.youtube, "youtube_insights", "YouTube insights"),
+        ...uploadGroup(verificationFiles.facebook, "facebook_insights", "Facebook insights"),
       ])).filter(Boolean);
       const { data } = await api.post("/verification", {
         kind: "influencer",
@@ -140,7 +144,7 @@ export default function InfluencerOverview() {
         setVerificationRequests((rows) => [data.request, ...rows.filter((row) => row.id !== data.request.id)]);
       }
       setVerificationOpen(false);
-      setVerificationFiles({ insights: null, identity: null, other: null });
+      setVerificationFiles({ aadhaar: [], instagram: [], youtube: [], facebook: [] });
       setVerificationContact({ name: "", phone: "" });
       setVerificationNotes("");
       toast.success(data.already_pending ? "Verification request is already pending." : "Verification request sent to admin.");
@@ -150,6 +154,14 @@ export default function InfluencerOverview() {
     } finally {
       setStartingVerification(false);
     }
+  };
+
+  const selectVerificationFiles = (key, list) => {
+    const files = Array.from(list || []).slice(0, MAX_VERIFICATION_FILES);
+    if ((list?.length || 0) > MAX_VERIFICATION_FILES) {
+      toast.error(`Maximum ${MAX_VERIFICATION_FILES} files allowed for one section.`);
+    }
+    setVerificationFiles((current) => ({ ...current, [key]: files }));
   };
 
   if (loading) {
@@ -262,7 +274,7 @@ export default function InfluencerOverview() {
                     ? "Admin is reviewing your documents. Your WhatsApp video call will be scheduled here."
                     : hasPendingVerification
                       ? "Your documents are waiting for admin review."
-                      : "Upload account insights, redacted ID proof, and supporting documents for admin review."}
+                      : "Upload Aadhaar and account insights for admin review."}
             </div>
           </div>
         </div>
@@ -313,35 +325,52 @@ export default function InfluencerOverview() {
               </div>
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Account insights *</label>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Aadhaar card *</label>
               <Input
                 type="file"
                 accept="image/*,.pdf"
+                multiple
                 className="mt-2"
-                onChange={(event) => setVerificationFiles((files) => ({ ...files, insights: event.target.files?.[0] || null }))}
-                data-testid="verification-insights-input"
+                onChange={(event) => selectVerificationFiles("aadhaar", event.target.files)}
+                data-testid="verification-aadhaar-input"
               />
+              <p className="mt-1 text-xs text-muted-foreground">Upload redacted Aadhaar. Up to 4 images or PDFs.</p>
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Proof of identity *</label>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Instagram insights</label>
               <Input
                 type="file"
                 accept="image/*,.pdf"
+                multiple
                 className="mt-2"
-                onChange={(event) => setVerificationFiles((files) => ({ ...files, identity: event.target.files?.[0] || null }))}
-                data-testid="verification-identity-input"
+                onChange={(event) => selectVerificationFiles("instagram", event.target.files)}
+                data-testid="verification-instagram-input"
               />
-              <p className="mt-1 text-xs text-muted-foreground">Use a redacted Aadhaar or equivalent identity document.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Reach, audience, recent reel/post screenshots. Up to 4 files.</p>
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Other supporting document</label>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">YouTube insights</label>
               <Input
                 type="file"
                 accept="image/*,.pdf"
+                multiple
                 className="mt-2"
-                onChange={(event) => setVerificationFiles((files) => ({ ...files, other: event.target.files?.[0] || null }))}
-                data-testid="verification-other-input"
+                onChange={(event) => selectVerificationFiles("youtube", event.target.files)}
+                data-testid="verification-youtube-input"
               />
+              <p className="mt-1 text-xs text-muted-foreground">Analytics, channel/recent video proof. Up to 4 files.</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Facebook insights</label>
+              <Input
+                type="file"
+                accept="image/*,.pdf"
+                multiple
+                className="mt-2"
+                onChange={(event) => selectVerificationFiles("facebook", event.target.files)}
+                data-testid="verification-facebook-input"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Page/profile insights and reach proof. Up to 4 files.</p>
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Notes for admin</label>

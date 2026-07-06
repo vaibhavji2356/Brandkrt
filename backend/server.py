@@ -4,9 +4,12 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+import json
 import os
 import logging
 import secrets
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Literal
 
@@ -152,9 +155,11 @@ def serialize_user(user: dict) -> dict:
         "email": user["email"],
         "name": user.get("name", ""),
         "role": user.get("role", "influencer"),
+        "phone": user.get("phone"),
         "avatar_url": user.get("avatar_url"),
         "cover_url": user.get("cover_url"),
         "email_verified": user.get("email_verified", False),
+        "phone_verified": user.get("phone_verified", False),
         "created_at": user.get("created_at").isoformat() if isinstance(user.get("created_at"), datetime) else user.get("created_at"),
     }
 
@@ -281,6 +286,108 @@ class EmailService:
 email_service = EmailService()
 
 
+def normalize_phone(phone: str) -> str:
+    raw = (phone or "").strip()
+    if not raw:
+        return ""
+    prefix = "+" if raw.startswith("+") else ""
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return ""
+    if prefix:
+        return f"+{digits}"
+    if len(digits) == 10:
+        return f"+91{digits}"
+    return f"+{digits}"
+
+
+class SmsService:
+    def __init__(self) -> None:
+        self.provider = os.environ.get("SMS_PROVIDER", "").strip().lower() or "auto"
+
+    def _allow_console_fallback(self) -> bool:
+        configured = os.environ.get("SMS_CONSOLE_FALLBACK", "").strip().lower()
+        if configured in {"0", "false", "no", "off"}:
+            return False
+        if configured in {"1", "true", "yes", "on"}:
+            return True
+        return not _is_production_like_environment()
+
+    async def send_signup_otp(self, to: str, code: str) -> None:
+        message = f"Your BrandKrt phone verification OTP is {code}. It expires in 10 minutes."
+        provider = self.provider
+        if provider == "auto":
+            if os.environ.get("TWILIO_ACCOUNT_SID") and os.environ.get("TWILIO_AUTH_TOKEN") and os.environ.get("TWILIO_FROM"):
+                provider = "twilio"
+            elif os.environ.get("FAST2SMS_API_KEY"):
+                provider = "fast2sms"
+            else:
+                provider = "console"
+
+        try:
+            if provider == "twilio":
+                await self._send_twilio(to, message)
+                return
+            if provider == "fast2sms":
+                await self._send_fast2sms(to, code)
+                return
+            if provider != "console":
+                raise RuntimeError(f"Unsupported SMS_PROVIDER={provider}")
+        except Exception as e:
+            if not self._allow_console_fallback():
+                raise RuntimeError(f"SMS delivery failed: {e}") from e
+            logger.warning("[SMS:%s] failed (%s); console fallback enabled", provider, e)
+
+        if not self._allow_console_fallback():
+            raise RuntimeError("No SMS provider is configured")
+        logger.info("[SMS:console] phone verification OTP for %s is %s", to, code)
+
+    async def _send_twilio(self, to: str, body: str) -> None:
+        sid = os.environ.get("TWILIO_ACCOUNT_SID")
+        token = os.environ.get("TWILIO_AUTH_TOKEN")
+        from_number = os.environ.get("TWILIO_FROM")
+        if not sid or not token or not from_number:
+            raise RuntimeError("Twilio SMS is missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM")
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+        data = urllib.parse.urlencode({"From": from_number, "To": to, "Body": body}).encode("utf-8")
+        request = urllib.request.Request(url, data=data, method="POST")
+        import base64
+        auth = base64.b64encode(f"{sid}:{token}".encode("utf-8")).decode("ascii")
+        request.add_header("Authorization", f"Basic {auth}")
+        request.add_header("Content-Type", "application/x-www-form-urlencoded")
+        with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+            if response.status >= 300:
+                raise RuntimeError(f"Twilio returned HTTP {response.status}")
+        logger.info("[SMS:twilio] sent phone verification OTP to=%s", to)
+
+    async def _send_fast2sms(self, to: str, code: str) -> None:
+        api_key = os.environ.get("FAST2SMS_API_KEY")
+        if not api_key:
+            raise RuntimeError("Fast2SMS is missing FAST2SMS_API_KEY")
+        digits = "".join(ch for ch in to if ch.isdigit())
+        if digits.startswith("91") and len(digits) > 10:
+            digits = digits[-10:]
+        payload = {
+            "route": "otp",
+            "variables_values": code,
+            "numbers": digits,
+        }
+        request = urllib.request.Request(
+            "https://www.fast2sms.com/dev/bulkV2",
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+        )
+        request.add_header("authorization", api_key)
+        request.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+            if response.status >= 300:
+                raise RuntimeError(f"Fast2SMS returned HTTP {response.status}")
+        logger.info("[SMS:fast2sms] sent phone verification OTP to=%s", to)
+
+
+sms_service = SmsService()
+
+
 # -----------------------------------------------------------------------------
 # Models
 # -----------------------------------------------------------------------------
@@ -293,13 +400,19 @@ class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     role: Role
-    phone: Optional[str] = None
+    phone: str = Field(min_length=8, max_length=24)
     otp_code: str = Field(min_length=4, max_length=12)
+    phone_otp_code: str = Field(min_length=4, max_length=12)
     accept_terms: bool = True
 
 
 class RegisterOtpIn(BaseModel):
     email: EmailStr
+
+
+class RegisterPhoneOtpIn(BaseModel):
+    email: EmailStr
+    phone: str = Field(min_length=8, max_length=24)
 
 
 class LoginIn(BaseModel):
@@ -425,6 +538,35 @@ async def send_register_otp(payload: RegisterOtpIn, _rl: None = Depends(_securit
     return {"success": True, "message": "OTP sent to your email inbox"}
 
 
+@auth_router.post("/register/send-phone-otp")
+async def send_register_phone_otp(payload: RegisterPhoneOtpIn, _rl: None = Depends(_security.limiter_dependency("register_phone_otp", limit=5, window=600))):
+    email = payload.email.lower().strip()
+    phone = normalize_phone(payload.phone)
+    if not phone or len("".join(ch for ch in phone if ch.isdigit())) < 10:
+        raise HTTPException(status_code=400, detail="Please enter a valid mobile number")
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    if await db.users.find_one({"phone": phone, "phone_verified": True}):
+        raise HTTPException(status_code=409, detail="An account with this phone number already exists")
+    now = datetime.now(timezone.utc)
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    await db.registration_phone_otps.update_many(
+        {"email": email, "phone": phone, "used": False},
+        {"$set": {"used": True, "updated_at": now}},
+    )
+    await db.registration_phone_otps.insert_one({
+        "email": email,
+        "phone": phone,
+        "code": code,
+        "used": False,
+        "expires_at": now + timedelta(minutes=10),
+        "created_at": now,
+        "updated_at": now,
+    })
+    await sms_service.send_signup_otp(phone, code)
+    return {"success": True, "message": "OTP sent to your mobile number"}
+
+
 @auth_router.post("/register")
 async def register(payload: RegisterIn, response: Response):
     if not payload.accept_terms:
@@ -434,20 +576,36 @@ async def register(payload: RegisterIn, response: Response):
     email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
+    phone = normalize_phone(payload.phone)
+    if not phone or len("".join(ch for ch in phone if ch.isdigit())) < 10:
+        raise HTTPException(status_code=400, detail="Please enter a valid mobile number")
+    if await db.users.find_one({"phone": phone, "phone_verified": True}):
+        raise HTTPException(status_code=409, detail="An account with this phone number already exists")
     now = datetime.now(timezone.utc)
     otp = await db.registration_otps.find_one({"email": email, "code": payload.otp_code.strip(), "used": False})
     if not otp:
         raise HTTPException(status_code=400, detail="Invalid OTP code")
     if _aware(otp["expires_at"]) < now:
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
+    phone_otp = await db.registration_phone_otps.find_one({
+        "email": email,
+        "phone": phone,
+        "code": payload.phone_otp_code.strip(),
+        "used": False,
+    })
+    if not phone_otp:
+        raise HTTPException(status_code=400, detail="Invalid mobile OTP code")
+    if _aware(phone_otp["expires_at"]) < now:
+        raise HTTPException(status_code=400, detail="Mobile OTP has expired. Please request a new code.")
 
     doc = {
         "email": email,
         "name": payload.name.strip(),
         "role": payload.role,
         "password_hash": hash_password(payload.password),
-        "phone": (payload.phone or "").strip(),
+        "phone": phone,
         "email_verified": True,
+        "phone_verified": True,
         "avatar_url": None,
         "cover_url": None,
         "created_at": now,
@@ -456,6 +614,7 @@ async def register(payload: RegisterIn, response: Response):
     result = await db.users.insert_one(doc)
     user_id = str(result.inserted_id)
     await db.registration_otps.update_one({"_id": otp["_id"]}, {"$set": {"used": True, "used_at": now}})
+    await db.registration_phone_otps.update_one({"_id": phone_otp["_id"]}, {"$set": {"used": True, "used_at": now}})
 
     access = create_access_token(user_id, email, payload.role)
     refresh = create_refresh_token(user_id)
@@ -700,6 +859,8 @@ async def on_startup():
     await db.verification_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.registration_otps.create_index("expires_at", expireAfterSeconds=0)
     await db.registration_otps.create_index([("email", 1), ("created_at", -1)])
+    await db.registration_phone_otps.create_index("expires_at", expireAfterSeconds=0)
+    await db.registration_phone_otps.create_index([("email", 1), ("phone", 1), ("created_at", -1)])
     await db.login_attempts.create_index("identifier")
     await domain.setup_indexes(db)
     try:

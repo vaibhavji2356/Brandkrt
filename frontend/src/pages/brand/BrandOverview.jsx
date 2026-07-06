@@ -30,6 +30,7 @@ const RUNNING_CAMPAIGN_STATUSES = new Set(["active", "draft"]);
 const ACTIVE_DEAL_STATUSES = new Set([
   "offer_sent", "offer_accepted", "product_shipped", "promotion_pending", "promotion_live",
 ]);
+const MAX_VERIFICATION_FILES = 4;
 
 function daysUntil(iso) {
   if (!iso) return null;
@@ -47,7 +48,7 @@ export default function BrandOverview() {
   const [notifications, setNotifications] = useState([]);
   const [verificationRequests, setVerificationRequests] = useState([]);
   const [verificationOpen, setVerificationOpen] = useState(false);
-  const [verificationFiles, setVerificationFiles] = useState({ business: null, identity: null, other: null });
+  const [verificationFiles, setVerificationFiles] = useState({ business: [], ownerAadhaar: [], other: [] });
   const [verificationContact, setVerificationContact] = useState({ name: "", phone: "" });
   const [verificationNotes, setVerificationNotes] = useState("");
   const [startingVerification, setStartingVerification] = useState(false);
@@ -127,8 +128,8 @@ export default function BrandOverview() {
       toast.error("Please save your Business Profile before starting verification.");
       return;
     }
-    if (!verificationFiles.business || !verificationFiles.identity) {
-      toast.error("Please upload business proof and owner identity proof.");
+    if (verificationFiles.business.length === 0 || verificationFiles.ownerAadhaar.length === 0) {
+      toast.error("Please upload business proof and owner Aadhaar card.");
       return;
     }
     if (!verificationContact.name.trim() || !verificationContact.phone.trim()) {
@@ -138,17 +139,18 @@ export default function BrandOverview() {
 
     setStartingVerification(true);
     try {
-      const uploadDoc = async (file, type, label) => {
+      const uploadDoc = async (file, type, label, index) => {
         if (!file) return null;
         const fd = new FormData();
         fd.append("file", file);
         const { data } = await api.post("/uploads/verification", fd, { headers: { "Content-Type": "multipart/form-data" } });
-        return { type, label, url: data.url, name: file.name };
+        return { type, label, url: data.url, name: file.name, index };
       };
+      const uploadGroup = (files, type, label) => files.map((file, index) => uploadDoc(file, type, label, index + 1));
       const documents = (await Promise.all([
-        uploadDoc(verificationFiles.business, "business_proof", "Business proof"),
-        uploadDoc(verificationFiles.identity, "owner_identity", "Owner identity proof"),
-        uploadDoc(verificationFiles.other, "supporting_document", "Supporting document"),
+        ...uploadGroup(verificationFiles.business, "business_proof", "Business proof"),
+        ...uploadGroup(verificationFiles.ownerAadhaar, "owner_aadhaar", "Owner Aadhaar card"),
+        ...uploadGroup(verificationFiles.other, "supporting_document", "Supporting document"),
       ])).filter(Boolean);
       const { data } = await api.post("/verification", {
         kind: "brand",
@@ -162,7 +164,7 @@ export default function BrandOverview() {
         setBrand((current) => current ? { ...current, verification_status: data.request.status || "pending" } : current);
       }
       setVerificationOpen(false);
-      setVerificationFiles({ business: null, identity: null, other: null });
+      setVerificationFiles({ business: [], ownerAadhaar: [], other: [] });
       setVerificationContact({ name: "", phone: "" });
       setVerificationNotes("");
       toast.success(data.already_pending ? "Verification request is already pending." : "Verification request sent to admin.");
@@ -172,6 +174,14 @@ export default function BrandOverview() {
     } finally {
       setStartingVerification(false);
     }
+  };
+
+  const selectVerificationFiles = (key, list) => {
+    const files = Array.from(list || []).slice(0, MAX_VERIFICATION_FILES);
+    if ((list?.length || 0) > MAX_VERIFICATION_FILES) {
+      toast.error(`Maximum ${MAX_VERIFICATION_FILES} files allowed for one section.`);
+    }
+    setVerificationFiles((current) => ({ ...current, [key]: files }));
   };
 
   if (loading) return <div className="text-muted-foreground">Loading…</div>;
@@ -227,7 +237,7 @@ export default function BrandOverview() {
                       ? "Admin is reviewing your documents. Your WhatsApp video call will be scheduled here."
                       : hasPendingVerification
                         ? "Your documents are waiting for admin review."
-                        : "Upload business proof, owner identity proof, and supporting documents for admin review."}
+                        : "Upload business proof and owner Aadhaar for admin review."}
               </div>
             </div>
           </div>
@@ -373,32 +383,36 @@ export default function BrandOverview() {
               <Input
                 type="file"
                 accept="image/*,.pdf"
+                multiple
                 className="mt-2"
-                onChange={(event) => setVerificationFiles((files) => ({ ...files, business: event.target.files?.[0] || null }))}
+                onChange={(event) => selectVerificationFiles("business", event.target.files)}
                 data-testid="brand-verification-business-input"
               />
-              <p className="mt-1 text-xs text-muted-foreground">GST certificate, business registration proof, shop license, or equivalent document.</p>
+              <p className="mt-1 text-xs text-muted-foreground">GST certificate, registration proof, shop license, or equivalent. Up to 4 files.</p>
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Owner identity proof *</label>
+              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Owner Aadhaar card *</label>
               <Input
                 type="file"
                 accept="image/*,.pdf"
+                multiple
                 className="mt-2"
-                onChange={(event) => setVerificationFiles((files) => ({ ...files, identity: event.target.files?.[0] || null }))}
-                data-testid="brand-verification-identity-input"
+                onChange={(event) => selectVerificationFiles("ownerAadhaar", event.target.files)}
+                data-testid="brand-verification-owner-aadhaar-input"
               />
-              <p className="mt-1 text-xs text-muted-foreground">Use a redacted Aadhaar or equivalent identity document.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Upload owner redacted Aadhaar. Up to 4 images or PDFs.</p>
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Other supporting document</label>
               <Input
                 type="file"
                 accept="image/*,.pdf"
+                multiple
                 className="mt-2"
-                onChange={(event) => setVerificationFiles((files) => ({ ...files, other: event.target.files?.[0] || null }))}
+                onChange={(event) => selectVerificationFiles("other", event.target.files)}
                 data-testid="brand-verification-other-input"
               />
+              <p className="mt-1 text-xs text-muted-foreground">Optional extra documents. Up to 4 files.</p>
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Notes for admin</label>
