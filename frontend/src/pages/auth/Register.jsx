@@ -24,15 +24,12 @@ export default function Register() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
-  const [phoneOtp, setPhoneOtp] = useState("");
   const [password, setPassword] = useState("");
   const [accept, setAccept] = useState(false);
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
-  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false);
   const [otpSentTo, setOtpSentTo] = useState("");
-  const [phoneOtpSentTo, setPhoneOtpSentTo] = useState("");
   const [error, setError] = useState("");
 
   const sendOtp = async () => {
@@ -52,32 +49,6 @@ export default function Register() {
 
   const normalizedPhone = phone.replace(/\D/g, "");
 
-  const sendPhoneOtp = async () => {
-    setError("");
-    if (!otpSentTo || otpSentTo !== email.trim().toLowerCase()) {
-      setError("Please send the email OTP first.");
-      return;
-    }
-    if (!otp.trim()) {
-      setError("Please enter the email OTP before mobile verification.");
-      return;
-    }
-    if (normalizedPhone.length < 10) {
-      setError("Please enter a valid mobile number.");
-      return;
-    }
-    setSendingPhoneOtp(true);
-    try {
-      await api.post("/auth/register/send-phone-otp", { email, phone }, { __retryOnNetwork: true, __maxRetries: 2 });
-      setPhoneOtpSentTo(normalizedPhone);
-      toast.success("Mobile OTP sent.");
-    } catch (err) {
-      setError(formatApiError(err));
-    } finally {
-      setSendingPhoneOtp(false);
-    }
-  };
-
   const submit = async (e) => {
     e.preventDefault();
     setError("");
@@ -88,15 +59,10 @@ export default function Register() {
     }
     if (!otp.trim()) { setError("Please enter the OTP sent to your inbox."); return; }
     if (!normalizedPhone || normalizedPhone.length < 10) { setError("Please enter your mobile number."); return; }
-    if (!phoneOtpSentTo || phoneOtpSentTo !== normalizedPhone) {
-      setError("Please send OTP to this mobile number before creating your account.");
-      return;
-    }
-    if (!phoneOtp.trim()) { setError("Please enter the OTP sent to your mobile number."); return; }
     setSubmitting(true);
     try {
-      const u = await register({ name, email, phone, password, role, otp_code: otp, phone_otp_code: phoneOtp, accept_terms: true });
-      toast.success("Account created. Email and mobile verified.");
+      const u = await register({ name, email, phone, password, role, otp_code: otp, accept_terms: true });
+      toast.success("Account created. Email verified.");
       navigate(u.role === "brand" ? "/brand" : "/influencer", { replace: true });
     } catch (err) {
       setError(formatApiError(err));
@@ -153,18 +119,8 @@ export default function Register() {
           </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mobile number</label>
-            <div className="mt-2 flex gap-2">
-              <Input value={phone} onChange={(e) => { setPhone(e.target.value); setPhoneOtpSentTo(""); }} required autoComplete="tel" data-testid="register-phone" placeholder="+91 98765 43210" />
-              <button type="button" onClick={sendPhoneOtp} disabled={sendingPhoneOtp} className="shrink-0 rounded-full border border-border px-4 text-sm font-semibold hover:bg-accent disabled:opacity-60" data-testid="register-send-phone-otp">
-                {sendingPhoneOtp ? "Sending..." : "Send OTP"}
-              </button>
-            </div>
-            {phoneOtpSentTo && <p className="mt-1 text-xs text-success">OTP sent to mobile ending {phoneOtpSentTo.slice(-4)}</p>}
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} required autoComplete="tel" data-testid="register-phone" className="mt-2" placeholder="+91 98765 43210" />
           </div>
-        </div>
-        <div>
-          <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Mobile OTP</label>
-          <Input value={phoneOtp} onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, "").slice(0, 6))} required inputMode="numeric" data-testid="register-phone-otp" className="mt-2" placeholder="6-digit code" />
         </div>
         <div>
           <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Password</label>
