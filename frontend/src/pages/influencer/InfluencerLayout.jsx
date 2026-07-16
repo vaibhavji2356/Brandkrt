@@ -83,13 +83,13 @@ export default function InfluencerLayout() {
   const headerAvatar = avatarUrl || user?.avatar_url || "";
 
   return (
-    <div className="min-h-screen flex bg-background" data-testid="influencer-layout">
+    <div className="min-h-screen flex bg-muted/20" data-testid="influencer-layout">
       {/* Sidebar (desktop) */}
-      <aside className="hidden md:flex w-64 shrink-0 border-r border-border bg-card flex-col" data-testid="influencer-sidebar">
-        <div className="h-16 flex items-center px-6 border-b border-border">
+      <aside className="hidden md:flex w-64 shrink-0 border-r border-border/70 bg-card/95 shadow-[1px_0_0_rgba(15,23,42,0.02)] flex-col" data-testid="influencer-sidebar">
+        <div className="h-20 flex items-center px-6 border-b border-border/70">
           <Logo />
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1.5">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
@@ -97,8 +97,8 @@ export default function InfluencerLayout() {
               end={item.end}
               data-testid={`influencer-nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive ? "bg-accent text-secondary" : "text-foreground/70 hover:bg-accent hover:text-primary dark:hover:text-white"
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  isActive ? "bg-primary text-primary-foreground shadow-luxe-sm" : "text-foreground/70 hover:bg-accent hover:text-primary dark:hover:text-white"
                 }`
               }
             >
@@ -107,7 +107,7 @@ export default function InfluencerLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-4 border-t border-border space-y-3">
+        <div className="p-4 border-t border-border/70 space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-xs text-muted-foreground truncate">{user.email}</div>
             <ThemeToggle />
@@ -124,7 +124,7 @@ export default function InfluencerLayout() {
 
       <main className="flex-1 min-w-0 flex flex-col">
         {/* Top bar */}
-        <div className="h-16 border-b border-border flex items-center px-4 md:px-8 gap-3">
+        <div className="sticky top-0 z-30 h-16 border-b border-border/70 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 flex items-center px-4 md:px-8 gap-3">
           <div className="md:hidden">
             <Logo />
           </div>
@@ -138,13 +138,13 @@ export default function InfluencerLayout() {
             <UserAvatar
               src={headerAvatar}
               initials={initials}
-              className="hidden md:flex h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold items-center justify-center"
+              className="hidden md:flex h-9 w-9 rounded-full text-sm font-semibold items-center justify-center ring-1 ring-border shadow-sm"
               testId="influencer-avatar"
             />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="md:hidden h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center" data-testid="influencer-mobile-menu">
-                  {headerAvatar ? <img src={headerAvatar} alt="" className="h-full w-full rounded-full object-cover" /> : initials}
+                <button className="md:hidden h-9 w-9 overflow-hidden rounded-full ring-1 ring-border shadow-sm" data-testid="influencer-mobile-menu">
+                  <UserAvatar src={headerAvatar} initials={initials} className="h-full w-full rounded-full" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 max-h-[75vh] overflow-auto">
@@ -167,7 +167,7 @@ export default function InfluencerLayout() {
           </div>
         </div>
 
-        <div className="p-4 md:p-8">
+        <div className="p-4 md:p-8 lg:p-10">
           <Outlet />
         </div>
       </main>

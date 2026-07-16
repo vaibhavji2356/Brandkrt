@@ -41,7 +41,7 @@ export default function Footer() {
           <div className="lg:col-span-2 space-y-6">
             <Logo textClassName="text-white" />
             <p className="text-sm text-white/70 max-w-sm leading-relaxed">
-              {BRAND.name} is the premium influencer marketing marketplace built for serious brands and creators. Verification, contracts, payments and analytics — handled.
+              {BRAND.name} is the premium influencer marketing marketplace built for serious brands and creators. Verification, contracts, payments and analytics - handled.
             </p>
             <div className="flex items-center gap-3 text-white/80">
               <Mail className="h-4 w-4" />
@@ -50,7 +50,7 @@ export default function Footer() {
               </a>
             </div>
             <div className="flex items-center gap-3">
-              <a href="https://instagram.com" aria-label="Instagram" data-testid="social-instagram" className="h-9 w-9 rounded-full border border-white/20 flex items-center justify-center hover:border-secondary hover:text-secondary transition-colors">
+              <a href="https://www.instagram.com/brandkrt_official/" aria-label="Instagram" data-testid="social-instagram" className="h-9 w-9 rounded-full border border-white/20 flex items-center justify-center hover:border-secondary hover:text-secondary transition-colors">
                 <Instagram className="h-4 w-4" />
               </a>
               <a href="https://twitter.com" aria-label="Twitter" data-testid="social-twitter" className="h-9 w-9 rounded-full border border-white/20 flex items-center justify-center hover:border-secondary hover:text-secondary transition-colors">
@@ -82,8 +82,8 @@ export default function Footer() {
         </div>
 
         <div className="mt-16 pt-8 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-white/50" data-testid="footer-copyright">© {new Date().getFullYear()} {BRAND.name}. All rights reserved. {BRAND.domain}</p>
-          <p className="text-xs text-white/50">Crafted with intention — for brands that lead and creators that move culture.</p>
+          <p className="text-xs text-white/50" data-testid="footer-copyright">(c) {new Date().getFullYear()} {BRAND.name}. All rights reserved. {BRAND.domain}</p>
+          <p className="text-xs text-white/50">Crafted for brands that lead and creators that move culture.</p>
         </div>
       </div>
     </footer>

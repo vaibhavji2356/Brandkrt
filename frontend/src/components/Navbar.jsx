@@ -4,6 +4,7 @@ import { Menu, X, LogOut, User as UserIcon, Settings as SettingsIcon, LayoutDash
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 import NotificationBell from "./NotificationBell";
+import UserAvatar from "./UserAvatar";
 import { useAuth } from "@/context/AuthContext";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
@@ -34,6 +35,7 @@ export default function Navbar() {
 
   const initials = (user?.name || user?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
+  const accountAvatar = user?.avatar_url || user?.profile_photo_url || user?.logo_url || "";
   const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : user?.role === "influencer" ? "/influencer" : "/profile";
   const isMarketingPage = ["/", "/about", "/contact", "/help", "/privacy", "/terms", "/refund"].includes(location.pathname);
   const showAccountMenu = !!user && !isMarketingPage;
@@ -81,8 +83,8 @@ export default function Navbar() {
               <NotificationBell />
               <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button data-testid="navbar-user-menu" className="h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center">
-                  {initials}
+                <button data-testid="navbar-user-menu" className="h-9 w-9 overflow-hidden rounded-full ring-1 ring-border shadow-sm">
+                  <UserAvatar src={accountAvatar} initials={initials} className="h-full w-full rounded-full" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -133,8 +135,8 @@ export default function Navbar() {
           {showAccountMenu && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button data-testid="navbar-mobile-user-menu" className="h-9 w-9 rounded-full bg-primary text-white text-sm font-semibold flex items-center justify-center">
-                  {initials}
+                <button data-testid="navbar-mobile-user-menu" className="h-9 w-9 overflow-hidden rounded-full ring-1 ring-border shadow-sm">
+                  <UserAvatar src={accountAvatar} initials={initials} className="h-full w-full rounded-full" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -187,7 +189,14 @@ export default function Navbar() {
             <div className="flex items-center justify-between pt-2">
               <ThemeToggle />
               {showAccountMenu ? (
-                <div className="text-xs text-muted-foreground text-right">Account options are in the round profile button.</div>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => go(dashboardPath)} className="text-sm font-semibold rounded-full border border-border px-4 py-2">
+                    Dashboard
+                  </button>
+                  <button type="button" onClick={signOut} className="text-sm font-semibold rounded-full bg-primary text-primary-foreground px-4 py-2">
+                    Log out
+                  </button>
+                </div>
               ) : (
                 <div className="flex gap-2">
                   <Link to="/login" onClick={() => setOpen(false)} className="text-sm font-medium px-4 py-2">Login</Link>

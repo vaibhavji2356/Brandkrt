@@ -7,14 +7,14 @@ export default function Logo({ variant = "full", className = "", iconClassName =
       <img
         src={LOGO.icon}
         alt={`${BRAND.name} icon`}
-        className={`h-9 w-9 rounded-md object-cover ${iconClassName} ${className}`}
+        className={`h-9 w-9 rounded-md object-cover shadow-sm ${iconClassName} ${className}`}
         data-testid="brand-logo-icon"
       />
     );
   }
   return (
     <div className={`flex items-center gap-2.5 ${className}`} data-testid="brand-logo-full">
-      <img src={LOGO.icon} alt={`${BRAND.name} mark`} className={`h-9 w-9 rounded-md ${iconClassName}`} />
+      <img src={LOGO.icon} alt={`${BRAND.name} mark`} className={`h-9 w-9 rounded-md object-cover shadow-sm ${iconClassName}`} />
       <span className={`font-display text-xl tracking-tight text-primary dark:text-white ${textClassName}`}>
         Brand<span className="gold-text font-semibold">krt</span>
       </span>

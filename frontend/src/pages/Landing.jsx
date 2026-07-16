@@ -15,9 +15,9 @@ import api, { formatApiError } from "@/lib/api";
 function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <div className="absolute inset-0 -z-10 grid-bg opacity-40" />
-      <div className="absolute -z-10 top-20 -right-20 h-80 w-80 rounded-full bg-secondary/10 blur-3xl animate-float-slow" />
-      <div className="absolute -z-10 -bottom-20 -left-20 h-80 w-80 rounded-full bg-primary/10 blur-3xl animate-float-slow" />
+      <div className="absolute inset-0 -z-10 grid-bg opacity-30" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-secondary/40" />
+      <div className="absolute inset-x-0 bottom-0 -z-10 h-px bg-border/80" />
       <div className="container-luxe pt-24 md:pt-32 pb-20 md:pb-28">
         <motion.div
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
@@ -31,7 +31,7 @@ function Hero() {
             meet the <span className="gold-text font-semibold">right</span> creators.
           </h1>
           <p className="mt-7 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed" data-testid="hero-subtitle">
-            BrandKrt connects small &amp; medium businesses — restaurants, cafés, salons, gyms, clothing stores, coaching institutes, D2C and home brands — with verified nano &amp; micro creators on Instagram, YouTube and Facebook. Verified collaborations, secure escrow payments and one simple dashboard to run every campaign.
+            BrandKrt connects small &amp; medium businesses - restaurants, cafes, salons, gyms, clothing stores, coaching institutes, D2C and home brands - with verified nano &amp; micro creators on Instagram, YouTube and Facebook. Verified collaborations, secure escrow payments and one simple dashboard to run every campaign.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-3">
             <Link
@@ -39,7 +39,7 @@ function Hero() {
               data-testid="hero-cta-influencer"
               className="inline-flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-7 py-3.5 text-sm font-semibold transition-colors"
             >
-              I&apos;m a Creator — Earn from Brands <ArrowRight className="h-4 w-4" />
+              I&apos;m a Creator - Earn from Brands <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
               to="/register?role=brand"
@@ -64,8 +64,8 @@ function Hero() {
           {[
             { v: "12K+", l: "Verified Creators" },
             { v: "2,400+", l: "Local & D2C Brands" },
-            { v: "₹0", l: "To Get Started" },
-            { v: "4.9★", l: "Average Rating" },
+            { v: "Rs 0", l: "To Get Started" },
+            { v: "4.9 star", l: "Average Rating" },
           ].map((s) => (
             <div key={s.l} className="rounded-2xl border border-border bg-card p-6">
               <div className="text-3xl md:text-4xl font-display font-light text-primary dark:text-white">{s.v}</div>
@@ -82,9 +82,9 @@ function Hero() {
 const FEATURES = [
   { icon: ShieldCheck, title: "Verified Collaborations", desc: "Every creator and business is identity-checked and handle-verified before they can collaborate. No fake followers, no ghost brands." },
   { icon: CreditCard, title: "Secure Escrow Payments", desc: "Brands fund the campaign upfront, money stays safely in escrow, and creators get paid the moment deliverables go live." },
-  { icon: Sparkles, title: "Built for Small Budgets", desc: "Designed for cafés, salons, gyms, clothing stores and home businesses. Start with a single nano-creator campaign for as little as ₹999." },
-  { icon: Users, title: "Nano & Micro Creator Network", desc: "Discover authentic creators across Instagram, YouTube and Facebook — sorted by niche, city and audience quality, not vanity followers." },
-  { icon: FileSignature, title: "Simple Contracts & Briefs", desc: "Auto-generated agreements with clear deliverables, deadlines and revision rules — so nothing slips through the cracks." },
+  { icon: Sparkles, title: "Built for Small Budgets", desc: "Designed for cafes, salons, gyms, clothing stores and home businesses. Start with a single nano-creator campaign for as little as Rs 999." },
+  { icon: Users, title: "Nano & Micro Creator Network", desc: "Discover authentic creators across Instagram, YouTube and Facebook - sorted by niche, city and audience quality, not vanity followers." },
+  { icon: FileSignature, title: "Simple Contracts & Briefs", desc: "Auto-generated agreements with clear deliverables, deadlines and revision rules - so nothing slips through the cracks." },
   { icon: BarChart3, title: "Easy Campaign Management", desc: "One dashboard to brief, chat, approve content, track posts and review ROI. No spreadsheets, no DMs, no chasing." },
 ];
 
@@ -97,7 +97,7 @@ function Features() {
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white" data-testid="features-heading">
             Everything a local business needs<br /> to run creator campaigns.
           </h2>
-          <p className="mt-5 text-lg text-muted-foreground">From your first nano-creator post to a multi-city micro-influencer rollout — BrandKrt makes the whole journey affordable, verified and effortless.</p>
+          <p className="mt-5 text-lg text-muted-foreground">From your first nano-creator post to a multi-city micro-influencer rollout - BrandKrt makes the whole journey affordable, verified and effortless.</p>
         </div>
         <div className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f, i) => (
@@ -125,7 +125,7 @@ const STEPS = [
   { n: "01", t: "Sign Up Free", d: "Create your free account as a business or as a creator in under a minute." },
   { n: "02", t: "Get Verified", d: "Quick KYC + social handle check so every collaboration on BrandKrt is genuine and safe." },
   { n: "03", t: "Find Your Match", d: "Brands shortlist nano & micro creators by city, niche and price. Creators browse open campaigns." },
-  { n: "04", t: "Run the Campaign", d: "Send the brief, agree on deliverables, ship the product or share details, approve the content — all inside BrandKrt." },
+  { n: "04", t: "Run the Campaign", d: "Send the brief, agree on deliverables, ship the product or share details, approve the content - all inside BrandKrt." },
   { n: "05", t: "Get Paid Safely", d: "Money sits in escrow and is released to the creator the moment the post goes live and is approved." },
 ];
 
@@ -164,7 +164,7 @@ function HowItWorks() {
 /* ---------- Benefits / Why Choose ---------- */
 function WhyChoose() {
   const items = [
-    { t: "Affordable for any business", d: "Restaurants, cafés, salons, gyms, coaching institutes, clothing stores, D2C and home businesses — start campaigns from as little as ₹999. No monthly minimums." },
+    { t: "Affordable for any business", d: "Restaurants, cafes, salons, gyms, coaching institutes, clothing stores, D2C and home businesses - start campaigns from as little as Rs 999. No monthly minimums." },
     { t: "Verified creators only", d: "Every nano, micro, Instagram, YouTube and Facebook creator on BrandKrt clears ID + social handle verification. Real people, real audiences." },
     { t: "Secure escrow payments", d: "Brands pay safely upfront. Creators are guaranteed payment the moment their content goes live and is approved. No more chasing." },
     { t: "Easy campaign management", d: "Brief, chat, approve and track every collab in one dashboard. Built for owners who don't have a marketing team." },
@@ -175,9 +175,9 @@ function WhyChoose() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Why BrandKrt</p>
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            Influencer marketing — finally built for small businesses and everyday creators.
+            Influencer marketing - finally built for small businesses and everyday creators.
           </h2>
-          <p className="mt-6 text-lg text-muted-foreground">We replaced expensive agencies, random DMs and risky payments with one premium, verified marketplace that any local shop, café, salon or D2C brand can use — and any nano or micro creator can earn from.</p>
+          <p className="mt-6 text-lg text-muted-foreground">We replaced expensive agencies, random DMs and risky payments with one premium, verified marketplace that any local shop, cafe, salon or D2C brand can use - and any nano or micro creator can earn from.</p>
           <div className="mt-8">
             <Link to="/register" data-testid="why-cta" className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 text-sm font-semibold">
               Create your free account <ArrowRight className="h-4 w-4" />
@@ -205,9 +205,9 @@ function WhyChoose() {
 
 /* ---------- Testimonials ---------- */
 const TESTIMONIALS = [
-  { name: "Priya Sharma", role: "Owner, Bloom Café — Pune", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "We ran our first BrandKrt campaign with five nano creators in Pune. Footfall doubled the next weekend — for less than what one ad agency was quoting us." },
-  { name: "Rohit Verma", role: "Founder, FitNation Gym — Jaipur", img: "https://images.pexels.com/photos/29086752/pexels-photo-29086752.jpeg", q: "BrandKrt got us 18 verified micro creators for our new branch launch. Escrow gave us total peace of mind on payments." },
-  { name: "Aanya Mehta", role: "Instagram Creator — 22K followers", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "I'm a nano creator and I'm finally getting paid on time, every time. BrandKrt is the only platform where small brands actually find me." },
+  { name: "Priya Sharma", role: "Owner, Bloom Cafe - Pune", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "We ran our first BrandKrt campaign with five nano creators in Pune. Footfall doubled the next weekend - for less than what one ad agency was quoting us." },
+  { name: "Rohit Verma", role: "Founder, FitNation Gym - Jaipur", img: "https://images.pexels.com/photos/29086752/pexels-photo-29086752.jpeg", q: "BrandKrt got us 18 verified micro creators for our new branch launch. Escrow gave us total peace of mind on payments." },
+  { name: "Aanya Mehta", role: "Instagram Creator - 22K followers", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "I'm a nano creator and I'm finally getting paid on time, every time. BrandKrt is the only platform where small brands actually find me." },
 ];
 
 function Testimonials() {
@@ -231,7 +231,7 @@ function Testimonials() {
               <div className="flex gap-1 text-secondary">
                 {Array.from({ length: 5 }).map((_, k) => <Star key={k} className="h-4 w-4 fill-current" />)}
               </div>
-              <blockquote className="mt-5 text-base leading-relaxed text-white/90">“{t.q}”</blockquote>
+              <blockquote className="mt-5 text-base leading-relaxed text-white/90">"{t.q}"</blockquote>
               <figcaption className="mt-6 flex items-center gap-3">
                 <img src={t.img} alt={t.name} className="h-10 w-10 rounded-full object-cover" />
                 <div>
@@ -250,7 +250,7 @@ function Testimonials() {
 /* ---------- Pricing ---------- */
 const PLANS = [
   { name: "Starter", price: "Free", per: "forever", features: ["For solo founders, home businesses &amp; new creators", "Up to 2 active campaigns", "Verified creator search", "Escrow-secured payments", "Email support"], cta: "Start free", testId: "pricing-starter", highlight: false },
-  { name: "Growth", price: "₹1,499", per: "/ month", features: ["For cafés, salons, gyms, clothing stores &amp; D2C brands", "Unlimited campaigns", "Priority creator matchmaking", "Multi-city &amp; multi-platform reach", "Campaign analytics &amp; ROI tracking", "Priority support"], cta: "Start 14-day free trial", testId: "pricing-growth", highlight: true },
+  { name: "Growth", price: "Rs 1,499", per: "/ month", features: ["For cafes, salons, gyms, clothing stores &amp; D2C brands", "Unlimited campaigns", "Priority creator matchmaking", "Multi-city &amp; multi-platform reach", "Campaign analytics &amp; ROI tracking", "Priority support"], cta: "Start 14-day free trial", testId: "pricing-growth", highlight: true },
   { name: "Business+", price: "Custom", per: "billed annually", features: ["For coaching institutes, retail chains &amp; growing D2C brands", "Dedicated account manager", "Custom contracts &amp; campaign briefs", "Bulk creator onboarding", "Quarterly performance reviews", "24/7 white-glove support"], cta: "Talk to us", testId: "pricing-enterprise", highlight: false },
 ];
 
@@ -263,7 +263,7 @@ function Pricing() {
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
             Affordable plans for every kind of business.
           </h2>
-          <p className="mt-5 text-lg text-muted-foreground">Flat 8% platform fee on campaign payouts — no agency markups, no hidden charges. Creators always sign up free.</p>
+          <p className="mt-5 text-lg text-muted-foreground">Flat 8% platform fee on campaign payouts - no agency markups, no hidden charges. Creators always sign up free.</p>
         </div>
         <div className="mt-16 grid gap-6 lg:grid-cols-3">
           {PLANS.map((p) => (
@@ -308,12 +308,12 @@ function Pricing() {
 
 /* ---------- FAQ ---------- */
 const FAQS = [
-  { q: "Who is BrandKrt for?", a: "Any business that wants reach without the agency cost — restaurants, cafés, salons, gyms, coaching institutes, clothing stores, local shops, D2C brands and home businesses — and any creator: nano, micro, Instagram, YouTube or Facebook." },
-  { q: "How affordable is influencer marketing on BrandKrt?", a: "You can run your first verified nano-creator campaign for as little as ₹999. There are no signup fees and no monthly minimums on the free plan — only an 8% platform fee on successful campaigns." },
+  { q: "Who is BrandKrt for?", a: "Any business that wants reach without the agency cost - restaurants, cafes, salons, gyms, coaching institutes, clothing stores, local shops, D2C brands and home businesses - and any creator: nano, micro, Instagram, YouTube or Facebook." },
+  { q: "How affordable is influencer marketing on BrandKrt?", a: "You can run your first verified nano-creator campaign for as little as Rs 999. There are no signup fees and no monthly minimums on the free plan - only an 8% platform fee on successful campaigns." },
   { q: "How do you verify creators and businesses?", a: "Every creator clears ID verification plus social handle ownership check. Every business is identity-verified before they can run a campaign. Verified profiles get a trust badge." },
   { q: "How are payments handled?", a: "Brands fund the campaign upfront. The amount sits safely in escrow and is released to the creator only after the deliverables (post, reel, video) are live and approved. Creators are never ghosted on payment." },
-  { q: "What platforms do you support?", a: "Right now Instagram, YouTube and Facebook — including Reels, Shorts, posts, stories and long-form videos. You can match with nano creators (1K–10K), micro creators (10K–100K) and established content creators all in one place." },
-  { q: "Can I run a campaign for my local shop or home business?", a: "Absolutely — that's exactly who BrandKrt is built for. Filter creators by your city and niche, send a brief, and your store can be featured by real local creators within days." },
+  { q: "What platforms do you support?", a: "Right now Instagram, YouTube and Facebook - including Reels, Shorts, posts, stories and long-form videos. You can match with nano creators (1K-10K), micro creators (10K-100K) and established content creators all in one place." },
+  { q: "Can I run a campaign for my local shop or home business?", a: "Absolutely - that's exactly who BrandKrt is built for. Filter creators by your city and niche, send a brief, and your store can be featured by real local creators within days." },
 ];
 
 function FAQ() {
@@ -350,7 +350,7 @@ function ContactSection() {
     setSubmitting(true);
     try {
       const { data } = await api.post("/contact", form);
-      toast.success(data.message || "Thanks — we'll be in touch.");
+      toast.success(data.message || "Thanks - we'll be in touch.");
       setForm({ name: "", email: "", subject: "", message: "" });
     } catch (err) {
       toast.error(formatApiError(err));
@@ -367,7 +367,7 @@ function ContactSection() {
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
             Tell us about your business or your creator journey.
           </h2>
-          <p className="mt-6 text-lg text-muted-foreground">Whether you&apos;re a café owner planning your first campaign, a salon launching a new service, a D2C brand scaling up, or a creator who wants to start earning — we&apos;re here. We typically reply within 24 hours.</p>
+          <p className="mt-6 text-lg text-muted-foreground">Whether you&apos;re a cafe owner planning your first campaign, a salon launching a new service, a D2C brand scaling up, or a creator who wants to start earning - we&apos;re here. We typically reply within 24 hours.</p>
           <div className="mt-8 space-y-3 text-sm text-muted-foreground">
             <a href="mailto:support@brandkrt.com" className="flex items-center gap-3 hover:text-secondary"><Mail className="h-4 w-4" /> support@brandkrt.com</a>
             <a href="mailto:vaibhav@brandkrt.com" className="flex items-center gap-3 hover:text-secondary"><Mail className="h-4 w-4" /> vaibhav@brandkrt.com</a>
