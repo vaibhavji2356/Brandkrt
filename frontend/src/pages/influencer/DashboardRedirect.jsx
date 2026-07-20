@@ -20,5 +20,5 @@ export default function DashboardRedirect() {
   if (user.role === "admin") return <Navigate to="/admin" replace />;
   if (user.role === "influencer") return <Navigate to="/influencer" replace />;
   if (user.role === "brand") return <Navigate to="/brand" replace />;
-  return <Navigate to="/profile" replace />;
+  return <Navigate to="/" replace />;
 }

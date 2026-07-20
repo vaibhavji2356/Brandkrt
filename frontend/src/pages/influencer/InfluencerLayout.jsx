@@ -40,7 +40,7 @@ export default function InfluencerLayout() {
     } else if (user.role === "admin") {
       navigate("/admin", { replace: true });
     } else if (user.role !== "influencer") {
-      navigate("/profile", { replace: true });
+      navigate("/dashboard", { replace: true });
     }
   }, [user, loading, navigate]);
 

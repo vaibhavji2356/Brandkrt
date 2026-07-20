@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import AuthLayout from "./AuthLayout";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,6 @@ import api from "@/lib/api";
 export default function Login() {
   const { login, googleSignIn, formatApiError } = useAuth();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const from = params.get("from") || "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,9 +40,7 @@ export default function Login() {
     try {
       const u = await googleSignIn(credential);
       toast.success(`Welcome ${u.name?.split(" ")[0] || ""}!`);
-      const dest = from === "/dashboard"
-        ? (u.role === "admin" ? "/admin" : u.role === "brand" ? "/brand" : u.role === "influencer" ? "/influencer" : "/profile")
-        : from;
+      const dest = u.role === "admin" ? "/admin" : u.role === "brand" ? "/brand" : "/influencer";
       navigate(dest, { replace: true });
     } catch (err) {
       toast.error(formatApiError ? formatApiError(err) : (err?.message || "Google sign-in failed"));
@@ -73,7 +69,7 @@ export default function Login() {
       window.removeEventListener("resize", render);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleEnabled, from]);
+  }, [googleEnabled]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -82,9 +78,7 @@ export default function Login() {
     try {
       const u = await login(email, password, remember);
       toast.success("Welcome back!");
-      const dest = from === "/dashboard"
-        ? (u.role === "admin" ? "/admin" : u.role === "brand" ? "/brand" : u.role === "influencer" ? "/influencer" : "/profile")
-        : from;
+      const dest = u.role === "admin" ? "/admin" : u.role === "brand" ? "/brand" : "/influencer";
       navigate(dest, { replace: true });
     } catch (err) {
       setError(formatApiError(err));

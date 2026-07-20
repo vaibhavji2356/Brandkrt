@@ -30,7 +30,7 @@ export default function Settings() {
 
   const [notifications, setNotifications] = useState({ email: true, marketing: false, product: true });
   const [language, setLanguage] = useState("en");
-  const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : user?.role === "influencer" ? "/influencer" : "/profile";
+  const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : "/influencer";
 
   const changePassword = async (e) => {
     e.preventDefault();

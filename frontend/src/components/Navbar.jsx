@@ -36,7 +36,8 @@ export default function Navbar() {
   const initials = (user?.name || user?.email || "U")
     .split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const accountAvatar = user?.avatar_url || user?.profile_photo_url || user?.logo_url || "";
-  const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : user?.role === "influencer" ? "/influencer" : "/profile";
+  const dashboardPath = user?.role === "admin" ? "/admin" : user?.role === "brand" ? "/brand" : "/influencer";
+  const profilePath = user?.role === "brand" ? "/brand/profile" : user?.role === "influencer" ? "/influencer/profile" : "/admin";
   const isMarketingPage = ["/", "/about", "/contact", "/help", "/privacy", "/terms", "/refund"].includes(location.pathname);
   const showAccountMenu = !!user && !isMarketingPage;
 
@@ -98,8 +99,8 @@ export default function Navbar() {
                     <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem data-testid="menu-profile" onClick={() => navigate("/profile")}>
-                  <UserIcon className="mr-2 h-4 w-4" /> Profile
+                <DropdownMenuItem data-testid="menu-profile" onClick={() => navigate(profilePath)}>
+                  <UserIcon className="mr-2 h-4 w-4" /> Edit profile
                 </DropdownMenuItem>
                 <DropdownMenuItem data-testid="menu-settings" onClick={() => navigate("/settings")}>
                   <SettingsIcon className="mr-2 h-4 w-4" /> Settings
@@ -148,8 +149,8 @@ export default function Navbar() {
                 <DropdownMenuItem data-testid="mobile-account-dashboard" onClick={() => go(dashboardPath)}>
                   <LayoutDashboard className="mr-2 h-4 w-4" /> Dashboard
                 </DropdownMenuItem>
-                <DropdownMenuItem data-testid="mobile-account-profile" onClick={() => go("/profile")}>
-                  <UserIcon className="mr-2 h-4 w-4" /> Profile
+                <DropdownMenuItem data-testid="mobile-account-profile" onClick={() => go(profilePath)}>
+                  <UserIcon className="mr-2 h-4 w-4" /> Edit profile
                 </DropdownMenuItem>
                 <DropdownMenuItem data-testid="mobile-account-settings" onClick={() => go("/settings")}>
                   <SettingsIcon className="mr-2 h-4 w-4" /> Settings

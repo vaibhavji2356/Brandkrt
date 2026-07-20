@@ -38,7 +38,7 @@ export default function VerifyEmail() {
             <CheckCircle2 className="h-12 w-12 text-success" />
             <h1 className="text-2xl font-display tracking-tight text-primary dark:text-white">Email verified</h1>
             <p className="text-muted-foreground text-sm">{state.message}</p>
-            <Link to="/profile" className="mt-2 rounded-full bg-primary text-primary-foreground px-6 py-3 text-sm font-semibold">Go to your profile</Link>
+            <Link to="/dashboard" className="mt-2 rounded-full bg-primary text-primary-foreground px-6 py-3 text-sm font-semibold">Open dashboard</Link>
           </div>
         )}
         {state.status === "error" && (
