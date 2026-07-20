@@ -356,7 +356,7 @@ export default function BrandProfile() {
         </div>
       </Section>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sticky bottom-0 z-20 rounded-2xl border border-border bg-background/95 p-4 shadow-lg backdrop-blur">
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 rounded-2xl border border-border bg-card p-4">
         <p className="text-xs text-muted-foreground sm:mr-auto">Changes are saved to your business profile.</p>
         <button
           type="submit"

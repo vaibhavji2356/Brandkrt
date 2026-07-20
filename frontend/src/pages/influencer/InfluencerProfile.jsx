@@ -210,7 +210,7 @@ export default function InfluencerProfile() {
                   ["approved", "verified"].includes(verified) ? "bg-success/10 text-success" :
                   verified === "rejected" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"
                 }`}>
-                  <BadgeCheck className="h-3 w-3" /> {verified}
+                  <BadgeCheck className="h-3 w-3" /> {verified === "not_started" ? "Not verified" : verified.replace(/_/g, " ")}
                 </span>
               </div>
               <p className="text-sm text-muted-foreground mt-1 truncate">{user?.email}</p>
@@ -297,7 +297,7 @@ export default function InfluencerProfile() {
         </div>
       </Section>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sticky bottom-0 z-20 rounded-2xl border border-border bg-background/95 p-4 shadow-lg backdrop-blur">
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 rounded-2xl border border-border bg-card p-4">
         <p className="text-xs text-muted-foreground sm:mr-auto">All changes are saved to your private creator profile.</p>
         <button
           type="submit"
