@@ -306,9 +306,10 @@ export default function InfluencerOverview({ verificationOnly = false }) {
       </div>
 
       <Dialog open={verificationOpen} onOpenChange={setVerificationOpen}>
-        <DialogContent className="max-w-xl" data-testid="verification-dialog">
-          <DialogHeader>
-            <DialogTitle>Start Verification</DialogTitle>
+        <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-xl overflow-y-auto sm:max-h-[90vh]" data-testid="verification-dialog">
+          <DialogHeader className="sticky top-0 z-20 -mx-6 -mt-6 border-b border-border bg-background px-6 py-4 pr-12">
+            <DialogTitle>Creator Verification</DialogTitle>
+            <p className="text-sm text-muted-foreground">Submit your identity and social insights for BrandKrt admin review.</p>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -393,7 +394,7 @@ export default function InfluencerOverview({ verificationOnly = false }) {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 z-20 -mx-6 -mb-6 border-t border-border bg-background px-6 py-4">
             <button
               type="button"
               onClick={() => setVerificationOpen(false)}
