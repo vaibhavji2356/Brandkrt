@@ -90,23 +90,35 @@ export default function AdminLayout() {
           <span className="text-sm text-muted-foreground">BrandKrt</span>
         </div>
         <div className="p-8 lg:p-10">
-          {Number(attention.pending_escrow_releases || 0) > 0 && (
-            <button
-              type="button"
-              onClick={() => navigate("/admin/escrow")}
-              className="mb-6 flex w-full items-center justify-between gap-4 rounded-2xl border border-secondary/40 bg-secondary/10 p-4 text-left"
-              data-testid="admin-release-alert"
-            >
-              <span>
-                <span className="block font-semibold text-primary dark:text-white">Creator payment release required</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">{attention.pending_escrow_releases} completed deal payout(s) are waiting for admin release.</span>
-              </span>
-              <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">Review payouts</span>
-            </button>
-          )}
+          <div className="mb-6 space-y-3">
+            {Number(attention.pending_escrow_releases || 0) > 0 && (
+              <AdminAttention count={attention.pending_escrow_releases} title="Creator payment release required" description="Completed deal payout(s) are waiting for admin release." action="Review payouts" onClick={() => navigate("/admin/escrow")} testId="admin-release-alert" />
+            )}
+            {Number(attention.pending_verification || 0) > 0 && (
+              <AdminAttention count={attention.pending_verification} title="Verification review required" description="Brand/creator verification request(s) are pending or in progress." action="Review verification" onClick={() => navigate("/admin/verification")} testId="admin-verification-alert" />
+            )}
+            {Number(attention.pending_withdrawals || 0) > 0 && (
+              <AdminAttention count={attention.pending_withdrawals} title="Withdrawal action required" description="Withdrawal request(s) are pending or approved but not released yet." action="Review withdrawals" onClick={() => navigate("/admin/withdrawals")} testId="admin-withdrawal-alert" />
+            )}
+          </div>
           <Outlet />
         </div>
       </main>
     </div>
+  );
+}
+
+function AdminAttention({ count, title, description, action, onClick, testId }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center justify-between gap-4 rounded-2xl border border-secondary/40 bg-secondary/10 p-4 text-left" data-testid={testId}>
+      <span className="flex min-w-0 items-center gap-3">
+        <span className="flex h-8 min-w-8 shrink-0 items-center justify-center rounded-full bg-destructive px-2 text-xs font-bold text-destructive-foreground">{count}</span>
+        <span>
+          <span className="block font-semibold text-primary dark:text-white">{title}</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+        </span>
+      </span>
+      <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">{action}</span>
+    </button>
   );
 }

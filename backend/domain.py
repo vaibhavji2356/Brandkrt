@@ -1147,8 +1147,8 @@ def register_handlers():
         users_total = await db.users.count_documents({})
         brands_total = await db.brands.count_documents({})
         infs_total = await db.influencers.count_documents({})
-        pending_verif = await db.verification_requests.count_documents({"status": "pending"})
-        pending_wd = await db.withdrawal_requests.count_documents({"status": "pending"})
+        pending_verif = await db.verification_requests.count_documents({"status": {"$in": ["pending", "in_progress"]}})
+        pending_wd = await db.withdrawal_requests.count_documents({"status": {"$in": ["pending", "approved"]}})
         pending_releases = await db.payments.count_documents({"release_status": "release_requested"})
         running = await db.campaigns.count_documents({"status": "active"})
         completed = await db.campaigns.count_documents({"status": "completed"})
@@ -1368,7 +1368,9 @@ def register_handlers():
         rows = []
         async for req in cur:
             rows.append(await _verification_out(req))
-        return {"requests": rows}
+        statuses = ["pending", "in_progress", "verified", "rejected"]
+        counts = {key: await db.verification_requests.count_documents({"status": key}) for key in statuses}
+        return {"requests": rows, "counts": counts}
 
     @admin_router.post("/verification/{rid}/decision")
     async def _admin_decide(rid: str, payload: VerificationDecisionIn, user: dict = Depends(get_current_user)):
@@ -1427,7 +1429,10 @@ def register_handlers():
         status = (status or "pending").lower()
         query = {} if status == "all" else {"status": status}
         cur = db.withdrawal_requests.find(query).sort("created_at", -1).limit(200)
-        return {"requests": [await _withdrawal_admin_out(x) async for x in cur]}
+        statuses = ["pending", "approved", "released", "rejected", "failed"]
+        counts = {key: await db.withdrawal_requests.count_documents({"status": key}) for key in statuses}
+        counts["all"] = await db.withdrawal_requests.count_documents({})
+        return {"requests": [await _withdrawal_admin_out(x) async for x in cur], "counts": counts}
 
     @admin_router.post("/withdrawals/{rid}/decision")
     async def _admin_wd_decide(rid: str, payload: WithdrawalDecisionIn, user: dict = Depends(get_current_user)):

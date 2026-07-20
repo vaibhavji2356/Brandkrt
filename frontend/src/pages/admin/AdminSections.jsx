@@ -150,7 +150,7 @@ export function AdminUsers() {
                 <td className="px-4 py-3 capitalize">{u.role}</td>
                 <td className="px-4 py-3"><StatusChip value={u.status || "active"} /></td>
                 <td className="px-4 py-3"><StatusChip value={u.verification_status || "not_started"} /></td>
-                <td className="px-4 py-3 text-muted-foreground">{(u.created_at || "").slice(0, 10)}</td>
+                <td className="px-4 py-3 text-muted-foreground">{adminDateTime(u.created_at)}</td>
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">{loading ? "Loading users..." : "No users found"}</td></tr>}
@@ -189,7 +189,7 @@ export function AdminUsers() {
                   <dl className="mt-3 space-y-2 text-sm">
                     <InfoRow label="User ID" value={currentUser.id} />
                     <InfoRow label="Role" value={currentUser.role} />
-                    <InfoRow label="Created" value={currentUser.created_at} />
+                    <InfoRow label="Created" value={adminDateTime(currentUser.created_at)} />
                     <InfoRow label="Email verified" value={currentUser.email_verified ? "Yes" : "No"} />
                   </dl>
                 </div>
@@ -241,7 +241,7 @@ function HistoryBlock({ title, rows = [], fields, compact = false }) {
             {fields.map((field) => (
               <div key={field} className="flex justify-between gap-3">
                 <span className="capitalize text-muted-foreground">{field.replaceAll("_", " ")}</span>
-                <span className="max-w-[65%] break-words text-right">{String(row[field] ?? "-")}</span>
+                <span className="max-w-[65%] break-words text-right">{field.endsWith("_at") ? adminDateTime(row[field]) : String(row[field] ?? "-")}</span>
               </div>
             ))}
           </div>
@@ -255,6 +255,7 @@ function HistoryBlock({ title, rows = [], fields, compact = false }) {
 export function AdminVerification() {
   const [tab, setTab] = useState("pending");
   const [rows, setRows] = useState([]);
+  const [counts, setCounts] = useState({});
   const [active, setActive] = useState(null);
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState("");
@@ -267,6 +268,7 @@ export function AdminVerification() {
       setLoadingRows(true);
       const r = await api.get("/admin/verification", { params: { status: s } });
       setRows(r.data.requests || []);
+      setCounts(r.data.counts || {});
     } catch (e) {
       setRows([]);
       toast.error(formatApiError(e));
@@ -341,10 +343,10 @@ export function AdminVerification() {
     <Section title="Verification panel">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="pending" data-testid="verif-tab-pending">Pending</TabsTrigger>
-          <TabsTrigger value="in_progress" data-testid="verif-tab-in-progress">In Progress</TabsTrigger>
-          <TabsTrigger value="verified" data-testid="verif-tab-verified">Verified</TabsTrigger>
-          <TabsTrigger value="rejected" data-testid="verif-tab-rejected">Rejected</TabsTrigger>
+          <TabsTrigger value="pending" data-testid="verif-tab-pending">Pending{counts.pending ? ` (${counts.pending})` : ""}</TabsTrigger>
+          <TabsTrigger value="in_progress" data-testid="verif-tab-in-progress">In Progress{counts.in_progress ? ` (${counts.in_progress})` : ""}</TabsTrigger>
+          <TabsTrigger value="verified" data-testid="verif-tab-verified">Verified{counts.verified ? ` (${counts.verified})` : ""}</TabsTrigger>
+          <TabsTrigger value="rejected" data-testid="verif-tab-rejected">Rejected{counts.rejected ? ` (${counts.rejected})` : ""}</TabsTrigger>
         </TabsList>
         <TabsContent value={tab} className="mt-6 space-y-3">
           {rows.map((r) => (
@@ -362,7 +364,7 @@ export function AdminVerification() {
                 <div className="truncate text-xs text-muted-foreground">
                   {r.user?.email || r.user_id} {r.user?.phone ? `- ${r.user.phone}` : ""} - {r.documents?.length || 0} doc(s)
                 </div>
-                {r.schedule_call_at && <div className="text-xs text-secondary mt-1">WhatsApp call: {new Date(r.schedule_call_at).toLocaleString()}</div>}
+                {r.schedule_call_at && <div className="text-xs text-secondary mt-1">WhatsApp call: {adminDateTime(r.schedule_call_at)}</div>}
                 {r.notes && <p className="text-xs mt-1 text-foreground/70">"{r.notes}"</p>}
                 </div>
               </div>
@@ -492,7 +494,7 @@ function SimpleList({ title, endpoint, columns, testidPrefix }) {
           <tbody>
             {rows.map((row, i) => (
               <tr key={row.id || i} className="border-t border-border" data-testid={`${testidPrefix}-${row.id || i}`}>
-                {columns.map((c) => <td key={c.key} className="px-4 py-3 text-foreground/80">{String(row[c.key] ?? "")}</td>)}
+                {columns.map((c) => <td key={c.key} className="px-4 py-3 text-foreground/80">{c.key.endsWith("_at") ? adminDateTime(row[c.key]) : String(row[c.key] ?? "")}</td>)}
               </tr>
             ))}
             {!rows.length && <tr><td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">{loading ? "Loading records..." : "No records"}</td></tr>}
@@ -506,6 +508,21 @@ function SimpleList({ title, endpoint, columns, testidPrefix }) {
 
 function money(value) {
   return `INR ${Number(value || 0).toLocaleString()}`;
+}
+
+function adminDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
 }
 
 function profileName(profile, user, fallback) {
@@ -637,8 +654,8 @@ export function AdminEscrow() {
                 ["Deal status", active.deal?.status],
                 ["Payment status", active.status],
                 ["Release status", active.release_status],
-                ["Paid at", active.verified_at || active.created_at],
-                ["Release requested", active.release_requested_at],
+                ["Paid at", adminDateTime(active.verified_at || active.created_at)],
+                ["Release requested", adminDateTime(active.release_requested_at)],
               ]} />
               {(active.release_status === "release_requested" || active.release_status === "held") && active.status === "escrowed" && (
                 <button onClick={() => release(active)} disabled={busy} className="w-full rounded-full bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60" data-testid="admin-release-escrow">
@@ -675,6 +692,7 @@ function DetailCard({ title, rows }) {
 export function AdminWithdrawals() {
   const [tab, setTab] = useState("pending");
   const [rows, setRows] = useState([]);
+  const [counts, setCounts] = useState({});
   const [active, setActive] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -685,6 +703,7 @@ export function AdminWithdrawals() {
       setLoading(true);
       const { data } = await api.get("/admin/withdrawals", { params: { status } });
       setRows(data.requests || []);
+      setCounts(data.counts || {});
     } catch (e) {
       setRows([]);
       toast.error(formatApiError(e));
@@ -769,7 +788,7 @@ export function AdminWithdrawals() {
     <Section title="Withdrawal payouts">
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          {tabs.map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}
+          {tabs.map(([value, label]) => <TabsTrigger key={value} value={value}>{label}{Number(counts[value] || 0) > 0 ? ` (${counts[value]})` : ""}</TabsTrigger>)}
         </TabsList>
         <TabsContent value={tab} className="mt-6 space-y-3">
           {rows.map((request) => (
@@ -804,7 +823,7 @@ export function AdminWithdrawals() {
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <Metric label="Amount to creator" value={money(request.amount)} tone="gold" />
-                <Metric label="Requested on" value={(request.created_at || "").slice(0, 10) || "-"} />
+                <Metric label="Requested on" value={adminDateTime(request.created_at)} />
                 <Metric label="Payout id" value={request.payout_id || "-"} />
               </div>
             </div>
@@ -844,7 +863,7 @@ export function AdminWithdrawals() {
                 ["Payout mode", active.payout_mode],
                 ["Fund account ID", active.payout_fund_account_id],
                 ["Contact ID", active.payout_contact_id],
-                ["Processed at", active.processed_at],
+                ["Processed at", adminDateTime(active.processed_at)],
                 ["Admin note", active.admin_note],
               ]} />
               <div className="rounded-2xl border border-border bg-background p-4">
