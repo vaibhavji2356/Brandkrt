@@ -198,6 +198,11 @@ export default function DealDetails() {
 
   const setStatus = async (to, confirmText) => {
     if (confirmText && !window.confirm(confirmText)) return;
+    if (to === "scheduled" && isInfluencer && !links.screenshot_url?.trim()) {
+      toast.info("Upload the scheduling screenshot first, then tap Mark scheduled again.");
+      screenshotRef.current?.click();
+      return;
+    }
     setBusy(true);
     try {
       const payload = { status: to };
@@ -207,9 +212,6 @@ export default function DealDetails() {
         payload.deliverables = Object.fromEntries(
           Object.entries(links).map(([k, v]) => [k, v?.trim() || null])
         );
-      }
-      if (to === "scheduled" && isInfluencer && !links.screenshot_url?.trim()) {
-        throw new Error("Upload the scheduling screenshot before marking the content scheduled.");
       }
       if (to === "published" && isInfluencer && !DELIVERABLE_FIELDS.some((field) => links[field.key]?.trim())) {
         throw new Error("Add at least one live platform link before marking the content published.");
@@ -255,7 +257,7 @@ export default function DealDetails() {
       const { data } = await api.post("/uploads/products", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const url = data.url;
       setLinks((l) => ({ ...l, screenshot_url: url }));
-      toast.success("Screenshot uploaded. Don't forget to save deliverables.");
+      toast.success("Screenshot uploaded. You can now tap Mark scheduled.");
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -405,6 +407,32 @@ export default function DealDetails() {
           <div className="rounded-2xl border border-border bg-card p-6">
             <h3 className="text-sm font-semibold text-primary dark:text-white">Lifecycle</h3>
             <p className="text-xs text-muted-foreground mt-0.5">Twelve-step Brand ↔ Creator pipeline. Status updates notify the other side automatically.</p>
+            {canon === "approved" && isInfluencer && (
+              <div className="mt-4 rounded-xl border border-secondary/30 bg-secondary/10 p-4" data-testid="schedule-screenshot-prompt">
+                <div className="flex items-center gap-2 font-semibold text-primary dark:text-white">
+                  <ImageIcon className="h-4 w-4 text-secondary" /> Upload scheduling screenshot
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">First upload proof that the post is scheduled. After upload, tap Mark scheduled below.</p>
+                {links.screenshot_url ? (
+                  <div className="mt-3 flex items-center gap-3">
+                    <a href={links.screenshot_url} target="_blank" rel="noreferrer" className="block h-20 w-20 overflow-hidden rounded-lg border border-border bg-background">
+                      <img src={links.screenshot_url} alt="Scheduling screenshot" className="h-full w-full object-cover" />
+                    </a>
+                    <button type="button" onClick={() => screenshotRef.current?.click()} className="rounded-full border border-border bg-background px-4 py-2 text-xs font-semibold hover:bg-accent">Change screenshot</button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => screenshotRef.current?.click()}
+                    disabled={uploadingShot}
+                    className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    {uploadingShot ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                    {uploadingShot ? "Uploading…" : "Choose screenshot"}
+                  </button>
+                )}
+              </div>
+            )}
             <div className="mt-5">
               <DealTimeline
                 status={deal.status}
@@ -498,11 +526,11 @@ export default function DealDetails() {
                       {uploadingShot ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
                       {uploadingShot ? "Uploading…" : "Upload screenshot"}
                     </button>
-                    <input ref={screenshotRef} type="file" accept="image/*" onChange={uploadScreenshot} className="hidden" />
                   </>
                 ) : (
                   <p className="mt-2 text-xs text-muted-foreground">No screenshot uploaded yet.</p>
                 )}
+                {isInfluencer && <input ref={screenshotRef} type="file" accept="image/*" onChange={uploadScreenshot} className="hidden" />}
               </div>
 
               <div className="sm:col-span-2 rounded-xl border border-border bg-background p-3" data-testid="deliv-notes">
