@@ -11,6 +11,30 @@ function Section({ title, children }) {
   return <div className="space-y-4"><h2 className="text-2xl font-display font-light text-primary dark:text-white">{title}</h2>{children}</div>;
 }
 
+const IMAGE_EXTENSIONS = /\.(avif|gif|jpe?g|png|svg|webp)(?:\?.*)?$/i;
+
+function isImageDocument(doc) {
+  if (doc?.kind === "image") return true;
+  const name = typeof doc === "string" ? doc : `${doc?.name || ""} ${doc?.url || ""}`;
+  return IMAGE_EXTENSIONS.test(name) || String(doc?.url || doc || "").startsWith("data:image/");
+}
+
+function VerificationImage({ url, label, className = "h-40 w-full" }) {
+  const [broken, setBroken] = useState(false);
+  if (!url || broken) return null;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-xl border border-border bg-accent/30">
+      <img
+        src={url}
+        alt={label}
+        className={`${className} object-cover transition-transform group-hover:scale-[1.02]`}
+        onError={() => setBroken(true)}
+      />
+      <div className="truncate border-t border-border px-3 py-2 text-xs font-medium text-secondary">{label} · Open full image</div>
+    </a>
+  );
+}
+
 export function AdminUsers() {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
@@ -334,7 +358,7 @@ export function AdminVerification() {
       </Tabs>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl" data-testid="admin-verification-dialog">
+        <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-3xl overflow-y-auto sm:max-h-[90vh]" data-testid="admin-verification-dialog">
           <DialogHeader><DialogTitle>Review verification</DialogTitle></DialogHeader>
           {active && (
             <div className="space-y-5">
@@ -353,15 +377,39 @@ export function AdminVerification() {
                 <StatusChip value={active.status} />
               </div>
 
+              {(active.media?.profile || active.media?.cover || active.media?.gallery?.length > 0) && (
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    {active.kind === "brand" ? "Brand photos" : "Creator photos"}
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <VerificationImage
+                      url={active.media?.profile}
+                      label={active.kind === "brand" ? "Brand logo" : "Creator profile photo"}
+                    />
+                    <VerificationImage
+                      url={active.media?.cover}
+                      label={active.kind === "brand" ? "Brand cover image" : "Creator cover image"}
+                    />
+                    {(active.media?.gallery || []).map((url, index) => (
+                      <VerificationImage key={`${url}-${index}`} url={url} label={`${active.kind === "brand" ? "Product" : "Portfolio"} image ${index + 1}`} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Submitted documents</div>
-                <div className="mt-2 space-y-2">
+                <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(active.documents || []).map((doc, index) => {
                     const url = typeof doc === "string" ? doc : doc.url;
                     const label = typeof doc === "string" ? `Document ${index + 1}` : doc.label || doc.type || `Document ${index + 1}`;
+                    if (isImageDocument(doc)) {
+                      return <VerificationImage key={`${url}-${index}`} url={url} label={`${label}${doc?.index ? ` ${doc.index}` : ""}`} />;
+                    }
                     return (
-                      <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="block rounded-xl border border-border px-3 py-2 text-sm text-secondary hover:bg-accent">
-                        {label}
+                      <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="block rounded-xl border border-border px-3 py-4 text-sm font-medium text-secondary hover:bg-accent">
+                        {label}{doc?.name ? ` · ${doc.name}` : ""} · Open file
                       </a>
                     );
                   })}

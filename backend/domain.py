@@ -1306,6 +1306,24 @@ def register_handlers():
                 "city": profile.get("city"),
                 "category": profile.get("category") or profile.get("industry"),
             }
+            if req.get("kind") == "brand":
+                gallery = profile.get("product_images") or []
+                out["media"] = {
+                    "profile": profile.get("logo_url"),
+                    "cover": profile.get("cover_url"),
+                    "gallery": gallery,
+                }
+            else:
+                portfolio = profile.get("portfolio") or []
+                gallery = [
+                    item.get("url") if isinstance(item, dict) else item
+                    for item in portfolio
+                ]
+                out["media"] = {
+                    "profile": profile.get("profile_photo_url"),
+                    "cover": profile.get("cover_photo_url"),
+                    "gallery": [url for url in gallery if url],
+                }
             if out.get("user") and not out["user"].get("phone"):
                 out["user"]["phone"] = profile.get("phone")
         return out
