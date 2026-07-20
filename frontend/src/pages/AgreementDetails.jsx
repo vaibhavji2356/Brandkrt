@@ -69,7 +69,7 @@ export default function AgreementDetails() {
     const refresh = () => load({ quiet: true });
     window.addEventListener("focus", refresh);
     return () => { clearInterval(timer); window.removeEventListener("focus", refresh); };
-  }, [id]);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isInfluencer = doc && user?.id === doc.influencer_user_id;
   const isBrand = doc && user?.id === doc.brand_user_id;
