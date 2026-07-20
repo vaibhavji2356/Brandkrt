@@ -230,9 +230,7 @@ function NewAgreementModal({ onClose, onCreated }) {
                   data-testid={`agreement-pick-${cr.id}`}
                   className={`w-full text-left flex items-center gap-3 px-3 py-2.5 ${form.influencer_user_id === cr.user_id ? "bg-accent" : "hover:bg-accent/60"}`}
                 >
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-semibold">
-                    {(cr.username || "U").slice(0, 2).toUpperCase()}
-                  </div>
+                  <CreatorAvatar creator={cr} />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold truncate">{cr.username || "Creator"}</div>
                     <div className="text-[11px] text-muted-foreground truncate">{cr.category || "—"}</div>
@@ -317,6 +315,27 @@ function NewAgreementModal({ onClose, onCreated }) {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function CreatorAvatar({ creator }) {
+  const [broken, setBroken] = useState(false);
+  const url = creator.profile_photo_url || creator.avatar_url;
+  const name = creator.username || creator.name || "Creator";
+  if (url && !broken) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        onError={() => setBroken(true)}
+        className="h-9 w-9 shrink-0 rounded-full border border-border object-cover"
+      />
+    );
+  }
+  return (
+    <div className="h-9 w-9 shrink-0 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-semibold">
+      {name.slice(0, 2).toUpperCase()}
     </div>
   );
 }
