@@ -513,8 +513,9 @@ function profileName(profile, user, fallback) {
 }
 
 export function AdminEscrow() {
-  const [tab, setTab] = useState("held");
+  const [tab, setTab] = useState("release_requested");
   const [rows, setRows] = useState([]);
+  const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -524,6 +525,7 @@ export function AdminEscrow() {
       setLoading(true);
       const { data } = await api.get("/admin/escrow", { params: { status } });
       setRows(data.payments || []);
+      setCounts(data.counts || {});
     } catch (e) {
       setRows([]);
       toast.error(formatApiError(e));
@@ -559,9 +561,15 @@ export function AdminEscrow() {
 
   return (
     <Section title="Escrow control">
+      {Number(counts.release_requested || 0) > 0 && (
+        <div className="rounded-2xl border border-secondary/40 bg-secondary/10 p-4" data-testid="escrow-release-alert">
+          <div className="font-semibold text-primary dark:text-white">{counts.release_requested} creator payout(s) ready for release</div>
+          <p className="mt-1 text-sm text-muted-foreground">The brand marked the work complete. Open each payment, verify the lifecycle and release the creator payout.</p>
+        </div>
+      )}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          {tabs.map(([value, label]) => <TabsTrigger key={value} value={value}>{label}</TabsTrigger>)}
+          {tabs.map(([value, label]) => <TabsTrigger key={value} value={value}>{label}{Number(counts[value] || 0) > 0 ? ` (${counts[value]})` : ""}</TabsTrigger>)}
         </TabsList>
         <TabsContent value={tab} className="mt-6 space-y-3">
           {rows.map((p) => (

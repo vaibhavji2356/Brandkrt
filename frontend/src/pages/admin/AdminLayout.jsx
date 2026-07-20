@@ -4,13 +4,14 @@ import { LayoutDashboard, ShieldCheck, Users, Banknote, Flag, ScrollText, LogOut
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
+import api from "@/lib/api";
 
 const NAV = [
   { to: "/admin", end: true, icon: LayoutDashboard, label: "Overview" },
   { to: "/admin/users", icon: Users, label: "Users" },
-  { to: "/admin/verification", icon: ShieldCheck, label: "Verification" },
-  { to: "/admin/escrow", icon: Banknote, label: "Escrow" },
-  { to: "/admin/withdrawals", icon: Banknote, label: "Withdrawals" },
+  { to: "/admin/verification", icon: ShieldCheck, label: "Verification", countKey: "pending_verification" },
+  { to: "/admin/escrow", icon: Banknote, label: "Escrow", countKey: "pending_escrow_releases" },
+  { to: "/admin/withdrawals", icon: Banknote, label: "Withdrawals", countKey: "pending_withdrawals" },
   { to: "/admin/reports", icon: Flag, label: "Reports" },
   { to: "/admin/logs", icon: ScrollText, label: "Logs" },
 ];
@@ -18,9 +19,28 @@ const NAV = [
 export default function AdminLayout() {
   const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
+  const [attention, setAttention] = useState({});
   useEffect(() => {
     if (!loading && (!user || user.role !== "admin")) navigate("/login", { replace: true });
   }, [user, loading, navigate]);
+  useEffect(() => {
+    if (!user || user.role !== "admin") return undefined;
+    let alive = true;
+    const loadAttention = async () => {
+      try {
+        const { data } = await api.get("/admin/overview");
+        if (alive) setAttention(data.cards || {});
+      } catch (_) {}
+    };
+    loadAttention();
+    const timer = window.setInterval(loadAttention, 30000);
+    window.addEventListener("focus", loadAttention);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", loadAttention);
+    };
+  }, [user]);
 
   if (loading || !user) return <div className="min-h-screen flex items-center justify-center"><div className="h-8 w-8 rounded-full border-2 border-secondary border-t-transparent animate-spin" /></div>;
 
@@ -44,7 +64,12 @@ export default function AdminLayout() {
               }
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {Number(attention[item.countKey] || 0) > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-secondary px-1.5 text-[10px] font-bold text-primary">
+                  {attention[item.countKey]}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -65,6 +90,20 @@ export default function AdminLayout() {
           <span className="text-sm text-muted-foreground">BrandKrt</span>
         </div>
         <div className="p-8 lg:p-10">
+          {Number(attention.pending_escrow_releases || 0) > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate("/admin/escrow")}
+              className="mb-6 flex w-full items-center justify-between gap-4 rounded-2xl border border-secondary/40 bg-secondary/10 p-4 text-left"
+              data-testid="admin-release-alert"
+            >
+              <span>
+                <span className="block font-semibold text-primary dark:text-white">Creator payment release required</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">{attention.pending_escrow_releases} completed deal payout(s) are waiting for admin release.</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">Review payouts</span>
+            </button>
+          )}
           <Outlet />
         </div>
       </main>

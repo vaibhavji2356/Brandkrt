@@ -1084,9 +1084,31 @@ def register_handlers():
     async def _ensure_admin(user: dict):
         await require_role(user, "admin")
 
+    async def _sync_completed_escrow_releases() -> int:
+        """Queue legacy/completed deals whose funded escrow still says held."""
+        queued = 0
+        async for deal in db.deals.find({"status": "completed"}, {"campaign_id": 1, "influencer_id": 1}):
+            payment = await db.payments.find_one({
+                "status": "escrowed",
+                "release_status": {"$in": ["held", "pending", None]},
+                "$or": [
+                    {"deal_id": str(deal["_id"])},
+                    {"campaign_id": deal.get("campaign_id"), "influencer_id": deal.get("influencer_id")},
+                ],
+            })
+            if payment:
+                now = now_utc()
+                result = await db.payments.update_one(
+                    {"_id": payment["_id"], "release_status": {"$in": ["held", "pending", None]}},
+                    {"$set": {"release_status": "release_requested", "release_requested_at": now, "updated_at": now}},
+                )
+                queued += result.modified_count
+        return queued
+
     @admin_router.get("/escrow")
     async def _admin_escrow(user: dict = Depends(get_current_user), status: str = "held"):
         await _ensure_admin(user)
+        await _sync_completed_escrow_releases()
         status = (status or "held").lower()
         if status == "all":
             query = {}
@@ -1099,7 +1121,13 @@ def register_handlers():
         else:
             query = {"$or": [{"status": status}, {"release_status": status}]}
         cur = db.payments.find(query).sort("created_at", -1).limit(200)
-        return {"payments": [await _payment_admin_out(payment) async for payment in cur]}
+        counts = {
+            "held": await db.payments.count_documents({"status": "escrowed", "release_status": {"$in": ["held", "pending", None]}}),
+            "release_requested": await db.payments.count_documents({"release_status": "release_requested"}),
+            "released": await db.payments.count_documents({"status": "released"}),
+            "all": await db.payments.count_documents({}),
+        }
+        return {"payments": [await _payment_admin_out(payment) async for payment in cur], "counts": counts}
 
     @admin_router.get("/escrow/{pid}")
     async def _admin_escrow_detail(pid: str, user: dict = Depends(get_current_user)):
@@ -1111,6 +1139,7 @@ def register_handlers():
     @admin_router.get("/overview")
     async def _admin_overview(user: dict = Depends(get_current_user)):
         await _ensure_admin(user)
+        await _sync_completed_escrow_releases()
         from datetime import timedelta
         now = now_utc()
         today = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1120,6 +1149,7 @@ def register_handlers():
         infs_total = await db.influencers.count_documents({})
         pending_verif = await db.verification_requests.count_documents({"status": "pending"})
         pending_wd = await db.withdrawal_requests.count_documents({"status": "pending"})
+        pending_releases = await db.payments.count_documents({"release_status": "release_requested"})
         running = await db.campaigns.count_documents({"status": "active"})
         completed = await db.campaigns.count_documents({"status": "completed"})
         cancelled = await db.campaigns.count_documents({"status": "cancelled"})
@@ -1158,6 +1188,7 @@ def register_handlers():
                 "total_influencers": infs_total,
                 "revenue_today": rev_today, "revenue_month": rev_month,
                 "pending_verification": pending_verif, "pending_withdrawals": pending_wd,
+                "pending_escrow_releases": pending_releases,
                 "running_campaigns": running, "completed_campaigns": completed,
                 "cancelled_campaigns": cancelled,
             },

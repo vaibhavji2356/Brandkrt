@@ -5,11 +5,13 @@ import { Users, Building2, Sparkles, DollarSign, ShieldCheck, Banknote, Activity
 
 const ICONS = { total_users: Users, total_brands: Building2, total_influencers: Sparkles, revenue_today: DollarSign,
   revenue_month: DollarSign, pending_verification: ShieldCheck, pending_withdrawals: Banknote,
+  pending_escrow_releases: Banknote,
   running_campaigns: Activity, completed_campaigns: CheckCircle2, cancelled_campaigns: XCircle };
 
 const LABELS = { total_users: "Total Users", total_brands: "Brands", total_influencers: "Influencers",
   revenue_today: "Revenue Today", revenue_month: "Revenue (MTD)", pending_verification: "Pending KYC",
   pending_withdrawals: "Pending Payouts", running_campaigns: "Running Campaigns",
+  pending_escrow_releases: "Release Payments",
   completed_campaigns: "Completed", cancelled_campaigns: "Cancelled" };
 
 function Card({ k, v }) {
