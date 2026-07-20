@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, List, Literal
 
 from bson import ObjectId
@@ -99,6 +99,7 @@ async def setup_indexes(database):
     await database.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
     await database.messages.create_index([("deal_id", 1), ("created_at", 1)])
     await database.verification_requests.create_index([("user_id", 1), ("status", 1)])
+    await database.creator_insight_updates.create_index([("user_id", 1), ("submitted_at", -1)])
     await database.withdrawal_requests.create_index([("user_id", 1), ("status", 1)])
     await database.reviews.create_index([("target_user_id", 1)])
     await database.reports.create_index([("reporter_id", 1), ("status", 1)])
@@ -176,6 +177,14 @@ class InfluencerProfileIn(BaseModel):
     upi: Optional[str] = None
     gst: Optional[str] = None
     portfolio: List[dict] = []
+
+class CreatorInsightUpdateIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    documents: List[Any] = []
+    followers: Optional[int] = Field(default=None, ge=0)
+    avg_reel_views: Optional[int] = Field(default=None, ge=0)
+    monthly_reach: Optional[int] = Field(default=None, ge=0)
+    notes: Optional[str] = None
 
 # ============== CAMPAIGN ==============
 class CampaignIn(BaseModel):
@@ -427,6 +436,67 @@ def register_handlers():
     async def _get_my_inf(user: dict = Depends(get_current_user)):
         doc = await db.influencers.find_one({"user_id": str(user["_id"])})
         return {"influencer": doc_out(doc) if doc else None}
+
+    async def _creator_insight_status(user: dict, profile: dict) -> dict:
+        last = await db.creator_insight_updates.find_one({"user_id": str(user["_id"])}, sort=[("submitted_at", -1)])
+        last_at = (last or {}).get("submitted_at") or profile.get("last_insights_update_at")
+        if not last_at:
+            verified_request = await db.verification_requests.find_one(
+                {"user_id": str(user["_id"]), "kind": "influencer", "status": "verified"},
+                sort=[("updated_at", -1)],
+            )
+            last_at = (verified_request or {}).get("updated_at") or (verified_request or {}).get("created_at")
+        now = now_utc()
+        next_due = last_at + timedelta(days=30) if last_at else now
+        can_update = now >= next_due
+        return {
+            "verified": profile.get("verification_status") in {"approved", "verified"},
+            "last_updated_at": last_at.isoformat() if isinstance(last_at, datetime) else last_at,
+            "next_update_at": next_due.isoformat(),
+            "can_update": can_update,
+            "seconds_remaining": max(0, int((next_due - now).total_seconds())),
+            "latest": doc_out(last) if last else None,
+        }
+
+    @influencer_router.get("/insights/status")
+    async def _get_creator_insight_status(user: dict = Depends(get_current_user)):
+        await require_role(user, "influencer")
+        profile = await db.influencers.find_one({"user_id": str(user["_id"])})
+        if not profile:
+            raise HTTPException(404, "Complete your creator profile first")
+        return await _creator_insight_status(user, profile)
+
+    @influencer_router.post("/insights")
+    async def _update_creator_insights(payload: CreatorInsightUpdateIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "influencer")
+        profile = await db.influencers.find_one({"user_id": str(user["_id"])})
+        if not profile:
+            raise HTTPException(404, "Complete your creator profile first")
+        status = await _creator_insight_status(user, profile)
+        if not status["verified"]:
+            raise HTTPException(403, "Complete creator verification before monthly insight updates")
+        if not status["can_update"]:
+            raise HTTPException(400, f"Your next insight update opens on {status['next_update_at']}")
+        if not payload.documents:
+            raise HTTPException(400, "Upload at least one social insight screenshot")
+        now = now_utc()
+        doc = {
+            **payload.model_dump(),
+            "user_id": str(user["_id"]),
+            "influencer_id": str(profile["_id"]),
+            "submitted_at": now,
+            "created_at": now,
+        }
+        result = await db.creator_insight_updates.insert_one(doc)
+        profile_update = {"last_insights_update_at": now, "insight_documents": payload.documents, "updated_at": now}
+        for key in ("followers", "avg_reel_views", "monthly_reach"):
+            value = getattr(payload, key)
+            if value is not None:
+                profile_update[key] = value
+        await db.influencers.update_one({"_id": profile["_id"]}, {"$set": profile_update})
+        await log_activity(str(user["_id"]), "creator.insights.update", "influencer", str(profile["_id"]))
+        fresh = await db.creator_insight_updates.find_one({"_id": result.inserted_id})
+        return {"success": True, "update": doc_out(fresh), **(await _creator_insight_status(user, {**profile, **profile_update}))}
 
     @influencer_router.get("")
     async def _list_inf(user: dict = Depends(get_current_user), q: Optional[str] = None, category: Optional[str] = None, limit: int = 50):
@@ -1401,8 +1471,11 @@ def register_handlers():
         await db.verification_requests.update_one({"_id": oid(rid)}, {"$set": update})
         # propagate to brand/influencer collection
         collection = db.brands if req["kind"] == "brand" else db.influencers
+        profile_update = {"verification_status": payload.decision, "updated_at": now_utc()}
+        if req["kind"] == "influencer" and payload.decision == "verified":
+            profile_update["last_insights_update_at"] = now
         await collection.update_one({"user_id": req["user_id"]},
-                                    {"$set": {"verification_status": payload.decision, "updated_at": now_utc()}})
+                                    {"$set": profile_update})
         if payload.decision == "in_progress" and payload.schedule_call_at:
             title = "WhatsApp verification call scheduled"
             body = f"Your WhatsApp video verification call is scheduled for {payload.schedule_call_at}."

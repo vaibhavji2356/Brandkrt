@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, UserCircle2, Megaphone, Wallet, Bell, LogOut, ChevronRight,
-  Handshake, MessageCircle, ScrollText, BarChart3, ShieldCheck,
+  Handshake, MessageCircle, ScrollText, BarChart3, ShieldCheck, RefreshCw,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -32,6 +32,7 @@ export default function InfluencerLayout() {
   const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -48,11 +49,14 @@ export default function InfluencerLayout() {
     if (!user || user.role !== "influencer") return undefined;
     let alive = true;
 
-    const loadAvatar = async () => {
+    const loadProfile = async () => {
       try {
         const { data } = await api.get("/influencers/me");
         const nextUrl = data?.influencer?.profile_photo_url || user.avatar_url || "";
-        if (alive) setAvatarUrl(nextUrl);
+        if (alive) {
+          setAvatarUrl(nextUrl);
+          setIsVerified(["approved", "verified"].includes(data?.influencer?.verification_status));
+        }
       } catch (_) {
         if (alive) setAvatarUrl(user.avatar_url || "");
       }
@@ -64,11 +68,15 @@ export default function InfluencerLayout() {
       }
     };
 
-    loadAvatar();
+    loadProfile();
+    const profileTimer = window.setInterval(loadProfile, 30000);
     window.addEventListener("brandkrt:profile-image-updated", onAvatarUpdated);
+    window.addEventListener("focus", loadProfile);
     return () => {
       alive = false;
+      window.clearInterval(profileTimer);
       window.removeEventListener("brandkrt:profile-image-updated", onAvatarUpdated);
+      window.removeEventListener("focus", loadProfile);
     };
   }, [user]);
 
@@ -82,6 +90,11 @@ export default function InfluencerLayout() {
 
   const initials = (user?.name || user?.email || "U").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const headerAvatar = avatarUrl || user?.avatar_url || "";
+  const navItems = NAV.map((item) => (
+    item.to === "/influencer/verification" && isVerified
+      ? { to: "/influencer/insights", icon: RefreshCw, label: "Monthly Insights" }
+      : item
+  ));
 
   return (
     <div className="min-h-screen flex bg-muted/20" data-testid="influencer-layout">
@@ -91,7 +104,7 @@ export default function InfluencerLayout() {
           <Logo />
         </div>
         <nav className="flex-1 p-4 space-y-1.5">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -154,7 +167,7 @@ export default function InfluencerLayout() {
                   <span className="text-xs text-muted-foreground">{user.email}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {NAV.map((item) => (
+                {navItems.map((item) => (
                   <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} data-testid={`influencer-mobile-menu-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
                     <item.icon className="mr-2 h-4 w-4" /> {item.label}
                   </DropdownMenuItem>

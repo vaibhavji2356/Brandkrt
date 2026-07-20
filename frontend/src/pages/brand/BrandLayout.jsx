@@ -33,6 +33,7 @@ export default function BrandLayout() {
   const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [isVerified, setIsVerified] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -49,11 +50,14 @@ export default function BrandLayout() {
     if (!user || user.role !== "brand") return undefined;
     let alive = true;
 
-    const loadAvatar = async () => {
+    const loadProfile = async () => {
       try {
         const { data } = await api.get("/brands/me");
         const nextUrl = data?.brand?.logo_url || user.avatar_url || "";
-        if (alive) setAvatarUrl(nextUrl);
+        if (alive) {
+          setAvatarUrl(nextUrl);
+          setIsVerified(["approved", "verified"].includes(data?.brand?.verification_status));
+        }
       } catch (_) {
         if (alive) setAvatarUrl(user.avatar_url || "");
       }
@@ -65,11 +69,15 @@ export default function BrandLayout() {
       }
     };
 
-    loadAvatar();
+    loadProfile();
+    const profileTimer = window.setInterval(loadProfile, 30000);
     window.addEventListener("brandkrt:profile-image-updated", onAvatarUpdated);
+    window.addEventListener("focus", loadProfile);
     return () => {
       alive = false;
+      window.clearInterval(profileTimer);
       window.removeEventListener("brandkrt:profile-image-updated", onAvatarUpdated);
+      window.removeEventListener("focus", loadProfile);
     };
   }, [user]);
 
@@ -83,6 +91,7 @@ export default function BrandLayout() {
 
   const initials = (user?.name || user?.email || "U").split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase();
   const headerAvatar = avatarUrl || user?.avatar_url || "";
+  const navItems = isVerified ? NAV.filter((item) => item.to !== "/brand/verification") : NAV;
 
   return (
     <div className="min-h-screen flex bg-muted/20" data-testid="brand-layout">
@@ -91,7 +100,7 @@ export default function BrandLayout() {
           <Logo />
         </div>
         <nav className="flex-1 p-4 space-y-1.5">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -153,7 +162,7 @@ export default function BrandLayout() {
                   <span className="text-xs text-muted-foreground">{user.email}</span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {NAV.map((item) => (
+                {navItems.map((item) => (
                   <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)} data-testid={`brand-mobile-menu-${item.label.toLowerCase().replace(/\s+/g, "-")}`}>
                     <item.icon className="mr-2 h-4 w-4" /> {item.label}
                   </DropdownMenuItem>

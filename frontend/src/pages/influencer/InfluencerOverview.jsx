@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Megaphone, CheckCircle2, Wallet, BadgeCheck, ArrowRight, Sparkles, Clock, Loader2,
 } from "lucide-react";
@@ -176,6 +176,9 @@ export default function InfluencerOverview({ verificationOnly = false }) {
   if (loading) {
     return <div className="text-muted-foreground">Loading…</div>;
   }
+  if (verificationOnly && verificationStatus === "verified") {
+    return <Navigate to="/influencer/insights" replace />;
+  }
 
   const recentDeals = deals.slice(0, 5);
   const recentNotifs = notifications.slice(0, 5);
@@ -267,6 +270,7 @@ export default function InfluencerOverview({ verificationOnly = false }) {
         </div>
       </div>
 
+      {verificationStatus !== "verified" && (
       <div className="rounded-2xl border border-border bg-card p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4" data-testid="overview-verification-card">
         <div className="flex items-start gap-3">
           <BadgeCheck className="h-5 w-5 text-secondary mt-0.5" />
@@ -304,6 +308,7 @@ export default function InfluencerOverview({ verificationOnly = false }) {
           </button>
         )}
       </div>
+      )}
 
       <Dialog open={verificationOpen} onOpenChange={setVerificationOpen}>
         <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-xl overflow-y-auto sm:max-h-[90vh]" data-testid="verification-dialog">

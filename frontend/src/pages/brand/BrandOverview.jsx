@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Megaphone, CheckCircle2, ShieldCheck, Wallet, Clock, ArrowRight,
   Calendar, Activity, Sparkles, BadgeCheck, Loader2,
@@ -194,6 +194,7 @@ export default function BrandOverview({ verificationOnly = false }) {
   };
 
   if (loading) return <div className="text-muted-foreground">Loading…</div>;
+  if (verificationOnly && verificationStatus === "verified") return <Navigate to="/brand" replace />;
 
   return (
     <div className="space-y-8" data-testid="brand-overview">
@@ -229,7 +230,7 @@ export default function BrandOverview({ verificationOnly = false }) {
         </div>
       )}
 
-      {brand && (
+      {brand && verificationStatus !== "verified" && (
         <div className="rounded-2xl border border-border bg-card p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4" data-testid="brand-verification-card">
           <div className="flex items-start gap-3">
             <BadgeCheck className="h-5 w-5 text-secondary mt-0.5" />

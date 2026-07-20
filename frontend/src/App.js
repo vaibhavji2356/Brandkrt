@@ -31,6 +31,7 @@ import InfluencerProfile from "@/pages/influencer/InfluencerProfile";
 import InfluencerCampaigns from "@/pages/influencer/InfluencerCampaigns";
 import InfluencerEarnings from "@/pages/influencer/InfluencerEarnings";
 import InfluencerNotifications from "@/pages/influencer/InfluencerNotifications";
+import CreatorInsights from "@/pages/influencer/CreatorInsights";
 import DashboardRedirect from "@/pages/influencer/DashboardRedirect";
 
 import BrandLayout from "@/pages/brand/BrandLayout";
@@ -100,6 +101,7 @@ export default function App() {
                 <Route index element={<InfluencerOverview />} />
                 <Route path="profile" element={<InfluencerProfile />} />
                 <Route path="verification" element={<InfluencerOverview verificationOnly />} />
+                <Route path="insights" element={<CreatorInsights />} />
                 <Route path="campaigns" element={<InfluencerCampaigns />} />
                 <Route path="deals/:id" element={<DealDetails />} />
                 <Route path="earnings" element={<InfluencerEarnings />} />
