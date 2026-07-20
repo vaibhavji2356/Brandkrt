@@ -27,7 +27,7 @@ function StatCard({ icon: Icon, label, value, hint, testId }) {
 const ACTIVE_STATUSES = new Set(["offer_sent", "offer_accepted", "product_shipped", "promotion_pending", "promotion_live"]);
 const MAX_VERIFICATION_FILES = 4;
 
-export default function InfluencerOverview() {
+export default function InfluencerOverview({ verificationOnly = false }) {
   const { user } = useAuth();
   const [deals, setDeals] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -53,8 +53,13 @@ export default function InfluencerOverview() {
       setDeals(d.data.deals || []);
       setPayments(p.data.payments || []);
       setNotifications(n.data.notifications || []);
-      setInfluencer(me.data.influencer || null);
+      const savedInfluencer = me.data.influencer || null;
+      setInfluencer(savedInfluencer);
       setVerificationRequests(v.data.requests || []);
+      setVerificationContact((current) => ({
+        name: current.name || savedInfluencer?.username || user?.name || "",
+        phone: current.phone || savedInfluencer?.phone || user?.phone || "",
+      }));
     } catch (err) {
       if (!quiet) toast.error(formatApiError(err));
     } finally {
@@ -101,6 +106,10 @@ export default function InfluencerOverview() {
   const hasPendingVerification = verificationStatus === "pending";
   const isVerificationInProgress = verificationStatus === "in_progress";
   const callTime = latestVerification?.schedule_call_at;
+
+  useEffect(() => {
+    if (verificationOnly && !loading && verificationStatus === "not_started") setVerificationOpen(true);
+  }, [verificationOnly, loading, verificationStatus]);
 
   const submitVerification = async () => {
     if (!profileReady) {

@@ -17,7 +17,7 @@ const TOPICS = [
 
 const FAQS = [
   { q: "How do I become a verified creator?", a: "Sign up as a creator, complete your profile, submit ID and social-handle verification. Our team reviews within 48 hours." },
-  { q: "How do brands pay creators?", a: "Brands fund the deal into BrandKrt escrow. Once deliverables are approved, the funds are released minus a flat 8% platform fee." },
+  { q: "How do brands pay creators?", a: "Brands fund the deal into BrandKrt escrow. Once deliverables are approved, the funds are released minus a flat 10% platform fee." },
   { q: "Can I cancel a campaign?", a: "Yes, until the offer is accepted. After acceptance, cancellations follow the dispute flow described in our Refund Policy." },
   { q: "Do you support international payouts?", a: "Yes — 40+ countries with local payout methods. Multi-currency support is available on Growth and Enterprise plans." },
 ];

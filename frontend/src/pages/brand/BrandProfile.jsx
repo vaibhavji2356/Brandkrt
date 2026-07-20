@@ -5,6 +5,7 @@ import api, { formatApiError } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const INDUSTRIES = [
   "Restaurant / Café", "Salon / Spa", "Gym / Fitness", "Clothing / Apparel", "Beauty / Cosmetics",
@@ -56,10 +57,11 @@ const hydrateBrand = (brand = {}) => ({
 
 export default function BrandProfile() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [verified, setVerified] = useState("pending");
+  const [verified, setVerified] = useState("not_started");
   const [categoryDraft, setCategoryDraft] = useState("");
 
   const logoRef = useRef(null);
@@ -78,7 +80,7 @@ export default function BrandProfile() {
         const brand = data?.brand;
         if (brand) {
           setForm(hydrateBrand(brand));
-          setVerified(brand.verification_status || "pending");
+          setVerified(brand.verification_status || "not_started");
         } else if (user?.name) {
           set("company_name", user.name);
         }
@@ -170,6 +172,7 @@ export default function BrandProfile() {
       setForm(hydrateBrand(updatedBrand));
       setVerified(updatedBrand.verification_status || verified);
       toast.success("Business profile saved.");
+      navigate("/brand/verification", { replace: true });
     } catch (err) { toast.error(formatApiError(err)); }
     finally { setSaving(false); }
   };
@@ -235,7 +238,7 @@ export default function BrandProfile() {
                   verified === "approved" ? "bg-success/10 text-success" :
                   verified === "rejected" ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"
                 }`}>
-                  <BadgeCheck className="h-3 w-3" /> {verified}
+                  <BadgeCheck className="h-3 w-3" /> {verified === "not_started" ? "Not verified" : verified.replace(/_/g, " ")}
                 </span>
               </div>
               <p className="text-sm text-muted-foreground mt-1 truncate">{user?.email}</p>
@@ -353,7 +356,7 @@ export default function BrandProfile() {
         </div>
       </Section>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sticky bottom-0 z-20 rounded-2xl border border-border bg-background/95 p-4 shadow-lg backdrop-blur">
         <p className="text-xs text-muted-foreground sm:mr-auto">Changes are saved to your business profile.</p>
         <button
           type="submit"
@@ -361,7 +364,7 @@ export default function BrandProfile() {
           data-testid="brand-profile-save"
           className="inline-flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 text-sm font-semibold disabled:opacity-60"
         >
-          {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><Save className="h-4 w-4" /> Save profile</>}
+          {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><Save className="h-4 w-4" /> Save &amp; continue to verification</>}
         </button>
       </div>
     </form>

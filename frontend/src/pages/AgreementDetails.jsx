@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StatusChip } from "@/components/State";
 import { useAuth } from "@/context/AuthContext";
+import UserAvatar from "@/components/UserAvatar";
 
 const RAZORPAY_CHECKOUT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
 
@@ -43,8 +44,8 @@ export default function AgreementDetails() {
   const [signatureName, setSignatureName] = useState("");
   const [payment, setPayment] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
     try {
       const [{ data }, paymentsResult] = await Promise.all([
         api.get(`/agreements/${id}`),
@@ -56,14 +57,19 @@ export default function AgreementDetails() {
       const found = (paymentsResult.data.payments || []).find((p) => p.agreement_id === id) || null;
       setPayment(found);
     } catch (err) {
-      toast.error(formatApiError(err));
-      navigate(-1);
+      if (!quiet) { toast.error(formatApiError(err)); navigate(-1); }
     }
-    setLoading(false);
+    if (!quiet) setLoading(false);
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    load();
+    const timer = setInterval(() => load({ quiet: true }), 8000);
+    const refresh = () => load({ quiet: true });
+    window.addEventListener("focus", refresh);
+    return () => { clearInterval(timer); window.removeEventListener("focus", refresh); };
+  }, [id]);
 
   const isInfluencer = doc && user?.id === doc.influencer_user_id;
   const isBrand = doc && user?.id === doc.brand_user_id;
@@ -226,8 +232,8 @@ export default function AgreementDetails() {
 
           {/* Parties */}
           <div className="p-6 grid gap-6 md:grid-cols-2">
-            <PartyCard role="Brand" name={doc.brand_name} signedAt={doc.brand_signed_at} signedBy={doc.brand_signature_name} />
-            <PartyCard role="Influencer" name={doc.influencer_name} signedAt={doc.influencer_signed_at} signedBy={doc.influencer_signature_name} />
+            <PartyCard role="Brand" name={doc.brand_name} avatar={doc.brand_avatar_url} signedAt={doc.brand_signed_at} signedBy={doc.brand_signature_name} />
+            <PartyCard role="Influencer" name={doc.influencer_name} avatar={doc.influencer_avatar_url} signedAt={doc.influencer_signed_at} signedBy={doc.influencer_signature_name} />
           </div>
 
           {/* Body */}
@@ -444,15 +450,19 @@ function AgreementFlow({ doc, payment, isBrand, busy, onFund, onOpenChat }) {
   );
 }
 
-function PartyCard({ role, name, signedAt, signedBy }) {
+function PartyCard({ role, name, avatar, signedAt, signedBy }) {
+  const initials = (name || role).split(" ").map((part) => part[0]).join("").slice(0, 2);
   return (
-    <div className="rounded-xl border border-border bg-background p-4">
+    <div className="rounded-xl border border-border bg-background p-4 flex gap-3">
+      <UserAvatar src={avatar} initials={initials} className="h-11 w-11 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1">
       <div className="text-[10px] uppercase tracking-[0.18em] text-secondary">{role}</div>
       <div className="text-lg font-semibold text-primary dark:text-white truncate">{name}</div>
       <div className="mt-2 text-xs text-muted-foreground">
         {signedAt
           ? <>Signed by <span className="font-semibold text-primary dark:text-white">{signedBy || name}</span> on {new Date(signedAt).toLocaleString()}</>
           : "Awaiting signature"}
+      </div>
       </div>
     </div>
   );

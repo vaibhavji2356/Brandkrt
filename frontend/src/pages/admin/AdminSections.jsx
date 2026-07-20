@@ -101,7 +101,7 @@ export function AdminUsers() {
       <div className="rounded-2xl border border-border overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-accent dark:bg-card text-left">
-            <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Verified</th><th className="px-4 py-3">Created</th></tr>
+            <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Role</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Profile verification</th><th className="px-4 py-3">Created</th></tr>
           </thead>
           <tbody>
             {rows.map((u) => (
@@ -110,7 +110,7 @@ export function AdminUsers() {
                 <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                 <td className="px-4 py-3 capitalize">{u.role}</td>
                 <td className="px-4 py-3"><StatusChip value={u.status || "active"} /></td>
-                <td className="px-4 py-3">{u.email_verified ? "Yes" : "No"}</td>
+                <td className="px-4 py-3"><StatusChip value={u.verification_status || "not_started"} /></td>
                 <td className="px-4 py-3 text-muted-foreground">{(u.created_at || "").slice(0, 10)}</td>
               </tr>
             ))}
@@ -158,7 +158,7 @@ export function AdminUsers() {
                   <div className="text-sm font-semibold text-primary dark:text-white">Profile details</div>
                   {profile ? (
                     <dl className="mt-3 space-y-2 text-sm">
-                      {Object.entries(profile).filter(([key]) => !["_id", "id", "user_id", "created_at", "updated_at"].includes(key)).slice(0, 12).map(([key, value]) => (
+                      {Object.entries(profile).filter(([key]) => !["_id", "id", "user_id", "created_at", "updated_at"].includes(key)).map(([key, value]) => (
                         <InfoRow key={key} label={key.replaceAll("_", " ")} value={typeof value === "object" ? JSON.stringify(value) : value} />
                       ))}
                     </dl>

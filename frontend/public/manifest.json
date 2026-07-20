@@ -2,8 +2,6 @@
   "short_name": "BrandKrt",
   "name": "BrandKrt — Connecting Brands With Creators",
   "icons": [
-    { "src": "/assets/brandkrt-search-icon-48.png", "type": "image/png", "sizes": "48x48", "purpose": "any" },
-    { "src": "/assets/brandkrt-search-icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
     { "src": "/assets/brandkrt-icon-16.png", "type": "image/png", "sizes": "16x16", "purpose": "any" },
     { "src": "/assets/brandkrt-icon-32.png", "type": "image/png", "sizes": "32x32", "purpose": "any" },
     { "src": "/favicon-48x48.png", "type": "image/png", "sizes": "48x48", "purpose": "any" },

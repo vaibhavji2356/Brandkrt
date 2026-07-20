@@ -1,6 +1,7 @@
 import React from "react";
 import { Search, Inbox } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import UserAvatar from "@/components/UserAvatar";
 
 function formatTime(iso) {
   if (!iso) return "";
@@ -65,11 +66,7 @@ export default function ConversationList({
                   isActive ? "bg-accent" : "hover:bg-accent/60"
                 }`}
               >
-                <div className="h-10 w-10 shrink-0 rounded-full bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center">
-                  {peer?.avatar_url ? (
-                    <img src={peer.avatar_url} alt={name} className="h-full w-full rounded-full object-cover" />
-                  ) : initials}
-                </div>
+                <UserAvatar src={peer?.avatar_url} initials={initials} className="h-10 w-10 shrink-0 rounded-full text-sm font-semibold" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-semibold text-primary dark:text-white truncate">{name}</div>

@@ -37,7 +37,7 @@ export function Terms() {
       <h3 className="text-lg font-medium text-primary dark:text-white">Account</h3>
       <p>You must be 18+ and provide accurate information. You're responsible for keeping credentials secure.</p>
       <h3 className="text-lg font-medium text-primary dark:text-white">Fees</h3>
-      <p>BrandKrt charges a flat 8% platform fee on processed transactions plus applicable taxes. Subscription plans are billed monthly or annually.</p>
+      <p>BrandKrt charges a flat 10% platform fee on processed transactions plus applicable taxes. Subscription plans are billed monthly or annually.</p>
       <h3 className="text-lg font-medium text-primary dark:text-white">Prohibited use</h3>
       <p>No misrepresentation, no automated engagement, no off-platform circumvention of payments. Violations may result in suspension.</p>
     </LegalShell>

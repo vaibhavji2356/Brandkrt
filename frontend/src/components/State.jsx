@@ -36,6 +36,7 @@ export function SuccessState({ title, description, action, testId = "success-sta
 
 const STATUS_STYLES = {
   active: "bg-success/10 text-success",
+  not_started: "bg-muted text-muted-foreground",
   pending: "bg-warning/10 text-warning",
   in_progress: "bg-secondary/15 text-secondary",
   approved: "bg-success/10 text-success",
@@ -67,7 +68,7 @@ export function StatusChip({ value, className = "" }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${cls} ${className}`} data-testid={`status-chip-${value}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-      {(value || "").replace(/_/g, " ")}
+      {(value || "").toLowerCase() === "not_started" ? "Not verified" : (value || "").replace(/_/g, " ")}
     </span>
   );
 }

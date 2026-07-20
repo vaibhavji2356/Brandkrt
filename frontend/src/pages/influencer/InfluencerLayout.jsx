@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, UserCircle2, Megaphone, Wallet, Bell, LogOut, ChevronRight,
-  Handshake, MessageCircle, ScrollText, BarChart3,
+  Handshake, MessageCircle, ScrollText, BarChart3, ShieldCheck,
 } from "lucide-react";
 import Logo from "@/components/Logo";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -18,6 +18,7 @@ import {
 const NAV = [
   { to: "/influencer", end: true, icon: LayoutDashboard, label: "Overview" },
   { to: "/influencer/profile", icon: UserCircle2, label: "Profile Builder" },
+  { to: "/influencer/verification", icon: ShieldCheck, label: "Verification" },
   { to: "/influencer/campaigns", icon: Megaphone, label: "Campaigns" },
   { to: "/influencer/collaborations", icon: Handshake, label: "Collaborations" },
   { to: "/influencer/messages", icon: MessageCircle, label: "Messages" },

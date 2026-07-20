@@ -12,6 +12,7 @@ import api, { formatApiError } from "@/lib/api";
 import { EmptyState } from "@/components/State";
 import StarRating from "@/components/StarRating";
 import ReviewList from "@/components/ReviewList";
+import UserAvatar from "@/components/UserAvatar";
 
 const NAVY = "#0A1F44";
 const GOLD = "#D4AF37";
@@ -244,13 +245,7 @@ export default function BrandPerformance() {
           <div className="mt-4 divide-y divide-border">
             {topCreators.slice(0, 8).map((c, i) => (
               <div key={c.influencer_id} className="py-3 flex items-center gap-3" data-testid={`bp-top-creator-${c.influencer_id}`}>
-                <div className="h-9 w-9 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center justify-center">
-                  {c.profile_photo_url ? (
-                    <img src={c.profile_photo_url} alt={c.username} className="h-full w-full rounded-full object-cover" />
-                  ) : (
-                    `#${i + 1}`
-                  )}
-                </div>
+                <UserAvatar src={c.profile_photo_url} initials={`#${i + 1}`} className="h-9 w-9 shrink-0 rounded-full text-xs font-semibold" />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold text-primary dark:text-white truncate">{c.username}</div>
                   <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1">

@@ -29,14 +29,16 @@ export default function InfluencerCampaigns() {
   const navigate = useNavigate();
   const [deals, setDeals] = useState([]);
   const [campaigns, setCampaigns] = useState({}); // id -> campaign
+  const [publicCampaigns, setPublicCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
 
   const load = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/deals");
+      const [{ data }, publicResult] = await Promise.all([api.get("/deals"), api.get("/campaigns", { params: { status: "active" } })]);
       const list = data.deals || [];
+      setPublicCampaigns(publicResult.data.campaigns || []);
       setDeals(list);
       const ids = Array.from(new Set(list.map((d) => d.campaign_id).filter(Boolean)));
       const fetched = {};
@@ -133,6 +135,27 @@ export default function InfluencerCampaigns() {
           );
         })}
       </div>
+
+      {publicCampaigns.length > 0 && (
+        <section className="space-y-4" data-testid="public-campaigns">
+          <div>
+            <h3 className="text-xl font-display text-primary dark:text-white">Public campaigns</h3>
+            <p className="text-sm text-muted-foreground">Active opportunities published by verified brands.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {publicCampaigns.map((campaign) => (
+              <div key={campaign.id} className="rounded-2xl border border-border bg-card p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <h4 className="font-semibold text-primary dark:text-white">{campaign.title}</h4>
+                  <StatusChip value={campaign.status} />
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground line-clamp-3">{campaign.description || campaign.product_details || "Open campaign opportunity"}</p>
+                <div className="mt-3 text-xs text-muted-foreground capitalize">{campaign.platform || "Platform"} · ₹{Number(campaign.budget || 0).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

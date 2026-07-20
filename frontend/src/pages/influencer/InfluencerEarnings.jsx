@@ -32,14 +32,24 @@ export default function InfluencerEarnings() {
   const load = async () => {
     setLoading(true);
     try {
-      const [d, p, w] = await Promise.all([
+      const [d, p, w, profileResult] = await Promise.all([
         api.get("/deals"),
         api.get("/payments"),
         api.get("/withdrawals/mine"),
+        api.get("/influencers/me"),
       ]);
       setDeals(d.data.deals || []);
       setPayments(p.data.payments || []);
       setWithdrawals(w.data.requests || []);
+      const profile = profileResult.data.influencer || {};
+      setWd((current) => ({
+        ...current,
+        upi: current.upi || profile.upi || "",
+        account_name: current.account_name || profile.bank_details?.account_name || "",
+        account_number: current.account_number || profile.bank_details?.account_number || "",
+        ifsc: current.ifsc || profile.bank_details?.ifsc || "",
+        bank_name: current.bank_name || profile.bank_details?.bank_name || "",
+      }));
     } catch (err) {
       toast.error(formatApiError(err));
     }
@@ -121,21 +131,10 @@ export default function InfluencerEarnings() {
           </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Method</label>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {["upi", "bank"].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setWd({ ...wd, method: m })}
-                  data-testid={`wd-method-${m}`}
-                  className={`rounded-full border px-3 py-2 text-xs font-semibold capitalize ${
-                    wd.method === m ? "border-secondary bg-accent text-secondary" : "border-border hover:bg-accent"
-                  }`}
-                >
-                  {m === "upi" ? "UPI" : "Bank transfer"}
-                </button>
-              ))}
-            </div>
+            <select value={wd.method} onChange={(e) => setWd({ ...wd, method: e.target.value })} data-testid="wd-method" className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <option value="upi">Saved UPI ID{wd.upi ? ` · ${wd.upi}` : ""}</option>
+              <option value="bank">Saved bank account{wd.account_number ? ` · ••••${wd.account_number.slice(-4)}` : ""}</option>
+            </select>
           </div>
           {wd.method === "upi" ? (
             <div>

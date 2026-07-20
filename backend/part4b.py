@@ -12,7 +12,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, List, Literal
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from bson.binary import Binary
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, Field, ConfigDict
 
 # Wired by init()
@@ -143,7 +144,7 @@ class AgreementIn(BaseModel):
     deliverables: List[str] = []
     timeline: Optional[str] = None
     payment_amount: float = Field(ge=0)
-    platform_fee_pct: float = 8.0
+    platform_fee_pct: float = 10.0
     cancellation_policy: Optional[str] = None
     terms: Optional[str] = None
 
@@ -288,6 +289,9 @@ def register_handlers():
     async def _conversation_lock_reason(conv: dict) -> Optional[str]:
         if conv.get("context_type") != "agreement" or not conv.get("context_id"):
             return None
+        agreement = await db.agreements.find_one({"_id": oid(conv["context_id"])}, {"status": 1})
+        if agreement and agreement.get("status") == "completed":
+            return "This campaign is complete, so messaging is now read-only."
         payment = await _agreement_escrow_payment(conv["context_id"])
         if payment:
             return None
@@ -534,22 +538,37 @@ def register_handlers():
                 others.append(t["user_id"])
         return {"typing": others}
 
-    # ---- chat attachments upload (uses same /uploads static mount) ----
-    CHAT_UPLOAD_ROOT = os.environ.get("UPLOAD_ROOT", "./uploads")
-    os.makedirs(os.path.join(CHAT_UPLOAD_ROOT, "chat"), exist_ok=True)
-
     @chat_router.post("/upload")
-    async def _chat_upload(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    async def _chat_upload(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
         filename = (file.filename or "").strip() or "file"
         data = await file.read()
+        max_bytes = int(os.environ.get("MONGO_UPLOAD_MAX_MB", "8")) * 1024 * 1024
+        if len(data) > max_bytes:
+            raise HTTPException(status_code=413, detail=f"File exceeds {max_bytes // (1024 * 1024)}MB limit")
+        content_type = file.content_type or "application/octet-stream"
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        image_exts = {"jpg", "jpeg", "png", "webp", "gif", "avif", "svg"}
+        kind = "image" if content_type.startswith("image/") or ext in image_exts else "file"
+        now = now_utc()
         try:
-            import storage  # noqa: WPS433
-            res = await storage.save_upload(file_bytes=data, original_name=filename, folder="chat")
-        except HTTPException:
-            raise
+            inserted = await db.uploads.insert_one({
+                "owner_id": str(user["_id"]), "folder": "chat", "filename": filename,
+                "content_type": content_type, "kind": kind, "size": len(data),
+                "data": Binary(data), "created_at": now, "updated_at": now,
+            })
         except Exception as e:
             raise HTTPException(500, f"Upload failed: {e}")
-        return {"url": res["url"], "name": filename, "kind": res.get("kind", "file"), "size": res.get("size", len(data)), "provider": res.get("provider")}
+        configured = os.environ.get("PUBLIC_BACKEND_URL") or os.environ.get("BACKEND_URL") or os.environ.get("API_BASE_URL")
+        if configured:
+            origin = configured.strip().rstrip("/")
+            if origin.endswith("/api"):
+                origin = origin[:-4]
+        else:
+            proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+            host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+            origin = f"{proto}://{host}".rstrip("/")
+        return {"url": f"{origin}/api/uploads/{inserted.inserted_id}", "name": filename,
+                "kind": kind, "size": len(data), "provider": "mongodb"}
 
     # =========================================================
     # AGREEMENTS (Digital Contracts)
@@ -629,7 +648,12 @@ def register_handlers():
             raise HTTPException(404, "Agreement not found")
         if uid not in (doc.get("brand_user_id"), doc.get("influencer_user_id")) and user.get("role") != "admin":
             raise HTTPException(403, "Forbidden")
-        return {"agreement": doc_out(doc)}
+        out = doc_out(doc)
+        brand_user = await db.users.find_one({"_id": oid(doc["brand_user_id"])}, {"avatar_url": 1})
+        influencer_user = await db.users.find_one({"_id": oid(doc["influencer_user_id"])}, {"avatar_url": 1})
+        out["brand_avatar_url"] = (brand_user or {}).get("avatar_url")
+        out["influencer_avatar_url"] = (influencer_user or {}).get("avatar_url")
+        return {"agreement": out}
 
     @agreement_router.post("/{aid}/accept")
     async def _accept_agreement(aid: str, payload: AgreementSignIn, user: dict = Depends(get_current_user)):
@@ -703,7 +727,7 @@ def register_handlers():
             raise HTTPException(400, "Agreement amount must be greater than zero")
 
         now = now_utc()
-        platform_fee = float(agreement.get("platform_fee") or round(amount * 0.08, 2))
+        platform_fee = float(agreement.get("platform_fee") or round(amount * 0.10, 2))
         influencer_earning = float(agreement.get("net_to_influencer") or round(amount - platform_fee, 2))
         try:
             import payments as _payments  # noqa: WPS433

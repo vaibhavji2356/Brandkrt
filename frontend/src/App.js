@@ -100,6 +100,7 @@ export default function App() {
               <Route path="/influencer" element={<ProtectedRoute><InfluencerLayout /></ProtectedRoute>}>
                 <Route index element={<InfluencerOverview />} />
                 <Route path="profile" element={<InfluencerProfile />} />
+                <Route path="verification" element={<InfluencerOverview verificationOnly />} />
                 <Route path="campaigns" element={<InfluencerCampaigns />} />
                 <Route path="deals/:id" element={<DealDetails />} />
                 <Route path="earnings" element={<InfluencerEarnings />} />
@@ -113,6 +114,7 @@ export default function App() {
               <Route path="/brand" element={<ProtectedRoute><BrandLayout /></ProtectedRoute>}>
                 <Route index element={<BrandOverview />} />
                 <Route path="profile" element={<BrandProfile />} />
+                <Route path="verification" element={<BrandOverview verificationOnly />} />
                 <Route path="campaigns" element={<BrandCampaigns />} />
                 <Route path="campaigns/:id" element={<BrandCampaignDetails />} />
                 <Route path="deals/:id" element={<DealDetails />} />
@@ -121,6 +123,7 @@ export default function App() {
                 <Route path="analytics" element={<BrandAnalytics />} />
                 <Route path="agreements" element={<BrandAgreements />} />
                 <Route path="messages" element={<Messages />} />
+                <Route path="notifications" element={<InfluencerNotifications />} />
                 <Route path="performance" element={<BrandPerformance />} />
               </Route>
 

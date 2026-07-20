@@ -39,7 +39,7 @@ function daysUntil(iso) {
   return Math.ceil((t - Date.now()) / (1000 * 60 * 60 * 24));
 }
 
-export default function BrandOverview() {
+export default function BrandOverview({ verificationOnly = false }) {
   const { user } = useAuth();
   const [brand, setBrand] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
@@ -64,12 +64,17 @@ export default function BrandOverview() {
         api.get("/notifications"),
         api.get("/verification/mine"),
       ]);
-      setBrand(b.data?.brand || null);
+      const savedBrand = b.data?.brand || null;
+      setBrand(savedBrand);
       setCampaigns(c.data.campaigns || []);
       setDeals(d.data.deals || []);
       setPayments(p.data.payments || []);
       setNotifications(n.data.notifications || []);
       setVerificationRequests(v.data.requests || []);
+      setVerificationContact((current) => ({
+        name: current.name || savedBrand?.owner_name || user?.name || "",
+        phone: current.phone || savedBrand?.phone || user?.phone || "",
+      }));
     } catch (err) {
       if (!quiet) toast.error(formatApiError(err));
     } finally {
@@ -122,6 +127,10 @@ export default function BrandOverview() {
   const hasPendingVerification = verificationStatus === "pending";
   const isVerificationInProgress = verificationStatus === "in_progress";
   const callTime = latestVerification?.schedule_call_at;
+
+  useEffect(() => {
+    if (verificationOnly && !loading && verificationStatus === "not_started") setVerificationOpen(true);
+  }, [verificationOnly, loading, verificationStatus]);
 
   const submitVerification = async () => {
     if (!brand) {

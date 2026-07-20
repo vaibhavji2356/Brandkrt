@@ -126,7 +126,7 @@ function NewAgreementModal({ onClose, onCreated }) {
     deliverables_text: "",
     timeline: "",
     payment_amount: "",
-    platform_fee_pct: "8",
+    platform_fee_pct: "10",
     cancellation_policy: "",
     terms: "",
   });
@@ -189,7 +189,7 @@ function NewAgreementModal({ onClose, onCreated }) {
         deliverables: form.deliverables_text.split("\n").map((s) => s.trim()).filter(Boolean),
         timeline: form.timeline || null,
         payment_amount: Number(form.payment_amount),
-        platform_fee_pct: Number(form.platform_fee_pct || 8),
+        platform_fee_pct: Number(form.platform_fee_pct || 10),
         cancellation_policy: form.cancellation_policy || null,
         terms: form.terms || null,
       };

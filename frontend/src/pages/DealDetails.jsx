@@ -113,18 +113,19 @@ export default function DealDetails() {
   const [deal, setDeal] = useState(null);
   const [campaign, setCampaign] = useState(null);
   const [payment, setPayment] = useState(null);
+  const [agreement, setAgreement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
   // deliverable form state (influencer edits, brand reads)
-  const [links, setLinks] = useState({ instagram_reel: "", youtube_video: "", facebook_post: "", instagram_story: "", screenshot_url: "", notes: "" });
+  const [links, setLinks] = useState({ draft_url: "", instagram_reel: "", youtube_video: "", facebook_post: "", instagram_story: "", screenshot_url: "", notes: "" });
   const [savingLinks, setSavingLinks] = useState(false);
   const [actionNote, setActionNote] = useState("");
   const screenshotRef = useRef(null);
   const [uploadingShot, setUploadingShot] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async ({ quiet = false } = {}) => {
+    if (!quiet) setLoading(true);
     try {
       const [d, p, a] = await Promise.all([
         api.get("/deals"),
@@ -139,6 +140,7 @@ export default function DealDetails() {
       }
       setDeal(found);
       setLinks({
+        draft_url:         found.deliverables_links?.draft_url || "",
         instagram_reel:   found.deliverables_links?.instagram_reel || "",
         youtube_video:    found.deliverables_links?.youtube_video || "",
         facebook_post:    found.deliverables_links?.facebook_post || "",
@@ -153,6 +155,7 @@ export default function DealDetails() {
       ) || (
         Number(ag.payment_amount || 0) === Number(found.amount || 0) && !ag.campaign_id
       ));
+      setAgreement(linkedAgreement || null);
       const myPay = payments.find((pp) => pp.deal_id === id)
         || (found.escrow_payment_id ? payments.find((pp) => pp.id === found.escrow_payment_id) : null)
         || (linkedAgreement ? payments.find((pp) => pp.agreement_id === linkedAgreement.id) : null)
@@ -165,12 +168,19 @@ export default function DealDetails() {
         } catch (_) { /* no access */ }
       }
     } catch (err) {
-      toast.error(formatApiError(err));
+      if (!quiet) toast.error(formatApiError(err));
     }
-    setLoading(false);
+    if (!quiet) setLoading(false);
   };
 
-  useEffect(() => { load(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [id]);
+  useEffect(() => {
+    load();
+    const timer = setInterval(() => load({ quiet: true }), 8000);
+    const refresh = () => load({ quiet: true });
+    window.addEventListener("focus", refresh);
+    return () => { clearInterval(timer); window.removeEventListener("focus", refresh); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const isEscrowFunded = Boolean(payment && (
     payment.status === "escrowed"
@@ -193,9 +203,19 @@ export default function DealDetails() {
       const payload = { status: to };
       if (actionNote.trim()) payload.note = actionNote.trim();
       if (to === "content_submitted" && isInfluencer) {
+        if (!links.draft_url?.trim()) throw new Error("Add a Google Drive or review link before submitting content.");
         payload.deliverables = Object.fromEntries(
           Object.entries(links).map(([k, v]) => [k, v?.trim() || null])
         );
+      }
+      if (to === "scheduled" && isInfluencer && !links.screenshot_url?.trim()) {
+        throw new Error("Upload the scheduling screenshot before marking the content scheduled.");
+      }
+      if (to === "published" && isInfluencer && !DELIVERABLE_FIELDS.some((field) => links[field.key]?.trim())) {
+        throw new Error("Add at least one live platform link before marking the content published.");
+      }
+      if (isInfluencer && ["scheduled", "published"].includes(to)) {
+        payload.deliverables = Object.fromEntries(Object.entries(links).map(([k, v]) => [k, v?.trim() || null]));
       }
       const { data } = await api.patch(`/deals/${id}/status`, payload);
       if (data.deal) setDeal(data.deal); else setDeal((d) => ({ ...d, status: to }));
@@ -323,6 +343,9 @@ export default function DealDetails() {
   const backTo = isBrand ? "/brand/campaigns" : "/influencer/campaigns";
   const canon = canonicalStatus(deal.status);
   const isClosed = canon === "completed" || canon === "cancelled";
+  const publicLinksUnlocked = ["approved", "scheduled", "published", "completed"].includes(canon);
+  const platformFee = Number(deal.amount || 0) * 0.10;
+  const creatorNet = Number(deal.amount || 0) - platformFee;
 
   return (
     <div className="space-y-8" data-testid="deal-details">
@@ -366,6 +389,14 @@ export default function DealDetails() {
           <Fact icon={Tag} label="Content type" value={campaign?.content_type || "—"} />
           <Fact icon={Globe2} label="Language" value={campaign?.preferred_language || "—"} />
         </div>
+        <div className="mt-4 rounded-xl border border-border bg-background p-4 text-sm">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <Fact icon={IndianRupee} label="Campaign amount" value={`₹${Number(deal.amount || 0).toLocaleString()}`} />
+            <Fact icon={Tag} label="BrandKrt fee (10%)" value={`₹${platformFee.toLocaleString()}`} />
+            <Fact icon={IndianRupee} label="Creator receives" value={`₹${creatorNet.toLocaleString()}`} />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">Payment is protected in escrow and released after the agreed work is completed.</p>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -382,6 +413,19 @@ export default function DealDetails() {
                 onAction={(action) => setStatus(action.to, action.confirm)}
               />
             </div>
+            {canon === "offer_accepted" && (
+              <div className="mt-5 rounded-xl border border-secondary/30 bg-secondary/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-primary dark:text-white">Next step: sign the agreement</div>
+                  <p className="text-xs text-muted-foreground">Agreement signing comes before shipping and escrow-funded work.</p>
+                </div>
+                {agreement ? (
+                  <Link to={`/agreements/${agreement.id}`} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">View / sign agreement</Link>
+                ) : isBrand ? (
+                  <button onClick={() => navigate("/brand/agreements")} className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Send agreement</button>
+                ) : <span className="text-sm font-semibold text-secondary">Waiting for brand to send agreement</span>}
+              </div>
+            )}
           </div>
 
           {/* Deliverables — influencer edit, brand read-only */}
@@ -403,6 +447,15 @@ export default function DealDetails() {
             </div>
 
             <div className="mt-4 grid sm:grid-cols-2 gap-3">
+              <DeliverableField
+                icon={ExternalLink}
+                label="Draft review link (Google Drive or similar)"
+                value={links.draft_url}
+                placeholder="https://drive.google.com/..."
+                editable={isInfluencer && ["content_in_progress", "content_submitted"].includes(canon)}
+                onChange={(v) => setLinks((l) => ({ ...l, draft_url: v }))}
+                testId="deliv-draft-url"
+              />
               {DELIVERABLE_FIELDS.map((f) => (
                 <DeliverableField
                   key={f.key}
@@ -410,11 +463,12 @@ export default function DealDetails() {
                   label={f.label}
                   value={links[f.key]}
                   placeholder={f.placeholder}
-                  editable={isInfluencer && !isClosed}
+                  editable={isInfluencer && !isClosed && publicLinksUnlocked}
                   onChange={(v) => setLinks((l) => ({ ...l, [f.key]: v }))}
                   testId={`deliv-${f.key}`}
                 />
               ))}
+              {!publicLinksUnlocked && <p className="sm:col-span-2 text-xs text-warning">Public post links unlock after the brand approves the draft.</p>}
 
               {/* Screenshot upload */}
               <div className="rounded-xl border border-border bg-background p-3 sm:col-span-2" data-testid="deliv-screenshot">
@@ -531,23 +585,37 @@ export default function DealDetails() {
             payment={payment}
             amount={deal.amount}
             role={role}
-            onFund={isBrand ? fundEscrow : undefined}
+            onFund={isBrand && agreement?.status === "accepted" ? fundEscrow : undefined}
             onRelease={undefined}
             busy={busy}
           />
 
           {/* Messaging hint */}
-          <div className={`rounded-2xl border ${payment ? "border-secondary/40 bg-accent" : "border-border bg-card"} p-5`} data-testid="messaging-hint">
+          <div className={`rounded-2xl border ${isEscrowFunded ? "border-secondary/40 bg-accent" : "border-border bg-card"} p-5`} data-testid="messaging-hint">
             <div className="flex items-center gap-2">
-              {payment ? <MessageCircle className="h-4 w-4 text-secondary" /> : <LockIcon className="h-4 w-4 text-muted-foreground" />}
+              {isEscrowFunded ? <MessageCircle className="h-4 w-4 text-secondary" /> : <LockIcon className="h-4 w-4 text-muted-foreground" />}
               <h3 className="text-sm font-semibold text-primary dark:text-white">In-app messaging</h3>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              {payment
-                ? "Escrow funded — you can now chat with the other party using the messaging APIs."
+              {isEscrowFunded
+                ? "Escrow funded — you can now chat with the other party."
                 : "Messaging unlocks the moment the brand funds escrow. This protects both sides."}
             </p>
+            {isEscrowFunded && agreement && canon !== "completed" && (
+              <Link to={`/agreements/${agreement.id}`} className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">
+                <MessageCircle className="h-3.5 w-3.5" /> Now you can chat — click to open
+              </Link>
+            )}
+            {canon === "completed" && <p className="mt-2 text-xs font-semibold text-warning">Campaign completed. Chat is now read-only.</p>}
           </div>
+
+          {canon === "completed" && isBrand && payment?.release_status !== "released" && (
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-5">
+              <h3 className="font-semibold text-primary dark:text-white">Final step: release escrow</h3>
+              <p className="mt-1 text-xs text-muted-foreground">The work is complete and the payout is queued for admin release. Track the full payment lifecycle in Escrow.</p>
+              <button onClick={() => navigate("/brand/campaigns")} className="mt-3 rounded-full bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground">View escrow status</button>
+            </div>
+          )}
 
           {/* Brief summary */}
           {campaign && (

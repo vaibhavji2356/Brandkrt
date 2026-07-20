@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { Bell, CheckCheck, Inbox } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
 import { EmptyState } from "@/components/State";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 const TABS = [
   { key: "all", label: "All" },
@@ -26,6 +28,8 @@ function timeAgo(iso) {
 }
 
 export default function InfluencerNotifications() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
@@ -68,6 +72,17 @@ export default function InfluencerNotifications() {
       load();
     }
     setBusy(false);
+  };
+
+  const openNotification = async (notification) => {
+    if (!notification.read) await markOne(notification.id);
+    const meta = notification.meta || {};
+    const base = user?.role === "brand" ? "/brand" : "/influencer";
+    if (meta.deal_id) navigate(`${base}/deals/${meta.deal_id}`);
+    else if (meta.agreement_id) navigate(`/agreements/${meta.agreement_id}`);
+    else if (meta.conversation_id) navigate(`${base}/messages?conversation_id=${meta.conversation_id}`);
+    else if (meta.campaign_id && user?.role === "brand") navigate(`/brand/campaigns/${meta.campaign_id}`);
+    else if (notification.type?.startsWith("verification.")) navigate(`${base}/verification`);
   };
 
   return (
@@ -117,6 +132,10 @@ export default function InfluencerNotifications() {
         {filtered.map((n) => (
           <div
             key={n.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => openNotification(n)}
+            onKeyDown={(e) => e.key === "Enter" && openNotification(n)}
             className={`rounded-2xl border p-5 flex items-start gap-4 transition-colors ${
               n.read ? "border-border bg-card" : "border-secondary/40 bg-accent"
             }`}
@@ -152,11 +171,11 @@ export default function InfluencerNotifications() {
                   )}
                 </div>
               )}
-              <p className="mt-2 text-xs text-muted-foreground">{timeAgo(n.created_at)}</p>
+              <p className="mt-2 text-xs text-muted-foreground">{timeAgo(n.created_at)}{n.created_at ? ` · ${new Date(n.created_at).toLocaleString()}` : ""}</p>
             </div>
             {!n.read && (
               <button
-                onClick={() => markOne(n.id)}
+                onClick={(e) => { e.stopPropagation(); markOne(n.id); }}
                 data-testid={`notif-mark-${n.id}`}
                 className="text-xs font-semibold text-secondary hover:underline whitespace-nowrap"
               >

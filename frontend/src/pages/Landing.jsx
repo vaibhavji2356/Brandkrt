@@ -263,7 +263,7 @@ function Pricing() {
           <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
             Affordable plans for every kind of business.
           </h2>
-          <p className="mt-5 text-lg text-muted-foreground">Flat 8% platform fee on campaign payouts - no agency markups, no hidden charges. Creators always sign up free.</p>
+          <p className="mt-5 text-lg text-muted-foreground">Flat 10% platform fee on campaign payouts - no agency markups, no hidden charges. Creators always sign up free.</p>
         </div>
         <div className="mt-16 grid gap-6 lg:grid-cols-3">
           {PLANS.map((p) => (
@@ -309,7 +309,7 @@ function Pricing() {
 /* ---------- FAQ ---------- */
 const FAQS = [
   { q: "Who is BrandKrt for?", a: "Any business that wants reach without the agency cost - restaurants, cafes, salons, gyms, coaching institutes, clothing stores, local shops, D2C brands and home businesses - and any creator: nano, micro, Instagram, YouTube or Facebook." },
-  { q: "How affordable is influencer marketing on BrandKrt?", a: "You can run your first verified nano-creator campaign for as little as Rs 999. There are no signup fees and no monthly minimums on the free plan - only an 8% platform fee on successful campaigns." },
+  { q: "How affordable is influencer marketing on BrandKrt?", a: "You can run your first verified nano-creator campaign for as little as Rs 999. There are no signup fees and no monthly minimums on the free plan - only a 10% platform fee on successful campaigns." },
   { q: "How do you verify creators and businesses?", a: "Every creator clears ID verification plus social handle ownership check. Every business is identity-verified before they can run a campaign. Verified profiles get a trust badge." },
   { q: "How are payments handled?", a: "Brands fund the campaign upfront. The amount sits safely in escrow and is released to the creator only after the deliverables (post, reel, video) are live and approved. Creators are never ghosted on payment." },
   { q: "What platforms do you support?", a: "Right now Instagram, YouTube and Facebook - including Reels, Shorts, posts, stories and long-form videos. You can match with nano creators (1K-10K), micro creators (10K-100K) and established content creators all in one place." },

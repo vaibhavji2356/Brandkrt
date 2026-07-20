@@ -5,6 +5,7 @@ import api, { formatApiError } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const CATEGORIES = [
   "Fashion & Beauty", "Food & Beverage", "Fitness & Health", "Lifestyle", "Travel",
@@ -46,6 +47,7 @@ const EMPTY = {
 
 export default function InfluencerProfile() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState(EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -132,6 +134,7 @@ export default function InfluencerProfile() {
         setVerified(data.influencer.verification_status || verified);
       }
       toast.success("Creator profile saved.");
+      navigate("/influencer/verification", { replace: true });
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -294,7 +297,7 @@ export default function InfluencerProfile() {
         </div>
       </Section>
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sticky bottom-16 md:bottom-0 md:static py-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sticky bottom-0 z-20 rounded-2xl border border-border bg-background/95 p-4 shadow-lg backdrop-blur">
         <p className="text-xs text-muted-foreground sm:mr-auto">All changes are saved to your private creator profile.</p>
         <button
           type="submit"
@@ -302,7 +305,7 @@ export default function InfluencerProfile() {
           data-testid="profile-save"
           className="inline-flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 text-sm font-semibold disabled:opacity-60"
         >
-          {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><Save className="h-4 w-4" /> Save profile</>}
+          {saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : <><Save className="h-4 w-4" /> Save &amp; continue to verification</>}
         </button>
       </div>
     </form>

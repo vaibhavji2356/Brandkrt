@@ -156,7 +156,6 @@ def serialize_user(user: dict) -> dict:
         "avatar_url": user.get("avatar_url"),
         "cover_url": user.get("cover_url"),
         "email_verified": user.get("email_verified", False),
-        "phone_verified": user.get("phone_verified", False),
         "created_at": user.get("created_at").isoformat() if isinstance(user.get("created_at"), datetime) else user.get("created_at"),
     }
 
@@ -470,7 +469,6 @@ async def register(payload: RegisterIn, response: Response):
         "password_hash": hash_password(payload.password),
         "phone": phone,
         "email_verified": True,
-        "phone_verified": False,
         "avatar_url": None,
         "cover_url": None,
         "created_at": now,

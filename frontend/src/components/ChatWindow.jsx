@@ -8,6 +8,7 @@ import api, { formatApiError } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
+import UserAvatar from "@/components/UserAvatar";
 
 function timestamp(iso) {
   if (!iso) return "";
@@ -192,9 +193,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
         <button type="button" onClick={onBack} className="md:hidden -ml-1 h-9 w-9 rounded-full hover:bg-accent flex items-center justify-center" data-testid="chat-back">
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center">
-          {peer?.avatar_url ? <img src={peer.avatar_url} alt={headerName} className="h-full w-full rounded-full object-cover" /> : initials}
-        </div>
+        <UserAvatar src={peer?.avatar_url} initials={initials} className="h-10 w-10 shrink-0 rounded-full text-sm font-semibold" />
         <div className="min-w-0">
           <div className="text-sm font-semibold text-primary dark:text-white truncate">{headerName}</div>
           <div className="text-xs text-muted-foreground truncate">

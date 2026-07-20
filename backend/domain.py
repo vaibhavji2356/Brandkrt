@@ -452,6 +452,8 @@ def register_handlers():
         brand = await find_brand_for_user(user)
         if not brand and user.get("role") != "admin":
             raise HTTPException(400, "Create your brand profile first")
+        if user.get("role") == "brand" and brand.get("verification_status") not in {"approved", "verified"}:
+            raise HTTPException(403, "Complete business verification before creating a campaign")
         now = now_utc()
         doc = {**payload.model_dump(), "brand_id": str(brand["_id"]) if brand else None,
                "status": "draft", "progress": 0, "analytics": {}, "created_at": now, "updated_at": now}
@@ -465,6 +467,8 @@ def register_handlers():
         if user.get("role") == "brand":
             brand = await find_brand_for_user(user)
             query["brand_id"] = str(brand["_id"]) if brand else "__none__"
+        elif user.get("role") == "influencer":
+            query["status"] = "active"
         if status:
             query["status"] = status
         cur = db.campaigns.find(query).sort("created_at", -1).limit(min(limit, 100))
@@ -489,6 +493,8 @@ def register_handlers():
             brand = await find_brand_for_user(user)
             if not brand or campaign.get("brand_id") != str(brand["_id"]):
                 raise HTTPException(403, "Not allowed")
+            if status == "active" and brand.get("verification_status") not in {"approved", "verified"}:
+                raise HTTPException(403, "Complete business verification before publishing a campaign")
         now = now_utc()
         await db.campaigns.update_one({"_id": oid(cid)}, {"$set": {"status": status, "updated_at": now}})
         if status == "cancelled":
@@ -562,6 +568,26 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(did)})
         if not deal:
             raise HTTPException(404, "Deal not found")
+        role = user.get("role")
+        current = deal.get("status")
+        allowed = {
+            "influencer": {
+                "offer_sent": {"offer_accepted", "cancelled"},
+                "product_shipped": {"product_received"},
+                "product_received": {"content_in_progress"},
+                "content_in_progress": {"content_submitted"},
+                "approved": {"scheduled"},
+                "scheduled": {"published"},
+            },
+            "brand": {
+                "offer_accepted": {"product_shipped", "cancelled"},
+                "content_submitted": {"brand_review", "content_in_progress"},
+                "brand_review": {"approved", "content_in_progress"},
+                "published": {"completed"},
+            },
+        }
+        if role != "admin" and payload.status != current and payload.status not in allowed.get(role, {}).get(current, set()):
+            raise HTTPException(403, f"{role or 'User'} cannot move this deal from {current} to {payload.status}")
         now = now_utc()
         update = {"status": payload.status, "updated_at": now}
         if payload.deliverables is not None:
@@ -569,6 +595,28 @@ def register_handlers():
             update["deliverables_links"] = merged
         if payload.note is not None:
             update["last_note"] = payload.note
+        merged_links = update.get("deliverables_links", deal.get("deliverables_links") or {})
+        if payload.status == "content_submitted" and not (merged_links.get("draft_url") or "").strip():
+            raise HTTPException(400, "A draft review link is required before content submission")
+        if payload.status == "scheduled" and not (merged_links.get("screenshot_url") or "").strip():
+            raise HTTPException(400, "A scheduling screenshot is required")
+        if payload.status == "published" and not any((merged_links.get(key) or "").strip() for key in ("instagram_reel", "youtube_video", "facebook_post", "instagram_story")):
+            raise HTTPException(400, "At least one live platform link is required")
+        if payload.status == "product_shipped" and role != "admin":
+            inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])})
+            agreement = await db.agreements.find_one({
+                "campaign_id": deal.get("campaign_id"),
+                "influencer_user_id": (inf or {}).get("user_id"),
+                "status": {"$in": ["accepted", "completed"]},
+            })
+            if not agreement:
+                raise HTTPException(403, "The creator must sign the agreement before product shipping")
+            funded = await db.payments.find_one({
+                "$or": [{"deal_id": did}, {"agreement_id": str(agreement["_id"])}],
+                "status": {"$in": ["escrowed", "released"]},
+            })
+            if not funded:
+                raise HTTPException(403, "Fund escrow before product shipping")
         # append a tiny history entry
         history_entry = {"status": payload.status, "by": str(user["_id"]), "role": user.get("role"), "at": now}
         await db.deals.update_one(
@@ -590,39 +638,45 @@ def register_handlers():
             return inf.get("user_id") if inf else None
 
         prev = deal.get("status")
-        meta = {"deal_id": did}
+        meta = {"deal_id": did, "note": payload.note} if payload.note else {"deal_id": did}
+        note_suffix = f" Note: {payload.note}" if payload.note else ""
         try:
             if payload.status == "offer_accepted" and prev != "offer_accepted":
                 buid = await _brand_user_id()
                 if buid:
                     await notify(buid, "deal.accepted", "Offer accepted",
-                                 "A creator accepted your campaign offer.", meta)
+                                 f"A creator accepted your campaign offer.{note_suffix}", meta)
             elif payload.status == "cancelled" and prev != "cancelled":
                 # treat rejection (creator side) vs general cancellation
                 other = await _brand_user_id() if user.get("role") == "influencer" else await _inf_user_id()
                 if other:
                     title = "Offer declined" if user.get("role") == "influencer" else "Deal cancelled"
-                    await notify(other, "deal.cancelled", title, "The deal has been cancelled.", meta)
+                    await notify(other, "deal.cancelled", title, f"The deal has been cancelled.{note_suffix}", meta)
             elif payload.status == "product_shipped":
                 iuid = await _inf_user_id()
                 if iuid:
                     await notify(iuid, "deal.shipped", "Product shipped",
-                                 "The brand has shipped the product for your campaign.", meta)
+                                 f"The brand has shipped the product for your campaign.{note_suffix}", meta)
             elif payload.status == "content_submitted":
                 buid = await _brand_user_id()
                 if buid:
                     await notify(buid, "deal.submission", "Content submitted for review",
-                                 "The creator has submitted content for your campaign.", meta)
+                                 f"The creator has submitted content for your campaign.{note_suffix}", meta)
+            elif payload.status == "content_in_progress" and user.get("role") == "brand":
+                iuid = await _inf_user_id()
+                if iuid:
+                    await notify(iuid, "deal.changes_requested", "Changes requested",
+                                 f"The brand requested changes to your draft.{note_suffix}", meta)
             elif payload.status == "approved":
                 iuid = await _inf_user_id()
                 if iuid:
                     await notify(iuid, "deal.approved", "Content approved",
-                                 "Great news — the brand approved your content.", meta)
+                                 f"Great news — the brand approved your content.{note_suffix}", meta)
             elif payload.status == "published":
                 buid = await _brand_user_id()
                 if buid:
                     await notify(buid, "deal.published", "Post is live",
-                                 "The creator has published the campaign content.", meta)
+                                 f"The creator has published the campaign content.{note_suffix}", meta)
             elif payload.status == "completed":
                 iuid = await _inf_user_id()
                 if iuid:
@@ -657,6 +711,10 @@ def register_handlers():
                         "A brand approved creator work. Review escrow and release creator payout.",
                         {"deal_id": did, "payment_id": str(pay["_id"])},
                     )
+                await db.agreements.update_many(
+                    {"campaign_id": deal.get("campaign_id"), "status": "accepted"},
+                    {"$set": {"status": "completed", "updated_at": now}},
+                )
         except Exception:
             pass
 
@@ -687,7 +745,7 @@ def register_handlers():
                 }
             return {"payment": out}
         now = now_utc()
-        platform_fee = round(payload.amount * 0.08, 2)
+        platform_fee = round(payload.amount * 0.10, 2)
         influencer_earning = round(payload.amount - platform_fee, 2)
         # delegate to provider (stub by default; razorpay/stripe when configured)
         try:
@@ -1119,6 +1177,12 @@ def register_handlers():
         async for row in cur:
             out = doc_out(row)
             out["status"] = out.get("status") or "active"
+            profile = None
+            if row.get("role") == "brand":
+                profile = await db.brands.find_one({"user_id": str(row["_id"])}, {"verification_status": 1})
+            elif row.get("role") == "influencer":
+                profile = await db.influencers.find_one({"user_id": str(row["_id"])}, {"verification_status": 1})
+            out["verification_status"] = (profile or {}).get("verification_status") or "not_started"
             rows.append(out)
         return {"users": rows}
 
@@ -1139,9 +1203,10 @@ def register_handlers():
         verifications = await db.verification_requests.find({"user_id": uid}).sort("created_at", -1).limit(20).to_list(20)
         withdrawals = await db.withdrawal_requests.find({"user_id": uid}).sort("created_at", -1).limit(20).to_list(20)
         notifications = await db.notifications.find({"user_id": uid}).sort("created_at", -1).limit(20).to_list(20)
-        deals = await db.deals.find({"$or": [{"brand_id": uid}, {"influencer_id": uid}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
-        campaigns = await db.campaigns.find({"$or": [{"brand_id": uid}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
-        payments = await db.payments.find({"$or": [{"brand_id": uid}, {"influencer_id": uid}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
+        profile_id = str(profile["_id"]) if profile else "__none__"
+        deals = await db.deals.find({"$or": [{"brand_id": profile_id}, {"influencer_id": profile_id}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
+        campaigns = await db.campaigns.find({"$or": [{"brand_id": profile_id}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
+        payments = await db.payments.find({"$or": [{"brand_id": profile_id}, {"influencer_id": profile_id}, {"user_id": uid}]}).sort("created_at", -1).limit(20).to_list(20)
 
         return {
             "user": target_out,
@@ -1298,7 +1363,9 @@ def register_handlers():
             title = "Verification rejected"
             body = payload.notes or "Your verification request needs changes before approval."
 
-        await notify(req["user_id"], "verification.decision", title, body, {"request_id": rid})
+        if payload.notes:
+            body = f"{body} Admin note: {payload.notes}"
+        await notify(req["user_id"], "verification.decision", title, body, {"request_id": rid, "verification_status": payload.decision})
         await log_admin(str(user["_id"]), f"verification.{payload.decision}", rid, {"notes": payload.notes})
         fresh = await db.verification_requests.find_one({"_id": oid(rid)})
         return {"success": True, "request": await _verification_out(fresh)}

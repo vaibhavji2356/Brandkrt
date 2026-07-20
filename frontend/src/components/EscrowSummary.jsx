@@ -25,7 +25,7 @@ export default function EscrowSummary({ payment, amount = 0, role = "brand", onF
   ];
 
   const gross = Number(payment?.amount ?? amount ?? 0);
-  const fee = Number(payment?.platform_fee ?? (gross * 0.08).toFixed(2));
+  const fee = Number(payment?.platform_fee ?? (gross * 0.10).toFixed(2));
   const net = Number(payment?.influencer_earning ?? Math.max(0, gross - fee));
 
   return (
@@ -68,7 +68,7 @@ export default function EscrowSummary({ payment, amount = 0, role = "brand", onF
 
       <div className="mt-5 grid grid-cols-3 gap-2">
         <Money label="Gross amount" value={gross} />
-        <Money label="Platform fee (8%)" value={fee} tone="muted" />
+        <Money label="Platform fee (10%)" value={fee} tone="muted" />
         <Money label="Creator earnings" value={net} tone="gold" />
       </div>
 
