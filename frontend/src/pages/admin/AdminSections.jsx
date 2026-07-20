@@ -15,8 +15,9 @@ const IMAGE_EXTENSIONS = /\.(avif|gif|jpe?g|png|svg|webp)(?:\?.*)?$/i;
 
 function isImageDocument(doc) {
   if (doc?.kind === "image") return true;
-  const name = typeof doc === "string" ? doc : `${doc?.name || ""} ${doc?.url || ""}`;
-  return IMAGE_EXTENSIONS.test(name) || String(doc?.url || doc || "").startsWith("data:image/");
+  const name = typeof doc === "string" ? doc : String(doc?.name || "");
+  const url = typeof doc === "string" ? doc : String(doc?.url || "");
+  return IMAGE_EXTENSIONS.test(name) || IMAGE_EXTENSIONS.test(url) || url.startsWith("data:image/");
 }
 
 function VerificationImage({ url, label, className = "h-40 w-full" }) {
@@ -32,6 +33,20 @@ function VerificationImage({ url, label, className = "h-40 w-full" }) {
       />
       <div className="truncate border-t border-border px-3 py-2 text-xs font-medium text-secondary">{label} · Open full image</div>
     </a>
+  );
+}
+
+function VerificationAvatar({ request, size = "h-12 w-12" }) {
+  const [broken, setBroken] = useState(false);
+  const url = request?.media?.profile || request?.user?.avatar_url;
+  const name = request?.profile?.name || request?.user?.name || (request?.kind === "brand" ? "Brand" : "Creator");
+  if (url && !broken) {
+    return <img src={url} alt={name} onError={() => setBroken(true)} className={`${size} shrink-0 rounded-full border border-border object-cover`} />;
+  }
+  return (
+    <div className={`${size} flex shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground`}>
+      {name.trim().charAt(0).toUpperCase() || "B"}
+    </div>
   );
 }
 
@@ -333,19 +348,23 @@ export function AdminVerification() {
         </TabsList>
         <TabsContent value={tab} className="mt-6 space-y-3">
           {rows.map((r) => (
-            <div key={r.id} className="rounded-2xl border border-border bg-card p-5 flex items-center justify-between" data-testid={`verif-row-${r.id}`}>
-              <div>
+            <div key={r.id} className="rounded-2xl border border-border bg-card p-5 flex items-center justify-between gap-4" data-testid={`verif-row-${r.id}`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <VerificationAvatar request={r} />
+                <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="text-sm font-semibold text-primary dark:text-white">
-                    {r.profile?.name || r.user?.name || (r.kind === "brand" ? "Brand" : "Influencer")} verification
+                    {r.profile?.name || r.user?.name || (r.kind === "brand" ? "Brand" : "Creator")}
                   </div>
+                  <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{r.kind === "brand" ? "Brand" : "Creator"}</span>
                   <StatusChip value={r.status} />
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="truncate text-xs text-muted-foreground">
                   {r.user?.email || r.user_id} {r.user?.phone ? `- ${r.user.phone}` : ""} - {r.documents?.length || 0} doc(s)
                 </div>
                 {r.schedule_call_at && <div className="text-xs text-secondary mt-1">WhatsApp call: {new Date(r.schedule_call_at).toLocaleString()}</div>}
                 {r.notes && <p className="text-xs mt-1 text-foreground/70">"{r.notes}"</p>}
+                </div>
               </div>
               <button onClick={() => openRequest(r)} disabled={busy} className="rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold disabled:opacity-60" data-testid={`verif-review-${r.id}`}>
                 {r.status === "pending" ? "Start review" : "Open"}
@@ -363,16 +382,20 @@ export function AdminVerification() {
           {active && (
             <div className="space-y-5">
               <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background p-3">
-                <div>
+                <div className="flex min-w-0 items-center gap-3">
+                  <VerificationAvatar request={active} size="h-14 w-14" />
+                  <div className="min-w-0">
                   <div className="text-sm font-semibold text-primary dark:text-white">
                     {active.profile?.name || active.user?.name || `${active.kind} verification`}
                   </div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-secondary">{active.kind === "brand" ? "Brand verification" : "Creator verification"}</div>
                   <div className="text-xs text-muted-foreground">
                     {active.user?.email || active.user_id} {active.user?.phone ? `- ${active.user.phone}` : ""}
                   </div>
                   {active.profile?.phone && active.profile.phone !== active.user?.phone && (
                     <div className="text-xs text-muted-foreground">Profile phone: {active.profile.phone}</div>
                   )}
+                  </div>
                 </div>
                 <StatusChip value={active.status} />
               </div>

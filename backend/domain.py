@@ -1292,6 +1292,8 @@ def register_handlers():
                 "name": req.get("contact_name") or target_user.get("name") or target_user.get("email", "").split("@")[0],
                 "email": target_user.get("email"),
                 "phone": req.get("contact_phone") or target_user.get("phone") or (profile or {}).get("phone"),
+                "avatar_url": target_user.get("avatar_url"),
+                "cover_url": target_user.get("cover_url"),
             }
         if profile:
             display_name = (
@@ -1309,8 +1311,8 @@ def register_handlers():
             if req.get("kind") == "brand":
                 gallery = profile.get("product_images") or []
                 out["media"] = {
-                    "profile": profile.get("logo_url"),
-                    "cover": profile.get("cover_url"),
+                    "profile": profile.get("logo_url") or (target_user or {}).get("avatar_url"),
+                    "cover": profile.get("cover_url") or (target_user or {}).get("cover_url"),
                     "gallery": gallery,
                 }
             else:
@@ -1320,8 +1322,8 @@ def register_handlers():
                     for item in portfolio
                 ]
                 out["media"] = {
-                    "profile": profile.get("profile_photo_url"),
-                    "cover": profile.get("cover_photo_url"),
+                    "profile": profile.get("profile_photo_url") or (target_user or {}).get("avatar_url"),
+                    "cover": profile.get("cover_photo_url") or (target_user or {}).get("cover_url"),
                     "gallery": [url for url in gallery if url],
                 }
             if out.get("user") and not out["user"].get("phone"):
