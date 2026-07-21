@@ -114,6 +114,49 @@ sudo supervisorctl restart backend
 | Admin | `/api/admin/{overview,users,verification,verification/{id}/decision,withdrawals,withdrawals/{id}/decision,reports,logs}` |
 | Contact | `/api/contact` |
 | Health | `/api/health`, `/api/health/live`, `/api/health/ready` |
+| Brand Discovery AI | `POST /api/ai/brand-discovery/preview` (authenticated brand/admin, non-persistent preview) |
+
+### Brand Discovery AI — Phase 3A
+
+The backend includes a vendor-neutral Brand Discovery preview package under
+`backend/brand_discovery_ai/`. It supports deterministic mock results and an
+OpenAI Responses API provider while preserving the same authenticated,
+rate-limited, non-persistent endpoint. Configure it with `AI_PROVIDER`,
+`AI_API_KEY`, `AI_ALLOWED_MODELS`, `AI_MODEL`, `AI_TIMEOUT_SECONDS`,
+`AI_MAX_RETRIES`, `AI_MAX_OUTPUT_TOKENS`,
+`AI_MAX_REQUESTS_PER_USER_PER_DAY`, `AI_MAX_REQUESTS_PER_IP_PER_MINUTE`,
+`AI_DAILY_BUDGET_USD`, `AI_MAX_ESTIMATED_COST_PER_REQUEST_USD`, and
+`AI_MOCK_MODE`. Keep `AI_PROVIDER=mock` and
+`AI_MOCK_MODE=true` for zero-cost development without an API key. To enable
+OpenAI staging, set both `AI_ALLOWED_MODELS=gpt-5.6-luna` and
+`AI_MODEL=gpt-5.6-luna`, provide `AI_API_KEY`, and set `AI_MOCK_MODE=false`.
+Unknown or non-allow-listed models fail closed; there is no model fallback.
+
+Paid-provider requests reserve a retry-inclusive conservative maximum cost
+before network access. Per-user daily, per-IP minute, per-request cost, and
+daily application budget limits are enforced in memory. These counters are
+isolated to one Python process and reset on restart; they are staging
+guardrails, not multi-worker production billing controls. Mock requests do not
+consume paid-provider counters or budget.
+
+Offline calibration estimates approximately 531 prompt tokens plus 276 schema
+tokens. Calibrated output fixtures estimate 201, 986, 1,968, and 3,931 tokens
+for 1, 5, 10, and 20 results respectively. Keep the 4,000 output-token cap:
+reducing it would make the 20-result contract unreliable. The provider uses
+`reasoning.effort=none`, strict structured output, `store=false`, and at most
+one retry.
+
+After setting the OpenAI environment values, one explicitly authorized staging
+call can be run from `backend/` with:
+
+```powershell
+.\.venv\Scripts\python.exe -m brand_discovery_ai.staging_call --allow-paid-call --result-limit 1
+```
+
+The command disables retries, caps that call at 1,200 output tokens, and prints
+only provider/model, result count, duration, token usage, and cost summary. It
+never prints credentials, prompts, headers, or raw provider output. No local
+model, scraping, embeddings, persistence, or vector database is included.
 
 ## Default credentials
 

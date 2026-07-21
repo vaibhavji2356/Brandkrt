@@ -764,6 +764,12 @@ async def health_ready(response: Response):
 # -----------------------------------------------------------------------------
 api_router.include_router(auth_router)
 
+# Brand Discovery AI Phase 1: isolated, vendor-neutral preview foundation.
+# The router receives only the existing auth dependency and has no DB handle.
+from brand_discovery_ai import create_router as create_brand_discovery_router  # noqa: E402
+
+api_router.include_router(create_brand_discovery_router(get_current_user))
+
 # Part 1B: domain routes
 import domain  # noqa: E402
 
