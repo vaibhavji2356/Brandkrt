@@ -2,8 +2,10 @@ import React from "react";
 import { Link } from "react-router-dom";
 import Logo from "@/components/Logo";
 import { Star } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AuthLayout({ children, side = "left", tagline }) {
+  const { backendState } = useAuth();
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       <div className={`relative hidden lg:flex ${side === "left" ? "order-first" : "order-last"} bg-primary text-white overflow-hidden`}>
@@ -37,7 +39,14 @@ export default function AuthLayout({ children, side = "left", tagline }) {
           <Link to="/" className="text-sm text-muted-foreground">← Home</Link>
         </div>
         <div className="flex-1 flex items-center justify-center px-6 py-12">
-          <div className="w-full max-w-md">{children}</div>
+          <div className="w-full max-w-md">
+            {(backendState === "checking" || backendState === "waking") && (
+              <div className="mb-5 rounded-xl border border-secondary/30 bg-secondary/10 px-4 py-3 text-sm text-foreground" role="status">
+                Waking server...
+              </div>
+            )}
+            {children}
+          </div>
         </div>
       </div>
     </div>

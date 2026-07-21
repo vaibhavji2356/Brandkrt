@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { getGoogleClientId, isGoogleConfigured, renderGoogleSignInButton, setGoogleClientId } from "@/lib/googleAuth";
 import api from "@/lib/api";
+import { waitForBackendReady } from "@/lib/backendStatus";
 
 export default function Login() {
   const { login, googleSignIn, formatApiError } = useAuth();
@@ -21,17 +22,27 @@ export default function Login() {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState("");
   const [googleEnabled, setGoogleEnabled] = useState(isGoogleConfigured());
+  const [googleConfigState, setGoogleConfigState] = useState("checking");
   const googleBtnRef = useRef(null);
 
-  // Confirm the backend has Google configured; if not we keep showing the button
-  // but it will toast a friendly "not configured" message on click.
+  // Wait for Render readiness before deciding whether Google is configured. A
+  // network failure during a cold start must not be shown as a config error.
   useEffect(() => {
     let alive = true;
-    api.get("/auth/google/config").then((r) => {
+    waitForBackendReady({
+      onState: ({ state }) => {
+        if (alive && (state === "checking" || state === "waking")) setGoogleConfigState("waking");
+      },
+    }).then(() => api.get("/auth/google/config")).then((r) => {
+      if (!alive) return;
       const clientId = r.data?.client_id || "";
       setGoogleClientId(clientId);
-      if (alive) setGoogleEnabled(!!r.data?.enabled && !!clientId);
-    }).catch(() => { /* keep current state */ });
+      const enabled = !!r.data?.enabled && !!clientId;
+      setGoogleEnabled(enabled);
+      setGoogleConfigState(enabled ? "enabled" : "disabled");
+    }).catch(() => {
+      if (alive) setGoogleConfigState("unavailable");
+    });
     return () => { alive = false; };
   }, []);
 
@@ -129,10 +140,14 @@ export default function Login() {
           </div>
         </div>
 
-        {!googleEnabled && (
+        {!googleEnabled && googleConfigState !== "waking" && googleConfigState !== "checking" && (
         <button
           type="button"
-          onClick={() => toast.error("Google sign-in is not configured on this server yet.")}
+          onClick={() => toast.error(
+            googleConfigState === "disabled"
+              ? "Google sign-in is not configured on this server yet."
+              : "Google sign-in is temporarily unavailable. Please try again shortly."
+          )}
           disabled={googleBusy}
           data-testid="login-google"
           aria-label="Continue with Google"

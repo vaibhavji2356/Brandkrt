@@ -1,3 +1,4 @@
+from backend_status import backend_status
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -7,6 +8,8 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import logging
 import secrets
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Literal
 
@@ -32,12 +35,33 @@ REFRESH_TOKEN_DAYS = 7
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_MINUTES = 15
 
-mongo_url = os.environ['MONGO_URL']
-db_name = os.environ['DB_NAME']
-client = AsyncIOMotorClient(mongo_url)
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://127.0.0.1:27017')
+db_name = os.environ.get('DB_NAME', 'brandkrt_db')
+client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=int(os.environ.get("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")),
+    connectTimeoutMS=int(os.environ.get("MONGO_CONNECT_TIMEOUT_MS", "5000")),
+    socketTimeoutMS=int(os.environ.get("MONGO_SOCKET_TIMEOUT_MS", "10000")),
+    maxPoolSize=int(os.environ.get("MONGO_MAX_POOL_SIZE", "50")),
+    minPoolSize=int(os.environ.get("MONGO_MIN_POOL_SIZE", "0")),
+    maxIdleTimeMS=int(os.environ.get("MONGO_MAX_IDLE_TIME_MS", "60000")),
+)
 db = client[db_name]
 
-app = FastAPI(title="BrandKrt API")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Database migrations and admin bootstrap intentionally live in
+    # database_setup.py, keeping the web process startup network-free.
+    backend_status.mark_app_started()
+    logger.info("[STARTUP] expensive initialization disabled; run `python database_setup.py` during deployment")
+    try:
+        yield
+    finally:
+        client.close()
+
+
+app = FastAPI(title="BrandKrt API", lifespan=lifespan)
 api_router = APIRouter(prefix="/api")
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -68,9 +92,6 @@ for _o in _env_cors + _DEFAULT_CORS_ORIGINS:
     if _o and _o not in _seen:
         _seen.add(_o)
         cors_origins.append(_o)
-# Accept Vercel preview deployments and any *.brandkrt.com sub-domain via regex
-_cors_origin_regex = r"^https://([a-z0-9-]+\.)?brandkrt\.com$|^https://.*\.vercel\.app$"
-
 _is_prod = os.environ.get("APP_ENV", "development").lower() != "development"
 # 1) innermost — defence-in-depth headers
 app.add_middleware(_security.SecurityHeadersMiddleware, prod=_is_prod)
@@ -79,6 +100,10 @@ app.add_middleware(_security.OriginCSRFMiddleware, allow_origins=cors_origins)
 # CORS is attached at the end of this module so it remains outermost.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("brandkrt")
+_readiness_lock = asyncio.Lock()
+_readiness_cache: Optional[dict] = None
+_readiness_checked_at = 0.0
+_readiness_cache_seconds = float(os.environ.get("READINESS_CACHE_SECONDS", "5"))
 
 # -----------------------------------------------------------------------------
 # Security helpers
@@ -348,12 +373,7 @@ class ContactIn(BaseModel):
 # Auth dependency
 # -----------------------------------------------------------------------------
 async def get_current_user(request: Request) -> dict:
-    token = None
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-    if not token:
-        token = request.cookies.get("access_token")
+    token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
@@ -482,7 +502,7 @@ async def register(payload: RegisterIn, response: Response):
     refresh = create_refresh_token(user_id)
     set_auth_cookies(response, access, refresh)
     doc["_id"] = result.inserted_id
-    return {"user": serialize_user(doc), "access_token": access, "email_verified": True}
+    return {"user": serialize_user(doc), "email_verified": True}
 
 
 @auth_router.post("/login")
@@ -503,7 +523,7 @@ async def login(payload: LoginIn, request: Request, response: Response):
     access = create_access_token(str(user["_id"]), email, user.get("role", "influencer"))
     refresh = create_refresh_token(str(user["_id"]))
     set_auth_cookies(response, access, refresh)
-    return {"user": serialize_user(user), "access_token": access}
+    return {"user": serialize_user(user)}
 
 
 @auth_router.post("/logout")
@@ -532,7 +552,7 @@ async def refresh_token(request: Request, response: Response):
         access = create_access_token(str(user["_id"]), user["email"], user.get("role", "influencer"))
         new_refresh = create_refresh_token(str(user["_id"]))
         set_auth_cookies(response, access, new_refresh)
-        return {"user": serialize_user(user), "access_token": access}
+        return {"user": serialize_user(user)}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
     except jwt.InvalidTokenError:
@@ -597,7 +617,9 @@ async def google_config():
 @auth_router.post("/google")
 async def google_signin(payload: GoogleSignInIn, request: Request, response: Response,
                         _rl: None = Depends(_security.limiter_dependency("oauth", limit=20, window=600))):
-    info = _oauth.verify_google_id_token(payload.credential)
+    # Google certificate retrieval is synchronous. Run it off the event loop so
+    # a first Google login cannot stall health checks or unrelated requests.
+    info = await asyncio.to_thread(_oauth.verify_google_id_token, payload.credential)
     email = info["email"]
     now = datetime.now(timezone.utc)
     user = await db.users.find_one({"email": email})
@@ -619,6 +641,8 @@ async def google_signin(payload: GoogleSignInIn, request: Request, response: Res
         doc["_id"] = res.inserted_id
         user = doc
     else:
+        if user.get("google_sub") and user.get("google_sub") != info.get("sub"):
+            raise HTTPException(409, "This email is linked to a different Google account")
         # link google sub on next sign-in if missing
         if not user.get("google_sub"):
             await db.users.update_one(
@@ -632,7 +656,7 @@ async def google_signin(payload: GoogleSignInIn, request: Request, response: Res
     access = create_access_token(str(user["_id"]), email, user.get("role", "influencer"))
     refresh = create_refresh_token(str(user["_id"]))
     set_auth_cookies(response, access, refresh)
-    return {"user": serialize_user(user), "access_token": access}
+    return {"user": serialize_user(user)}
 
 
 @auth_router.post("/resend-verification")
@@ -708,49 +732,31 @@ async def contact(payload: ContactIn, request: Request,
 
 @api_router.get("/health")
 async def health():
-    return {"status": "ok", "service": "brandkrt-api"}
+    """Backwards-compatible liveness endpoint used by existing deployments."""
+    return {"status": "ok", "service": "brandkrt-api", **backend_status.snapshot()}
 
 
-# -----------------------------------------------------------------------------
-# Startup
-# -----------------------------------------------------------------------------
-@app.on_event("startup")
-async def on_startup():
-    await db.users.create_index("email", unique=True)
-    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
-    await db.verification_tokens.create_index("expires_at", expireAfterSeconds=0)
-    await db.registration_otps.create_index("expires_at", expireAfterSeconds=0)
-    await db.registration_otps.create_index([("email", 1), ("created_at", -1)])
-    await db.login_attempts.create_index("identifier")
-    await domain.setup_indexes(db)
-    try:
-        await part4b.setup_part4b_indexes(db)
-    except Exception as _e:
-        logger.warning("part4b index setup failed: %s", _e)
-    try:
-        await part4c.setup_part4c_indexes(db)
-    except Exception as _e:
-        logger.warning("part4c index setup failed: %s", _e)
-
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@brandkrt.com").lower()
-    admin_password = os.environ.get("ADMIN_PASSWORD", "admin123")
-    existing = await db.users.find_one({"email": admin_email})
-    now = datetime.now(timezone.utc)
-    if not existing:
-        await db.users.insert_one({
-            "email": admin_email, "name": "BrandKrt Admin", "role": "admin",
-            "password_hash": hash_password(admin_password), "email_verified": True,
-            "avatar_url": None, "cover_url": None, "created_at": now, "updated_at": now,
-        })
-        logger.info("Seeded admin user %s", admin_email)
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
-        logger.info("Updated admin password for %s", admin_email)
+@api_router.get("/health/live")
+async def health_live():
+    """Cheap process liveness check. It intentionally does not touch MongoDB."""
+    return {"status": "live", "service": "brandkrt-api", **backend_status.snapshot()}
 
 
-@app.on_event("shutdown")
-async def on_shutdown():
-    client.close()
+@api_router.get("/health/ready")
+async def health_ready(response: Response):
+    """Dependency-aware readiness check for Render and frontend wake handling."""
+    global _readiness_cache, _readiness_checked_at
+    now = asyncio.get_running_loop().time()
+    if _readiness_cache is None or now - _readiness_checked_at >= _readiness_cache_seconds:
+        async with _readiness_lock:
+            now = asyncio.get_running_loop().time()
+            if _readiness_cache is None or now - _readiness_checked_at >= _readiness_cache_seconds:
+                _readiness_cache = await backend_status.check_readiness(lambda: client.admin.command("ping"))
+                _readiness_checked_at = now
+    status = _readiness_cache
+    if not status["isReady"]:
+        response.status_code = 503
+    return {"status": "ready" if status["isReady"] else "not_ready", "service": "brandkrt-api", **status}
 
 
 # -----------------------------------------------------------------------------
@@ -789,7 +795,16 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 import os as _os
 _uploads_dir = _os.environ.get("UPLOAD_ROOT", "./uploads")
 _os.makedirs(_uploads_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+# Verification documents are never exposed through the legacy static mount.
+# New verification files use the authenticated /api/uploads/{id} route.
+for _public_folder in ("profiles", "brand_logos", "products", "contracts", "invoices", "chat"):
+    _folder_path = _os.path.join(_uploads_dir, _public_folder)
+    _os.makedirs(_folder_path, exist_ok=True)
+    app.mount(
+        f"/uploads/{_public_folder}",
+        StaticFiles(directory=_folder_path),
+        name=f"uploads-{_public_folder}",
+    )
 
 @app.options("/{full_path:path}", include_in_schema=False)
 async def cors_preflight(full_path: str):
@@ -801,7 +816,6 @@ async def cors_preflight(full_path: str):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_origin_regex=_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

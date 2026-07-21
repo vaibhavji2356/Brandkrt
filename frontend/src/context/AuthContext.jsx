@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api, { formatApiError } from "@/lib/api";
+import { waitForBackendReady } from "@/lib/backendStatus";
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = "brandkrt_access_token";
 
-function saveAccessToken(token) {
+function clearLegacyAccessToken() {
   if (typeof window === "undefined") return;
-  if (token) window.localStorage.setItem(TOKEN_KEY, token);
-  else window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(TOKEN_KEY);
 }
 
 function isAuthDenied(error) {
@@ -18,19 +18,26 @@ function isAuthDenied(error) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);     // user object | null
   const [loading, setLoading] = useState(true);
+  const [backendState, setBackendState] = useState("checking");
 
   const refresh = useCallback(async () => {
     try {
-      const { data } = await api.get("/auth/me", { __retryOnNetwork: true, __maxRetries: 4 });
+      await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
+    } catch (_) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+    try {
+      const { data } = await api.get("/auth/me");
       setUser(data.user);
     } catch (e) {
       try {
-        const { data } = await api.post("/auth/refresh", null, { __retryOnNetwork: true, __maxRetries: 2 });
-        saveAccessToken(data.access_token);
+        const { data } = await api.post("/auth/refresh");
         setUser(data.user);
       } catch (refreshErr) {
         if (isAuthDenied(e) || isAuthDenied(refreshErr)) {
-          saveAccessToken(null);
+          clearLegacyAccessToken();
         }
         setUser(null);
       }
@@ -39,46 +46,52 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    clearLegacyAccessToken();
+    refresh();
+  }, [refresh]);
 
   const login = async (email, password, remember_me = false) => {
-    const { data } = await api.post("/auth/login", { email, password, remember_me }, { __retryOnNetwork: true, __maxRetries: 2 });
-    saveAccessToken(data.access_token);
+    await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
+    const { data } = await api.post("/auth/login", { email, password, remember_me });
     setUser(data.user);
     return data.user;
   };
 
   const googleSignIn = async (credential) => {
-    const { data } = await api.post("/auth/google", { credential }, { __retryOnNetwork: true, __maxRetries: 2 });
-    saveAccessToken(data.access_token);
+    await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
+    const { data } = await api.post("/auth/google", { credential });
     setUser(data.user);
     return data.user;
   };
 
   const register = async (payload) => {
+    await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
     const { data } = await api.post("/auth/register", payload);
-    saveAccessToken(data.access_token);
     setUser(data.user);
     return data.user;
   };
 
   const logout = async () => {
     try { await api.post("/auth/logout"); } catch (e) {}
-    saveAccessToken(null);
+    clearLegacyAccessToken();
     setUser(null);
   };
 
   const forgotPassword = async (email) => {
+    await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
     const { data } = await api.post("/auth/forgot-password", { email });
     return data;
   };
 
   const resetPassword = async (token, new_password) => {
+    await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
     const { data } = await api.post("/auth/reset-password", { token, new_password });
     return data;
   };
 
   const verifyEmail = async (token) => {
+    await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
     const { data } = await api.post("/auth/verify-email", { token });
     await refresh();
     return data;
@@ -86,7 +99,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, refresh, login, register, logout, googleSignIn,
+      user, loading, backendState, refresh, login, register, logout, googleSignIn,
       forgotPassword, resetPassword, verifyEmail, formatApiError,
     }}>
       {children}

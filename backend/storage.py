@@ -16,6 +16,8 @@ import os
 import secrets
 from typing import Optional
 
+from upload_security import validate_upload
+
 logger = logging.getLogger("brandkrt.storage")
 
 _CL_READY = False
@@ -37,9 +39,6 @@ except Exception as e:  # pragma: no cover
     _CL_READY = False
 
 
-ALLOWED_EXT = {"jpg", "jpeg", "png", "webp", "gif", "pdf",
-               "doc", "docx", "txt", "csv", "xlsx", "ppt", "pptx", "zip"}
-IMAGE_EXT = {"jpg", "jpeg", "png", "webp", "gif"}
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024
 
 
@@ -64,11 +63,15 @@ async def save_upload(*, file_bytes: bytes, original_name: str, folder: str) -> 
         from fastapi import HTTPException
         raise HTTPException(status_code=413, detail=f"File exceeds {MAX_UPLOAD_BYTES // (1024*1024)}MB limit")
 
-    ext = (original_name or "").rsplit(".", 1)[-1].lower() if "." in (original_name or "") else ""
-    if ext and ext not in ALLOWED_EXT:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Unsupported file type")
-    kind = "image" if ext in IMAGE_EXT else "file"
+    validated = validate_upload(
+        data=file_bytes,
+        filename=original_name or "file",
+        claimed_type="application/octet-stream",
+        folder=folder,
+    )
+    original_name = validated["filename"]
+    kind = validated["kind"]
+    ext = original_name.rsplit(".", 1)[-1].lower()
 
     if _CL_READY:
         # use Cloudinary; resource_type='auto' supports image+raw

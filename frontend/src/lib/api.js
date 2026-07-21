@@ -1,7 +1,6 @@
 import axios from "axios";
 import { API, normalizeAssetUrls } from "./brand";
 
-const TOKEN_KEY = "brandkrt_access_token";
 const DEFAULT_TIMEOUT_MS = 75000;
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const RETRYABLE_METHODS = new Set(["get", "head", "options"]);
@@ -21,10 +20,9 @@ function canRetryRequest(error) {
   if (!config) return false;
   const method = (config.method || "get").toLowerCase();
   const retryCount = config.__retryCount || 0;
-  const maxRetries = config.__maxRetries ?? (config.__retryOnNetwork ? 2 : 3);
-  const optedIn = Boolean(config.__retryOnNetwork);
+  const maxRetries = config.__maxRetries ?? 2;
   const isRetryableMethod = RETRYABLE_METHODS.has(method);
-  return retryCount < maxRetries && (isRetryableMethod || optedIn) && isNetworkOrColdStartError(error);
+  return retryCount < maxRetries && isRetryableMethod && isNetworkOrColdStartError(error);
 }
 
 const api = axios.create({
@@ -34,14 +32,7 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-api.interceptors.request.use((config) => {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem(TOKEN_KEY) : null;
-  if (token) {
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+let refreshPromise = null;
 
 api.interceptors.response.use((response) => {
   response.data = normalizeAssetUrls(response.data);
@@ -50,30 +41,27 @@ api.interceptors.response.use((response) => {
   if (canRetryRequest(error)) {
     const config = error.config;
     config.__retryCount = (config.__retryCount || 0) + 1;
-    const delay = Math.min(1000 * 2 ** (config.__retryCount - 1), 5000);
+    const retryAfter = Number(error?.response?.headers?.["retry-after"] || 0) * 1000;
+    const backoff = Math.min(750 * 2 ** (config.__retryCount - 1), 4000);
+    const delay = retryAfter || backoff + Math.floor(Math.random() * 250);
     await sleep(delay);
     return api(config);
   }
 
   const status = error?.response?.status;
   const config = error?.config;
-  const hasStoredToken = typeof window !== "undefined" && window.localStorage.getItem(TOKEN_KEY);
-  if ((status === 401 || status === 403) && config && !config._retryWithFreshAuth) {
+  const requestUrl = String(config?.url || "");
+  const isAuthBootstrap = /\/auth\/(?:login|register|google|refresh|logout)(?:\/|$)/.test(requestUrl);
+  if (status === 401 && config && !config._retryWithFreshAuth && !isAuthBootstrap) {
     config._retryWithFreshAuth = true;
     try {
-      const refreshed = await axios.post(`${API}/auth/refresh`, null, { withCredentials: true });
-      const token = refreshed?.data?.access_token;
-      if (token && typeof window !== "undefined") {
-        window.localStorage.setItem(TOKEN_KEY, token);
-        config.headers = config.headers || {};
-        config.headers.Authorization = `Bearer ${token}`;
-        return api(config);
+      if (!refreshPromise) {
+        refreshPromise = axios.post(`${API}/auth/refresh`, null, { withCredentials: true })
+          .finally(() => { refreshPromise = null; });
       }
-    } catch (_) {
-      if (hasStoredToken && typeof window !== "undefined") {
-        window.localStorage.removeItem(TOKEN_KEY);
-      }
-    }
+      await refreshPromise;
+      return api(config);
+    } catch (_) { /* the caller handles the original authentication failure */ }
   }
   return Promise.reject(error);
 });

@@ -16,6 +16,9 @@ from bson.binary import Binary
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, Field, ConfigDict
 
+import domain as _domain
+from upload_security import validate_upload
+
 # Wired by init()
 db = None  # type: ignore
 get_current_user = None  # type: ignore
@@ -143,8 +146,8 @@ class AgreementIn(BaseModel):
     campaign_id: Optional[str] = None
     deliverables: List[str] = []
     timeline: Optional[str] = None
-    payment_amount: float = Field(ge=0)
-    platform_fee_pct: float = 10.0
+    payment_amount: float = Field(gt=0, allow_inf_nan=False)
+    platform_fee_pct: float = Field(10.0, ge=0, le=100, allow_inf_nan=False)
     cancellation_policy: Optional[str] = None
     terms: Optional[str] = None
 
@@ -402,6 +405,7 @@ def register_handlers():
             deal = await db.deals.find_one({"_id": oid(payload.context_id)})
             if not deal:
                 raise HTTPException(404, "Deal not found")
+            await _domain.require_deal_access(db, deal, user)
             brand = await db.brands.find_one({"_id": oid(deal["brand_id"])}) if deal.get("brand_id") else None
             inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])}) if deal.get("influencer_id") else None
             parts = [x for x in [brand.get("user_id") if brand else None, inf.get("user_id") if inf else None] if x]
@@ -541,14 +545,21 @@ def register_handlers():
     @chat_router.post("/upload")
     async def _chat_upload(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
         filename = (file.filename or "").strip() or "file"
-        data = await file.read()
         max_bytes = int(os.environ.get("MONGO_UPLOAD_MAX_MB", "8")) * 1024 * 1024
+        if file.size is not None and file.size > max_bytes:
+            raise HTTPException(status_code=413, detail=f"File exceeds {max_bytes // (1024 * 1024)}MB limit")
+        data = await file.read(max_bytes + 1)
         if len(data) > max_bytes:
             raise HTTPException(status_code=413, detail=f"File exceeds {max_bytes // (1024 * 1024)}MB limit")
-        content_type = file.content_type or "application/octet-stream"
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        image_exts = {"jpg", "jpeg", "png", "webp", "gif", "avif", "svg"}
-        kind = "image" if content_type.startswith("image/") or ext in image_exts else "file"
+        validated = validate_upload(
+            data=data,
+            filename=filename,
+            claimed_type=file.content_type or "",
+            folder="chat",
+        )
+        filename = validated["filename"]
+        content_type = validated["content_type"]
+        kind = validated["kind"]
         now = now_utc()
         try:
             inserted = await db.uploads.insert_one({
@@ -583,6 +594,15 @@ def register_handlers():
             raise HTTPException(400, "Invalid influencer_user_id")
         if not inf_user:
             raise HTTPException(404, "Influencer user not found")
+        if inf_user.get("role") != "influencer":
+            raise HTTPException(400, "Agreement recipient must be an influencer")
+        if payload.campaign_id and user.get("role") != "admin":
+            campaign = await db.campaigns.find_one({"_id": oid(payload.campaign_id)})
+            if not campaign:
+                raise HTTPException(404, "Campaign not found")
+            brand_profile = await db.brands.find_one({"user_id": str(user["_id"])})
+            if not brand_profile or str(campaign.get("brand_id") or "") != str(brand_profile["_id"]):
+                raise HTTPException(403, "Only the campaign owner can create its agreement")
 
         now = now_utc()
         amount = float(payload.payment_amount)
@@ -747,20 +767,17 @@ def register_handlers():
             provider_status = "escrowed"
 
 
+        brand_profile = await db.brands.find_one({"user_id": agreement.get("brand_user_id")})
+        creator_profile = await db.influencers.find_one({"user_id": agreement.get("influencer_user_id")})
         linked_deal = None
-        if agreement.get("campaign_id"):
-            linked_deal = await db.deals.find_one({
-                "campaign_id": agreement.get("campaign_id"),
+        if brand_profile and creator_profile:
+            deal_query = {
+                "brand_id": str(brand_profile["_id"]),
+                "influencer_id": str(creator_profile["_id"]),
                 "amount": amount,
-            })
-        if not linked_deal:
-            brand_profile = await db.brands.find_one({"user_id": agreement.get("brand_user_id")})
-            creator_profile = await db.influencers.find_one({"user_id": agreement.get("influencer_user_id")})
-            deal_query = {"amount": amount}
-            if brand_profile:
-                deal_query["brand_id"] = str(brand_profile["_id"])
-            if creator_profile:
-                deal_query["influencer_id"] = str(creator_profile["_id"])
+            }
+            if agreement.get("campaign_id"):
+                deal_query["campaign_id"] = agreement["campaign_id"]
             linked_deal = await db.deals.find_one(deal_query)
         is_razorpay_pending = provider_name == "razorpay" and provider_status == "pending"
         payment_doc = {

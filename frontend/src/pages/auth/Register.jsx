@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Eye, EyeOff, Sparkles, Briefcase } from "lucide-react";
 import api from "@/lib/api";
+import { waitForBackendReady } from "@/lib/backendStatus";
 
 const ROLES = [
   { id: "influencer", title: "I'm a Creator", desc: "Earn from premium brand campaigns.", icon: Sparkles },
@@ -37,7 +38,8 @@ export default function Register() {
     if (!email.trim()) { setError("Please enter your email first."); return; }
     setSendingOtp(true);
     try {
-      await api.post("/auth/register/send-otp", { email }, { __retryOnNetwork: true, __maxRetries: 2 });
+      await waitForBackendReady();
+      await api.post("/auth/register/send-otp", { email });
       setOtpSentTo(email.trim().toLowerCase());
       toast.success("OTP sent. Please check your inbox.");
     } catch (err) {

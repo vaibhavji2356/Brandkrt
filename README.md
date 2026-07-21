@@ -17,7 +17,8 @@
 ```
 /app
 ├── backend/
-│   ├── server.py               # FastAPI app, auth, CORS, startup, admin seed
+│   ├── server.py               # FastAPI app, auth, CORS, health and lifecycle
+│   ├── database_setup.py       # Explicit indexes + one-time admin bootstrap
 │   ├── domain.py               # Models + routes: brands, influencers, campaigns,
 │   │                            #   deals, payments (escrow), notifications, messages,
 │   │                            #   verification, withdrawals, reviews, reports, uploads, admin
@@ -26,6 +27,8 @@
 │   └── .env                    # MONGO_URL, JWT_SECRET, ADMIN_*, EMAIL_PROVIDER, FRONTEND_URL
 ├── frontend/
 │   ├── public/                 # index.html, manifest.json, robots.txt, sitemap.xml
+│   ├── vercel.json             # Vercel rewrites, SPA fallback and headers
+│   ├── yarn.lock               # Frozen production dependency graph
 │   └── src/
 │       ├── App.js              # All routes
 │       ├── index.css           # Tailwind + brand tokens (navy + gold)
@@ -43,8 +46,6 @@
 ├── memory/
 │   ├── PRD.md
 │   └── test_credentials.md
-├── .env.example
-├── vercel.json
 └── README.md
 ```
 
@@ -54,7 +55,8 @@
 # Backend
 cd backend
 pip install -r requirements.txt
-# .env required (see .env.example) — admin user seeds automatically on startup
+# .env required (see .env.example)
+python database_setup.py  # once for a new database or index release
 uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
 # Frontend
@@ -71,9 +73,9 @@ sudo supervisorctl restart backend
 ## Production deployment
 
 ### Frontend → Vercel
-1. Connect the repo, set the project root to `/`.
-2. Vercel will pick up `vercel.json` (rewrites all `/api/*` and `/uploads/*` to the API origin).
-3. Set env: `REACT_APP_BACKEND_URL=https://api.brandkrt.com`.
+1. Connect the repo, set the project root to `frontend`.
+2. Vercel will pick up `frontend/vercel.json` (rewrites all `/api/*` and `/uploads/*` to the API origin).
+3. Leave `REACT_APP_BACKEND_URL` unset for the standard deployment so API calls use the same-origin Vercel rewrite. Set it only for a deliberate custom API origin.
 
 ### Backend → any Python host (Render, Fly, Railway, AWS)
 1. Provide MongoDB connection string (Mongo Atlas recommended).
@@ -87,8 +89,9 @@ sudo supervisorctl restart backend
 - [ ] `ADMIN_PASSWORD` rotated
 - [ ] `CORS_ORIGINS` set to exact production origins (no `*`)
 - [ ] `APP_ENV=production` (enables `Secure` cookies)
+- [ ] Browser authentication uses HTTP-only cookies; no access JWT is stored in Web Storage
 - [ ] MongoDB IP allowlist + auth
-- [ ] Run `vercel.json` security headers (X-Frame-Options, Permissions-Policy)
+- [ ] Run `frontend/vercel.json` security headers (X-Frame-Options, Permissions-Policy)
 - [ ] Object storage migrated off local disk (S3/GCS)
 
 ## API surface (high-level)
@@ -110,7 +113,7 @@ sudo supervisorctl restart backend
 | Uploads | `/api/uploads/{folder}` (multipart) |
 | Admin | `/api/admin/{overview,users,verification,verification/{id}/decision,withdrawals,withdrawals/{id}/decision,reports,logs}` |
 | Contact | `/api/contact` |
-| Health | `/api/health` |
+| Health | `/api/health`, `/api/health/live`, `/api/health/ready` |
 
 ## Default credentials
 

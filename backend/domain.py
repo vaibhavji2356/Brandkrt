@@ -9,13 +9,17 @@ from __future__ import annotations
 import os
 import re
 import secrets
+import math
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, List, Literal
 
 from bson import ObjectId
 from bson.binary import Binary
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, File
+from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
+
+from upload_security import validate_upload
 
 # These are wired in server.py
 db = None  # type: ignore  # populated by init()
@@ -86,6 +90,81 @@ async def find_brand_for_user(user: dict) -> Optional[dict]:
             return legacy
     return None
 
+
+async def _profile_for_user(database, collection_name: str, user_id: str) -> Optional[dict]:
+    collection = getattr(database, collection_name)
+    profile = await collection.find_one({"user_id": user_id})
+    if profile:
+        return profile
+    if ObjectId.is_valid(user_id):
+        return await collection.find_one({"user_id": ObjectId(user_id)})
+    return None
+
+
+async def deal_participant_user_ids(database, deal: dict) -> set[str]:
+    participant_ids: set[str] = set()
+    brand_id = deal.get("brand_id")
+    if not brand_id and deal.get("campaign_id"):
+        campaign = await database.campaigns.find_one({"_id": oid(deal["campaign_id"])}, {"brand_id": 1})
+        brand_id = (campaign or {}).get("brand_id")
+    if brand_id:
+        brand = await database.brands.find_one({"_id": oid(brand_id)}, {"user_id": 1})
+        if brand and brand.get("user_id") is not None:
+            participant_ids.add(str(brand["user_id"]))
+        elif ObjectId.is_valid(str(brand_id)):
+            legacy_brand_user = await database.users.find_one(
+                {"_id": ObjectId(str(brand_id)), "role": "brand"}, {"_id": 1}
+            )
+            if legacy_brand_user:
+                participant_ids.add(str(legacy_brand_user["_id"]))
+    if deal.get("brand_user_id"):
+        participant_ids.add(str(deal["brand_user_id"]))
+    if deal.get("influencer_id"):
+        influencer = await database.influencers.find_one(
+            {"_id": oid(deal["influencer_id"])}, {"user_id": 1}
+        )
+        if influencer and influencer.get("user_id") is not None:
+            participant_ids.add(str(influencer["user_id"]))
+        elif ObjectId.is_valid(str(deal["influencer_id"])):
+            legacy_influencer_user = await database.users.find_one(
+                {"_id": ObjectId(str(deal["influencer_id"])), "role": "influencer"}, {"_id": 1}
+            )
+            if legacy_influencer_user:
+                participant_ids.add(str(legacy_influencer_user["_id"]))
+    if deal.get("influencer_user_id"):
+        participant_ids.add(str(deal["influencer_user_id"]))
+    return participant_ids
+
+
+async def deal_access_allowed(database, deal: dict, user: dict) -> bool:
+    """Return whether the current database user is a party to ``deal``."""
+    role = user.get("role")
+    if role == "admin":
+        return True
+    user_id = str(user["_id"])
+    if role == "brand":
+        if str(deal.get("brand_user_id") or "") == user_id or str(deal.get("brand_id") or "") == user_id:
+            return True
+        profile = await _profile_for_user(database, "brands", user_id)
+        if not profile:
+            return False
+        brand_id = deal.get("brand_id")
+        if not brand_id and deal.get("campaign_id"):
+            campaign = await database.campaigns.find_one({"_id": oid(deal["campaign_id"])}, {"brand_id": 1})
+            brand_id = (campaign or {}).get("brand_id")
+        return str(brand_id or "") == str(profile["_id"])
+    if role == "influencer":
+        if str(deal.get("influencer_user_id") or "") == user_id or str(deal.get("influencer_id") or "") == user_id:
+            return True
+        profile = await _profile_for_user(database, "influencers", user_id)
+        return bool(profile and str(deal.get("influencer_id") or "") == str(profile["_id"]))
+    return False
+
+
+async def require_deal_access(database, deal: dict, user: dict) -> None:
+    if not await deal_access_allowed(database, deal, user):
+        raise HTTPException(status_code=403, detail="You are not a participant in this deal")
+
 async def setup_indexes(database):
     await database.brands.create_index("user_id", unique=True)
     await database.influencers.create_index("user_id", unique=True)
@@ -101,6 +180,7 @@ async def setup_indexes(database):
     await database.verification_requests.create_index([("user_id", 1), ("status", 1)])
     await database.creator_insight_updates.create_index([("user_id", 1), ("submitted_at", -1)])
     await database.withdrawal_requests.create_index([("user_id", 1), ("status", 1)])
+    await database.withdrawal_requests.create_index("active_key", unique=True, sparse=True)
     await database.reviews.create_index([("target_user_id", 1)])
     await database.reports.create_index([("reporter_id", 1), ("status", 1)])
     await database.activity_logs.create_index([("user_id", 1), ("created_at", -1)])
@@ -221,7 +301,7 @@ DEAL_STATUSES = [
 class DealCreateIn(BaseModel):
     campaign_id: str
     influencer_id: str
-    amount: float = Field(ge=0)
+    amount: float = Field(gt=0, allow_inf_nan=False)
     note: Optional[str] = None
 
 class DealStatusIn(BaseModel):
@@ -240,7 +320,7 @@ class DealStatusIn(BaseModel):
 # ============== PAYMENT (escrow stub) ==============
 class PaymentCreateIn(BaseModel):
     deal_id: str
-    amount: float = Field(ge=0)
+    amount: float = Field(ge=0, allow_inf_nan=False)
 
 class RazorpayVerifyIn(BaseModel):
     payment_id: str
@@ -264,7 +344,7 @@ class VerificationDecisionIn(BaseModel):
 
 # ============== WITHDRAWAL ==============
 class WithdrawalIn(BaseModel):
-    amount: float = Field(gt=0)
+    amount: float = Field(gt=0, allow_inf_nan=False)
     method: Literal["bank", "upi"]
     details: dict
 
@@ -598,6 +678,13 @@ def register_handlers():
         campaign = await db.campaigns.find_one({"_id": oid(payload.campaign_id)})
         if not campaign:
             raise HTTPException(404, "Campaign not found")
+        if user.get("role") != "admin":
+            brand = await _profile_for_user(db, "brands", str(user["_id"]))
+            if not brand or str(campaign.get("brand_id") or "") != str(brand["_id"]):
+                raise HTTPException(403, "Only the campaign owner can create a deal")
+        influencer = await db.influencers.find_one({"_id": oid(payload.influencer_id)})
+        if not influencer:
+            raise HTTPException(404, "Influencer not found")
         now = now_utc()
         doc = {"campaign_id": payload.campaign_id, "brand_id": campaign.get("brand_id"),
                "influencer_id": payload.influencer_id, "amount": payload.amount,
@@ -605,9 +692,8 @@ def register_handlers():
                "created_at": now, "updated_at": now}
         res = await db.deals.insert_one(doc)
         # notify influencer (best-effort)
-        inf = await db.influencers.find_one({"_id": oid(payload.influencer_id)})
-        if inf:
-            await notify(inf["user_id"], "deal.offer", "New campaign offer", f"You received a new offer.", {"deal_id": str(res.inserted_id)})
+        if influencer:
+            await notify(influencer["user_id"], "deal.offer", "New campaign offer", f"You received a new offer.", {"deal_id": str(res.inserted_id)})
         await log_activity(str(user["_id"]), "deal.create", "deal", str(res.inserted_id))
         return {"deal": doc_out(await db.deals.find_one({"_id": res.inserted_id}))}
 
@@ -638,6 +724,7 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(did)})
         if not deal:
             raise HTTPException(404, "Deal not found")
+        await require_deal_access(db, deal, user)
         role = user.get("role")
         current = deal.get("status")
         allowed = {
@@ -799,6 +886,12 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(payload.deal_id)})
         if not deal:
             raise HTTPException(404, "Deal not found")
+        await require_deal_access(db, deal, user)
+        if deal.get("status") in {None, "offer_sent", "cancelled"}:
+            raise HTTPException(400, "Escrow can only be funded after the deal is accepted")
+        amount = float(deal.get("amount") or 0)
+        if amount <= 0 or not math.isfinite(amount):
+            raise HTTPException(400, "Approved deal amount must be greater than zero")
         existing = await db.payments.find_one({
             "deal_id": payload.deal_id,
             "status": {"$in": ["pending", "escrowed", "released"]},
@@ -815,12 +908,12 @@ def register_handlers():
                 }
             return {"payment": out}
         now = now_utc()
-        platform_fee = round(payload.amount * 0.10, 2)
-        influencer_earning = round(payload.amount - platform_fee, 2)
+        platform_fee = round(amount * 0.10, 2)
+        influencer_earning = round(amount - platform_fee, 2)
         # delegate to provider (stub by default; razorpay/stripe when configured)
         try:
             import payments as _payments  # noqa: WPS433
-            pr = _payments.get_provider().create_escrow(amount=payload.amount, deal_id=payload.deal_id)
+            pr = _payments.get_provider().create_escrow(amount=amount, deal_id=payload.deal_id)
             txid = pr.get("transaction_id") or secrets.token_hex(8).upper()
             client_secret = pr.get("client_secret")
             provider_name = pr.get("provider", "stub")
@@ -837,7 +930,7 @@ def register_handlers():
         is_razorpay_pending = provider_name == "razorpay" and provider_status == "pending"
         doc = {"deal_id": payload.deal_id, "campaign_id": deal.get("campaign_id"),
                "brand_id": deal.get("brand_id"), "influencer_id": deal.get("influencer_id"),
-               "amount": payload.amount,
+               "amount": amount,
                "platform_fee": platform_fee, "influencer_earning": influencer_earning,
                "release_status": "pending" if is_razorpay_pending else "held", "transaction_id": txid,
                "provider": provider_name, "client_secret": client_secret,
@@ -849,7 +942,7 @@ def register_handlers():
                "created_at": now, "updated_at": now}
         res = await db.payments.insert_one(doc)
         await db.transactions.insert_one({
-            "user_id": str(user["_id"]), "type": "escrow_in", "amount": payload.amount,
+            "user_id": str(user["_id"]), "type": "escrow_in", "amount": amount,
             "ref": str(res.inserted_id), "status": "pending" if is_razorpay_pending else "ok", "created_at": now,
         })
         payment_out = doc_out(await db.payments.find_one({"_id": res.inserted_id}))
@@ -869,6 +962,24 @@ def register_handlers():
         pay = await db.payments.find_one({"_id": oid(payload.payment_id)})
         if not pay:
             raise HTTPException(404, "Payment not found")
+        if user.get("role") != "admin":
+            uid = str(user["_id"])
+            if pay.get("deal_id"):
+                deal = await db.deals.find_one({"_id": oid(pay["deal_id"])})
+                if not deal:
+                    raise HTTPException(404, "Deal not found")
+                await require_deal_access(db, deal, user)
+            elif pay.get("agreement_id"):
+                agreement = await db.agreements.find_one({"_id": oid(pay["agreement_id"])})
+                if not agreement or agreement.get("brand_user_id") != uid:
+                    raise HTTPException(403, "Only the funding brand can verify this payment")
+            else:
+                brand = await _profile_for_user(db, "brands", uid)
+                owned_brand_ids = {uid}
+                if brand:
+                    owned_brand_ids.add(str(brand["_id"]))
+                if str(pay.get("brand_id") or pay.get("brand_user_id") or "") not in owned_brand_ids:
+                    raise HTTPException(403, "Only the funding brand can verify this payment")
         if pay.get("provider") != "razorpay":
             raise HTTPException(400, "Payment is not a Razorpay payment")
         if pay.get("transaction_id") != payload.razorpay_order_id:
@@ -980,7 +1091,33 @@ def register_handlers():
         return {"success": True, "payment": doc_out(fresh)}
     @payment_router.get("")
     async def _list_payments(user: dict = Depends(get_current_user)):
-        cur = db.payments.find({}).sort("created_at", -1).limit(100)
+        if user.get("role") == "admin":
+            query = {}
+        else:
+            uid = str(user["_id"])
+            clauses = [{"user_id": uid}]
+            if user.get("role") == "brand":
+                clauses.extend([{"brand_id": uid}, {"brand_user_id": uid}])
+                brand = await _profile_for_user(db, "brands", uid)
+                if brand:
+                    clauses.append({"brand_id": str(brand["_id"])})
+            elif user.get("role") == "influencer":
+                clauses.extend([
+                    {"influencer_id": uid}, {"creator_id": uid}, {"influencer_user_id": uid},
+                ])
+                influencer = await _profile_for_user(db, "influencers", uid)
+                if influencer:
+                    clauses.append({"influencer_id": str(influencer["_id"])})
+            agreement_ids = [
+                str(row["_id"])
+                async for row in db.agreements.find(
+                    {"$or": [{"brand_user_id": uid}, {"influencer_user_id": uid}]}, {"_id": 1}
+                )
+            ]
+            if agreement_ids:
+                clauses.append({"agreement_id": {"$in": agreement_ids}})
+            query = {"$or": clauses}
+        cur = db.payments.find(query).sort("created_at", -1).limit(100)
         return {"payments": [doc_out(x) async for x in cur]}
 
     # ----- NOTIFICATIONS -----
@@ -999,6 +1136,11 @@ def register_handlers():
     # ----- MESSAGES (locked until payment) -----
     @msg_router.get("/{deal_id}")
     async def _list_msgs(deal_id: str, user: dict = Depends(get_current_user)):
+        deal = await db.deals.find_one({"_id": oid(deal_id)})
+        if not deal:
+            raise HTTPException(404, "Deal not found")
+        if str(user["_id"]) not in await deal_participant_user_ids(db, deal):
+            raise HTTPException(403, "Only deal conversation participants can read messages")
         pay = await db.payments.find_one({"deal_id": deal_id, "status": {"$in": ["escrowed", "released"]}})
         if not pay:
             raise HTTPException(403, "Messaging is locked until payment is completed")
@@ -1007,6 +1149,11 @@ def register_handlers():
 
     @msg_router.post("")
     async def _send_msg(payload: MessageIn, user: dict = Depends(get_current_user)):
+        deal = await db.deals.find_one({"_id": oid(payload.deal_id)})
+        if not deal:
+            raise HTTPException(404, "Deal not found")
+        if str(user["_id"]) not in await deal_participant_user_ids(db, deal):
+            raise HTTPException(403, "Only deal conversation participants can send messages")
         pay = await db.payments.find_one({"deal_id": payload.deal_id, "status": {"$in": ["escrowed", "released"]}})
         if not pay:
             raise HTTPException(403, "Messaging is locked until payment is completed")
@@ -1051,11 +1198,54 @@ def register_handlers():
     # ----- WITHDRAWAL -----
     @withdraw_router.post("")
     async def _wd(payload: WithdrawalIn, user: dict = Depends(get_current_user)):
+        await require_role(user, "influencer")
+        uid = str(user["_id"])
+        influencer = await _profile_for_user(db, "influencers", uid)
+        if not influencer:
+            raise HTTPException(403, "An influencer profile is required to withdraw earnings")
+        details = {str(key): str(value).strip() for key, value in (payload.details or {}).items()}
+        if payload.method == "upi" and not (details.get("upi") or details.get("vpa")):
+            raise HTTPException(400, "A UPI ID is required")
+        if payload.method == "bank" and not all(details.get(key) for key in ("account_number", "ifsc")):
+            raise HTTPException(400, "Bank account number and IFSC are required")
+        active_statuses = ["pending", "approved", "processing"]
+        if await db.withdrawal_requests.find_one({"user_id": uid, "status": {"$in": active_statuses}}):
+            raise HTTPException(409, "You already have a pending withdrawal request")
+
+        agreement_ids = [
+            str(row["_id"])
+            async for row in db.agreements.find({"influencer_user_id": uid}, {"_id": 1})
+        ]
+        payment_clauses = [{"influencer_id": str(influencer["_id"])}]
+        if agreement_ids:
+            payment_clauses.append({"agreement_id": {"$in": agreement_ids}})
+        earnings = 0.0
+        payment_query = {
+            "$and": [
+                {"$or": payment_clauses},
+                {"$or": [{"status": "released"}, {"release_status": "released"}]},
+            ]
+        }
+        async for payment in db.payments.find(payment_query):
+            earnings += float(payment.get("influencer_earning") or 0)
+        committed = 0.0
+        async for withdrawal in db.withdrawal_requests.find({
+            "user_id": uid,
+            "status": {"$in": ["pending", "approved", "processing", "released"]},
+        }):
+            committed += float(withdrawal.get("amount") or 0)
+        available = round(max(0.0, earnings - committed), 2)
+        if payload.amount > available:
+            raise HTTPException(400, f"Withdrawal amount exceeds available balance of INR {available:.2f}")
         now = now_utc()
-        doc = {"user_id": str(user["_id"]), "amount": payload.amount,
-               "method": payload.method, "details": payload.details,
-               "status": "pending", "created_at": now, "updated_at": now}
-        res = await db.withdrawal_requests.insert_one(doc)
+        doc = {"user_id": uid, "amount": payload.amount,
+               "method": payload.method, "details": details,
+               "status": "pending", "active_key": uid,
+               "available_balance_before": available, "created_at": now, "updated_at": now}
+        try:
+            res = await db.withdrawal_requests.insert_one(doc)
+        except DuplicateKeyError:
+            raise HTTPException(409, "You already have a pending withdrawal request")
         return {"request": doc_out(await db.withdrawal_requests.find_one({"_id": res.inserted_id}))}
 
     @withdraw_router.get("/mine")
@@ -1098,34 +1288,59 @@ def register_handlers():
         host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
         return f"{proto}://{host}".rstrip("/")
 
-    def _upload_public_url(request: Request, upload_id: ObjectId) -> str:
+    def _upload_public_url(request: Request, upload_id: ObjectId, folder: str) -> str:
+        if folder == "verification":
+            return f"/api/uploads/{upload_id}"
         return f"{_public_backend_origin(request)}/api/uploads/{upload_id}"
 
     @upload_router.get("/{file_id}")
-    async def _get_upload(file_id: str):
+    async def _get_upload(file_id: str, request: Request):
         if not ObjectId.is_valid(file_id):
             raise HTTPException(404, "File not found")
         doc = await db.uploads.find_one({"_id": ObjectId(file_id)})
         if not doc:
             raise HTTPException(404, "File not found")
+        if doc.get("folder") == "verification":
+            user = await get_current_user(request)
+            if user.get("role") != "admin" and doc.get("owner_id") != str(user["_id"]):
+                raise HTTPException(403, "Verification documents are private")
+        data = bytes(doc.get("data") or b"")
+        validated = validate_upload(
+            data=data,
+            filename=doc.get("filename") or "file",
+            claimed_type=doc.get("content_type") or "",
+            folder=doc.get("folder") or "chat",
+        )
+        safe_download_name = re.sub(r"[^A-Za-z0-9._-]", "_", validated["filename"])[:180] or "file"
+        disposition = "attachment" if doc.get("folder") == "verification" or validated["kind"] != "image" else "inline"
         return Response(
-            content=bytes(doc.get("data") or b""),
-            media_type=doc.get("content_type") or "application/octet-stream",
-            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+            content=data,
+            media_type=validated["content_type"],
+            headers={
+                "Cache-Control": "private, no-store" if doc.get("folder") == "verification" else "public, max-age=31536000, immutable",
+                "Content-Disposition": f'{disposition}; filename="{safe_download_name}"',
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     @upload_router.post("/{folder}")
     async def _upload(request: Request, folder: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
         if folder not in FOLDERS:
             raise HTTPException(400, "Unknown folder")
-        data = await file.read()
+        if file.size is not None and file.size > MAX_DB_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail=f"File exceeds {MAX_DB_UPLOAD_BYTES // (1024 * 1024)}MB limit")
+        data = await file.read(MAX_DB_UPLOAD_BYTES + 1)
         if len(data) > MAX_DB_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail=f"File exceeds {MAX_DB_UPLOAD_BYTES // (1024 * 1024)}MB limit")
-        filename = file.filename or "file"
-        content_type = file.content_type or "application/octet-stream"
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        image_exts = {"jpg", "jpeg", "png", "webp", "gif", "avif", "svg"}
-        kind = "image" if content_type.startswith("image/") or ext in image_exts else "file"
+        validated = validate_upload(
+            data=data,
+            filename=file.filename or "file",
+            claimed_type=file.content_type or "",
+            folder=folder,
+        )
+        filename = validated["filename"]
+        content_type = validated["content_type"]
+        kind = validated["kind"]
         now = now_utc()
         try:
             inserted = await db.uploads.insert_one({
@@ -1142,7 +1357,7 @@ def register_handlers():
         except Exception as e:
             raise HTTPException(500, f"Upload failed: {e}")
         return {
-            "url": _upload_public_url(request, inserted.inserted_id),
+            "url": _upload_public_url(request, inserted.inserted_id, folder),
             "folder": folder,
             "filename": filename,
             "kind": kind,
@@ -1513,9 +1728,15 @@ def register_handlers():
         req = await db.withdrawal_requests.find_one({"_id": oid(rid)})
         if not req:
             raise HTTPException(404, "Withdrawal request not found")
+        if req.get("status") in {"released", "processing"}:
+            raise HTTPException(400, "Processed withdrawal requests cannot be changed")
+        update = {"status": payload.decision, "admin_note": payload.note, "updated_at": now_utc()}
+        update_operation: dict = {"$set": update}
+        if payload.decision == "rejected":
+            update_operation["$unset"] = {"active_key": ""}
         await db.withdrawal_requests.update_one(
             {"_id": oid(rid)},
-            {"$set": {"status": payload.decision, "admin_note": payload.note, "updated_at": now_utc()}},
+            update_operation,
         )
         if payload.decision == "rejected":
             await notify(req["user_id"], "withdrawal.rejected", "Payout request rejected", payload.note or "Please check your payout details and request again.", {"withdrawal_id": rid})
@@ -1611,7 +1832,10 @@ def register_handlers():
             "admin_note": "Paid via RazorpayX",
             "updated_at": now,
         }
-        await db.withdrawal_requests.update_one({"_id": oid(rid)}, {"$set": update})
+        await db.withdrawal_requests.update_one(
+            {"_id": oid(rid)},
+            {"$set": update, "$unset": {"active_key": ""}},
+        )
         await db.transactions.insert_one({
             "user_id": req.get("user_id"),
             "type": "withdrawal_payout",
@@ -1664,7 +1888,10 @@ def register_handlers():
             "admin_note": payload.note or "Marked paid manually",
             "updated_at": now,
         }
-        await db.withdrawal_requests.update_one({"_id": oid(rid)}, {"$set": update})
+        await db.withdrawal_requests.update_one(
+            {"_id": oid(rid)},
+            {"$set": update, "$unset": {"active_key": ""}},
+        )
         await db.transactions.insert_one({
             "user_id": req.get("user_id"),
             "type": "withdrawal_payout",

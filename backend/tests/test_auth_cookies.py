@@ -1,4 +1,9 @@
+import sys
+from pathlib import Path
+
 from fastapi import Response
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import server
 
@@ -12,6 +17,7 @@ def test_auth_cookies_use_secure_samesite_when_production(monkeypatch):
 
     cookie_headers = [header.lower() for header in response.headers.getlist("set-cookie")]
     assert any("access_token" in header for header in cookie_headers)
+    assert all("httponly" in header for header in cookie_headers)
     assert any("secure" in header for header in cookie_headers)
     assert any("samesite=none" in header for header in cookie_headers)
 

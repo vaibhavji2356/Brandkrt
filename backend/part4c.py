@@ -13,6 +13,8 @@ from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
+import domain as _domain
+
 # Wired by init()
 db = None  # type: ignore
 get_current_user = None  # type: ignore
@@ -159,6 +161,7 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(deal_id)})
         if not deal:
             raise HTTPException(404, "Deal not found")
+        await _domain.require_deal_access(db, deal, user)
         # only the assigned influencer (or admin) can submit metrics
         uid = str(user["_id"])
         inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])}) if deal.get("influencer_id") else None
@@ -183,14 +186,7 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(deal_id)})
         if not deal:
             raise HTTPException(404, "Deal not found")
-        uid = str(user["_id"])
-        # access: brand owner OR assigned influencer OR admin
-        if user.get("role") != "admin":
-            brand = await db.brands.find_one({"_id": oid(deal["brand_id"])}) if deal.get("brand_id") else None
-            inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])}) if deal.get("influencer_id") else None
-            allowed = uid in {(brand or {}).get("user_id"), (inf or {}).get("user_id")}
-            if not allowed:
-                raise HTTPException(403, "Forbidden")
+        await _domain.require_deal_access(db, deal, user)
         return {"metrics": _compute_metrics(deal.get("metrics") or {}, float(deal.get("amount") or 0))}
 
     # ---------- FEEDBACK / REVIEWS ----------
@@ -204,6 +200,11 @@ def register_handlers():
             raise HTTPException(400, "Invalid target_user_id")
         if not target:
             raise HTTPException(404, "Target user not found")
+        if payload.deal_id:
+            deal = await db.deals.find_one({"_id": oid(payload.deal_id)})
+            if not deal:
+                raise HTTPException(404, "Deal not found")
+            await _domain.require_deal_access(db, deal, user)
 
         # one review per (reviewer, target, deal) — update if exists
         now = now_utc()
@@ -244,6 +245,10 @@ def register_handlers():
 
     @feedback_router.get("/for-deal/{deal_id}")
     async def _reviews_for_deal(deal_id: str, user: dict = Depends(get_current_user)):
+        deal = await db.deals.find_one({"_id": oid(deal_id)})
+        if not deal:
+            raise HTTPException(404, "Deal not found")
+        await _domain.require_deal_access(db, deal, user)
         cur = db.reviews.find({"deal_id": deal_id, "status": "active"}).sort("created_at", -1)
         return {"reviews": [doc_out(x) async for x in cur]}
 
@@ -414,11 +419,9 @@ def register_handlers():
         deal = await db.deals.find_one({"_id": oid(deal_id)})
         if not deal:
             raise HTTPException(404, "Deal not found")
-        uid = str(user["_id"])
+        await _domain.require_deal_access(db, deal, user)
         brand = await db.brands.find_one({"_id": oid(deal["brand_id"])}) if deal.get("brand_id") else None
         inf = await db.influencers.find_one({"_id": oid(deal["influencer_id"])}) if deal.get("influencer_id") else None
-        if user.get("role") != "admin" and uid not in {(brand or {}).get("user_id"), (inf or {}).get("user_id")}:
-            raise HTTPException(403, "Forbidden")
 
         campaign = await db.campaigns.find_one({"_id": oid(deal["campaign_id"])}) if deal.get("campaign_id") else None
         payment = await db.payments.find_one({"deal_id": deal_id})

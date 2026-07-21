@@ -12,7 +12,10 @@ export const BRAND = {
 };
 
 const rawBackendUrl = process.env.REACT_APP_BACKEND_URL?.trim();
-const DEFAULT_BACKEND_ORIGIN = process.env.NODE_ENV === "production" ? "https://brandkrt.onrender.com" : "";
+// Production uses the checked-in Vercel /api rewrite by default. Keeping API
+// requests same-origin makes HTTP-only auth cookies reliable in browsers that
+// block third-party cookies. A custom API origin remains an explicit override.
+const DEFAULT_BACKEND_ORIGIN = "";
 export const BACKEND_ORIGIN = rawBackendUrl
   ? rawBackendUrl.replace(/\/api\/?$/, "").replace(/\/$/, "")
   : DEFAULT_BACKEND_ORIGIN;
@@ -26,11 +29,13 @@ export function assetUrl(value) {
   if (/^https?:/i.test(trimmed)) {
     try {
       const url = new URL(trimmed);
-      const isUpload = url.pathname.startsWith("/uploads/");
+      const isUpload = url.pathname.startsWith("/uploads/") || url.pathname.startsWith("/api/uploads/");
       const isAppHost = ["brandkrt.com", "www.brandkrt.com"].includes(url.hostname)
         || (typeof window !== "undefined" && url.hostname === window.location.hostname);
-      if (isUpload && isAppHost && BACKEND_ORIGIN) {
-        return `${BACKEND_ORIGIN}${url.pathname}${url.search}`;
+      if (isUpload && (isAppHost || url.hostname.endsWith(".onrender.com"))) {
+        return BACKEND_ORIGIN
+          ? `${BACKEND_ORIGIN}${url.pathname}${url.search}`
+          : `${url.pathname}${url.search}`;
       }
     } catch (_) {
       return trimmed;
