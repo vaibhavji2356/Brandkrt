@@ -125,6 +125,15 @@ describe("Admin AI Lead Intelligence UI", () => {
     expect(container.textContent).toContain("Saved");
   });
 
+  test("creator discovery defaults campaign budget currency to INR", async () => {
+    mockPost.mockRejectedValueOnce(new Error("stop after payload capture"));
+    await act(async () => root.render(<LeadDiscoveryPage entityType="creator" />));
+    expect(container.textContent).toContain("Maximum budget (INR)");
+    const form = container.querySelector('[data-testid="lead-discovery-form"]');
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(mockPost.mock.calls[0][1].currency).toBe("INR");
+  });
+
   test("failed discovery is retryable and always resets loading", async () => {
     mockPost.mockRejectedValueOnce(new Error("Research service unavailable"));
     await act(async () => root.render(<LeadDiscoveryPage entityType="brand" />));

@@ -194,7 +194,7 @@ const initialDiscovery = {
   research_name: "", industry: "", niche: "", categories: "", keywords: "",
   exclusions: "", location: "", language: "", minimum_followers: "",
   maximum_followers: "", minimum_engagement_rate: "", minimum_audience_quality: "",
-  campaign_objective: "", minimum_budget: "", maximum_budget: "", currency: "USD",
+  campaign_objective: "", minimum_budget: "", maximum_budget: "", currency: "INR",
   result_limit: "12", platforms: ["youtube"],
 };
 
@@ -315,7 +315,13 @@ export function LeadDiscoveryPage({ entityType }) {
             {!isBrand && <Field label="Minimum engagement %" type="number" step="0.01" value={form.minimum_engagement_rate} onChange={(value) => update("minimum_engagement_rate", value)} />}
             {!isBrand && <Field label="Minimum audience quality" type="number" value={form.minimum_audience_quality} onChange={(value) => update("minimum_audience_quality", value)} hint="Applied only when an official quality measurement exists." />}
             <Field label="Campaign objective" value={form.campaign_objective} onChange={(value) => update("campaign_objective", value)} placeholder="Brand Awareness" />
-            <Field label="Maximum budget" type="number" value={form.maximum_budget} onChange={(value) => update("maximum_budget", value)} />
+            <label className="text-sm font-medium">Currency
+              <select value={form.currency} onChange={(event) => update("currency", event.target.value)} className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2.5">
+                <option value="INR">INR (Indian Rupees)</option>
+                <option value="USD">USD</option>
+              </select>
+            </label>
+            <Field label={`Maximum budget (${form.currency})`} type="number" value={form.maximum_budget} onChange={(value) => update("maximum_budget", value)} />
             <Field label="Exclusions" value={form.exclusions} onChange={(value) => update("exclusions", value)} placeholder="competitor, gambling" />
             <label className="text-sm font-medium">Result limit
               <select value={form.result_limit} onChange={(event) => update("result_limit", event.target.value)} className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2.5">

@@ -67,6 +67,8 @@ class ResearchAgent:
         results = orchestration.task_results
         warnings.extend(orchestration.warnings)
         entities = [item.entity for item in orchestration.aggregated_results]
+        entities, filter_warnings = _apply_follower_range(entities, request)
+        warnings.extend(filter_warnings)
         ranked = rank_profiles(entities, request)
         ranking_summary = [RankingSummaryItem(
             entity_key=f"{item.profile.platform.value}:{item.profile.platform_id}",
@@ -100,6 +102,42 @@ class ResearchAgent:
             ai_context=context,
         )
         return ResearchRun(tasks=ordered, results=results, package=package)
+
+
+def _apply_follower_range(entities, request: DiscoveryCriteria):
+    """Enforce requested bounds only when the provider supplied a factual count."""
+    if request.minimum_followers is None and request.maximum_followers is None:
+        return entities, []
+
+    included = []
+    excluded = 0
+    unavailable = 0
+    for entity in entities:
+        count = entity.follower_count
+        if count is None:
+            unavailable += 1
+            included.append(entity)
+            continue
+        if request.minimum_followers is not None and count < request.minimum_followers:
+            excluded += 1
+            continue
+        if request.maximum_followers is not None and count > request.maximum_followers:
+            excluded += 1
+            continue
+        included.append(entity)
+
+    warnings = []
+    if excluded:
+        warnings.append(
+            f"Excluded {excluded} normalized {'entity' if excluded == 1 else 'entities'} "
+            "outside the requested follower range."
+        )
+    if unavailable:
+        warnings.append(
+            f"Retained {unavailable} normalized {'entity' if unavailable == 1 else 'entities'} "
+            "with unavailable follower counts; the range was not fabricated or enforced for them."
+        )
+    return included, warnings
 
 
 def _source_summary(entities) -> list[SourceSummaryItem]:

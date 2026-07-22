@@ -41,7 +41,7 @@ class AdminResearchRequest(DiscoveryCriteria):
     research_name: str | None = Field(default=None, max_length=120)
     industry: str | None = Field(default=None, max_length=120)
     minimum_audience_quality: float | None = Field(default=None, ge=0, le=100)
-    currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
+    currency: str = Field(default="INR", pattern=r"^[A-Z]{3}$")
 
     def discovery_criteria(self) -> DiscoveryCriteria:
         values = self.model_dump(exclude={

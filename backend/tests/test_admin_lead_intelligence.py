@@ -121,6 +121,32 @@ def test_research_job_returns_grounded_normalized_results(monkeypatch, payload, 
     asyncio.run(scenario())
 
 
+def test_creator_research_enforces_follower_and_inr_budget_ranges(monkeypatch):
+    async def scenario():
+        _database, client = await _context(monkeypatch)
+        try:
+            follower_payload = {
+                **CREATOR_REQUEST, "minimum_followers": 31_000,
+                "maximum_followers": 35_000, "maximum_budget": 1_000,
+                "currency": "INR",
+            }
+            follower_detail = await _create_completed(client, follower_payload)
+            assert [item["follower_count"] for item in follower_detail["results"]] == [35_000]
+            assert all(item["pricing"]["currency"] == "INR" for item in follower_detail["results"])
+            assert any("outside the requested follower range" in item for item in follower_detail["warnings"])
+
+            budget_payload = {
+                **CREATOR_REQUEST, "maximum_followers": 50_000,
+                "maximum_budget": 50, "currency": "INR",
+            }
+            budget_detail = await _create_completed(client, budget_payload)
+            assert budget_detail["result_count"] == 0
+            assert any("outside the requested INR budget range" in item for item in budget_detail["warnings"])
+        finally:
+            await client.aclose()
+    asyncio.run(scenario())
+
+
 def test_research_history_filters_and_reruns(monkeypatch):
     async def scenario():
         _database, client = await _context(monkeypatch)

@@ -67,6 +67,8 @@ class AdminLeadService:
             duplicates = _duplicate_map(package.identity_suggestions)
             results = []
             extra_warnings: list[str] = []
+            budget_excluded = 0
+            budget_unavailable = 0
             if request.minimum_audience_quality is not None:
                 extra_warnings.append(
                     "Audience-quality filtering was not applied where an official quality measurement was unavailable."
@@ -77,11 +79,28 @@ class AdminLeadService:
                 commercial = await self.repository.commercial_summary(
                     profile.platform.value, profile.platform_id,
                 ) if profile.entity_type == "creator" else None
-                results.append(_lead_result(
+                result = _lead_result(
                     profile, ranked, package.confidence, request,
                     recommendations.get(entity_key), match.reasoning_source,
                     match.degraded, commercial, duplicates.get(entity_key, []),
-                ))
+                )
+                budget_status = _budget_status(result, request)
+                if budget_status == "outside":
+                    budget_excluded += 1
+                    continue
+                if budget_status == "unavailable":
+                    budget_unavailable += 1
+                results.append(result)
+            if budget_excluded:
+                extra_warnings.append(
+                    f"Excluded {budget_excluded} creator {'result' if budget_excluded == 1 else 'results'} "
+                    f"outside the requested {request.currency} budget range."
+                )
+            if budget_unavailable:
+                extra_warnings.append(
+                    f"Retained {budget_unavailable} creator {'result' if budget_unavailable == 1 else 'results'} "
+                    "because factual pricing was unavailable; no rate was fabricated."
+                )
             results.sort(key=lambda item: (-item.priority.score, -item.recommendation_score, item.entity_key))
             results = results[:request.result_limit]
             completed_at = datetime.now(timezone.utc)
@@ -262,6 +281,21 @@ def _lead_result(
         pricing=pricing, commercial_history=commercial_summary,
         possible_duplicates=duplicates[:10], warnings=list(dict.fromkeys(profile.warnings))[:30],
     )
+
+
+def _budget_status(result: LeadIntelligenceResult, request: AdminResearchRequest) -> str:
+    if result.entity_type != "creator":
+        return "not_applicable"
+    if request.minimum_budget is None and request.maximum_budget is None:
+        return "not_requested"
+    rate = result.pricing.selected_rate if result.pricing else None
+    if rate is None:
+        return "unavailable"
+    if request.minimum_budget is not None and rate < request.minimum_budget:
+        return "outside"
+    if request.maximum_budget is not None and rate > request.maximum_budget:
+        return "outside"
+    return "inside"
 
 
 def _priority(profile: NormalizedProfile, commercial_fit: float, commercial: dict | None) -> PriorityScore:

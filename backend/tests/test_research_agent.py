@@ -165,3 +165,20 @@ def test_agent_deduplicates_provider_results_before_packaging():
     first = run(ResearchAgent().research(criteria))
     keys = [(item.platform, item.platform_id) for item in first.package.normalized_entities]
     assert len(keys) == len(set(keys))
+
+
+def test_agent_hard_filters_known_follower_counts_and_retains_unknown_counts():
+    filtered = run(ResearchAgent().research(DiscoveryCriteria(
+        entity_type="creator", platforms=["instagram"],
+        minimum_followers=31_000, maximum_followers=35_000,
+    ))).package
+    assert [item.follower_count for item in filtered.normalized_entities] == [35_000]
+    assert any("outside the requested follower range" in item for item in filtered.warnings)
+
+    unknown = run(ResearchAgent().research(DiscoveryCriteria(
+        entity_type="creator", platforms=["snapchat"],
+        minimum_followers=1_000, maximum_followers=50_000,
+    ))).package
+    assert unknown.normalized_entities
+    assert all(item.follower_count is None for item in unknown.normalized_entities)
+    assert any("unavailable follower counts" in item for item in unknown.warnings)
