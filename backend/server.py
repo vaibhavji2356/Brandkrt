@@ -768,13 +768,16 @@ api_router.include_router(auth_router)
 # The router receives only the existing auth dependency and has no DB handle.
 from brand_discovery_ai import create_router as create_brand_discovery_router  # noqa: E402
 from brand_discovery_ai.discovery_router import create_discovery_router  # noqa: E402
+from commercial_intelligence import create_commercial_intelligence_routers  # noqa: E402
 from creator_intelligence.router import create_creator_intelligence_router  # noqa: E402
 from match_intelligence.router import create_match_router  # noqa: E402
 
 api_router.include_router(create_brand_discovery_router(get_current_user))
 api_router.include_router(create_discovery_router(get_current_user))
 api_router.include_router(create_match_router(get_current_user))
-api_router.include_router(create_creator_intelligence_router(get_current_user))
+api_router.include_router(create_creator_intelligence_router(get_current_user, lambda: db))
+for _commercial_router in create_commercial_intelligence_routers(get_current_user, lambda: db):
+    api_router.include_router(_commercial_router)
 
 # Part 1B: domain routes
 import domain  # noqa: E402

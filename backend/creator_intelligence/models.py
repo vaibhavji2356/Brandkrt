@@ -1,7 +1,7 @@
 """Additive contracts for pricing, ROI, and creator portfolio intelligence."""
 
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
@@ -79,6 +79,8 @@ class CreatorIntelligenceRequest(BaseModel):
     campaign_objective: CampaignObjective
     currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
     creator_inputs: list[CreatorInsightInput] = Field(default_factory=list, max_length=50)
+    include_ai_narrative: bool = False
+    use_commercial_history: bool = False
 
     @field_validator("creator_inputs")
     @classmethod
@@ -189,3 +191,35 @@ class CreatorIntelligenceResponse(BaseModel):
     confidence: float = Field(ge=0, le=1)
     reasoning_source: str
     warnings: list[str] = Field(default_factory=list)
+    ai_narrative: "PortfolioNarrative | None" = None
+    narrative_source: Literal["disabled", "openai_grounded", "deterministic_fallback"] = "disabled"
+    narrative_degraded: bool = False
+
+
+class CreatorNarrative(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    profile_reference: str = Field(min_length=3, max_length=300)
+    platform: str = Field(min_length=1, max_length=40)
+    platform_id: str = Field(min_length=1, max_length=200)
+    username: str | None = Field(default=None, max_length=200)
+    selection_reason: ShortText
+    strengths: list[ShortText] = Field(min_length=1, max_length=5)
+    weaknesses: list[ShortText] = Field(min_length=1, max_length=5)
+    pricing_assessment: ShortText
+    negotiation_guidance: ShortText
+    uncertainty: ShortText
+    risk_flags: list[ShortText] = Field(min_length=1, max_length=5)
+
+
+class PortfolioNarrative(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    executive_summary: ShortText
+    objective_alignment: ShortText
+    budget_assessment: ShortText
+    portfolio_tradeoffs: list[ShortText] = Field(min_length=1, max_length=5)
+    expected_efficiency_summary: ShortText
+    risk_summary: list[ShortText] = Field(min_length=1, max_length=5)
+    recommended_actions: list[ShortText] = Field(min_length=1, max_length=5)
+    creator_narratives: list[CreatorNarrative] = Field(max_length=50)
+    confidence_statement: ShortText
+    warnings: list[ShortText] = Field(max_length=10)
