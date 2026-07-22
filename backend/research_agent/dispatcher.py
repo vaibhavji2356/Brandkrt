@@ -1,4 +1,4 @@
-"""Provider-independent task dispatch; execution providers own adapter details."""
+"""Backward-compatible Research Dispatcher backed by ProviderOrchestrator."""
 
 from abc import ABC, abstractmethod
 import time
@@ -9,6 +9,9 @@ from brand_discovery_ai.source_adapters import SourceProvider, build_mock_adapte
 from .errors import UnsupportedTaskError
 from .metrics import research_metrics
 from .models import ResearchTask, TaskResult, TaskStatus, TaskType
+from .provider_orchestrator import (
+    ProviderOrchestrationResult, ProviderOrchestrator, SUPPORTED_TASK_TYPES,
+)
 
 
 class ResearchExecutionProvider(ABC):
@@ -20,10 +23,11 @@ class ResearchExecutionProvider(ABC):
 
 
 class MockPlatformExecutionProvider(ResearchExecutionProvider):
-    """The only implemented bridge; invokes deterministic adapters without transport."""
+    """Compatibility wrapper; all execution is delegated to the orchestrator."""
 
     def __init__(self, adapter: SourceProvider):
         self.adapter = adapter
+        self.orchestrator = ProviderOrchestrator([adapter])
 
     def supports(self, task: ResearchTask) -> bool:
         return task.platform == self.adapter.platform.value and task.type in {
@@ -32,39 +36,49 @@ class MockPlatformExecutionProvider(ResearchExecutionProvider):
         }
 
     async def execute(self, task: ResearchTask, criteria: DiscoveryCriteria) -> TaskResult:
-        if task.type == TaskType.CREATOR_SEARCH:
-            entities = await self.adapter.search_creators(criteria)
-        elif task.type == TaskType.BRAND_SEARCH:
-            entities = await self.adapter.search_brands(criteria)
-        elif task.type in {TaskType.PROFILE_LOOKUP, TaskType.PLATFORM_LOOKUP}:
-            profile = await self.adapter.get_profile(task.query)
-            entities = [profile] if profile else []
-        elif task.type == TaskType.KEYWORD_LOOKUP:
-            entities = (
-                await self.adapter.search_brands(criteria)
-                if task.entity_type == "brand"
-                else await self.adapter.search_creators(criteria)
-            )
-        else:
+        if task.type not in SUPPORTED_TASK_TYPES:
             raise UnsupportedTaskError("Research task type is not implemented.")
-        return TaskResult(task_id=task.id, status=TaskStatus.COMPLETED, entities=entities)
+        result = await self.orchestrator.execute([task], criteria)
+        return result.task_results[0]
 
 
 class ResearchDispatcher:
-    def __init__(self, providers: list[ResearchExecutionProvider]):
-        self.providers = providers
+    def __init__(
+        self,
+        providers: list[ResearchExecutionProvider] | None = None,
+        *,
+        orchestrator: ProviderOrchestrator | None = None,
+    ):
+        self.providers = providers or []
+        if orchestrator is None:
+            adapters = [
+                item.adapter for item in self.providers
+                if isinstance(item, MockPlatformExecutionProvider)
+            ]
+            orchestrator = ProviderOrchestrator(adapters)
+        self.orchestrator = orchestrator
 
     async def dispatch(self, task: ResearchTask, criteria: DiscoveryCriteria) -> TaskResult:
+        if task.type not in SUPPORTED_TASK_TYPES:
+            raise UnsupportedTaskError("Research task type is not implemented.")
+        orchestration = await self.dispatch_many([task], criteria)
+        if not orchestration.task_results:
+            raise UnsupportedTaskError("No research provider supports this task.")
+        return orchestration.task_results[0]
+
+    async def dispatch_many(
+        self, tasks: list[ResearchTask], criteria: DiscoveryCriteria,
+    ) -> ProviderOrchestrationResult:
+        if any(task.type not in SUPPORTED_TASK_TYPES for task in tasks):
+            raise UnsupportedTaskError("Research task type is not implemented.")
         started = time.perf_counter()
         try:
-            provider = next((item for item in self.providers if item.supports(task)), None)
-            if provider is None:
-                raise UnsupportedTaskError("No research provider supports this task.")
-            task.status = TaskStatus.RUNNING
-            result = await provider.execute(task, criteria)
-            task.status = result.status
-            if result.status == TaskStatus.COMPLETED:
-                research_metrics.add("tasks_completed")
+            result = await self.orchestrator.execute(tasks, criteria)
+            completed = sum(
+                item.status == TaskStatus.COMPLETED for item in result.task_results
+            )
+            if completed:
+                research_metrics.add("tasks_completed", completed)
             return result
         finally:
             research_metrics.add("dispatcher_time_ms", int((time.perf_counter() - started) * 1000))
@@ -72,6 +86,6 @@ class ResearchDispatcher:
 
 def build_mock_dispatcher() -> ResearchDispatcher:
     adapters = build_mock_adapters()
-    return ResearchDispatcher([
-        MockPlatformExecutionProvider(adapters[platform]) for platform in Platform
-    ])
+    return ResearchDispatcher(orchestrator=ProviderOrchestrator([
+        adapters[platform] for platform in Platform
+    ]))

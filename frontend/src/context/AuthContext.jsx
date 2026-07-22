@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import api, { formatApiError } from "@/lib/api";
-import { waitForBackendReady } from "@/lib/backendStatus";
+import { resetBackendReadiness, waitForBackendReady } from "@/lib/backendStatus";
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = "brandkrt_access_token";
@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
     try {
       await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
     } catch (_) {
+      setBackendState("unavailable");
       setUser(null);
       setLoading(false);
       return;
@@ -52,10 +53,18 @@ export function AuthProvider({ children }) {
   }, [refresh]);
 
   const login = async (email, password, remember_me = false) => {
-    await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
-    const { data } = await api.post("/auth/login", { email, password, remember_me });
-    setUser(data.user);
-    return data.user;
+    try {
+      await waitForBackendReady({ onState: ({ state }) => setBackendState(state) });
+      const { data } = await api.post("/auth/login", { email, password, remember_me });
+      setUser(data.user);
+      return data.user;
+    } catch (error) {
+      if (!error?.response || [408, 425, 429, 500, 502, 503, 504].includes(error.response.status)) {
+        resetBackendReadiness();
+        setBackendState("unavailable");
+      }
+      throw error;
+    }
   };
 
   const googleSignIn = async (credential) => {

@@ -288,5 +288,7 @@ def test_research_dispatcher_supported_search_and_access_restriction():
     )
     dispatcher = ResearchDispatcher([MockPlatformExecutionProvider(restricted)])
     task.status = "pending"
-    with pytest.raises(XAccessRestrictedError):
-        run(dispatcher.dispatch(task, criteria))
+    restricted_result = run(dispatcher.dispatch(task, criteria))
+    assert restricted_result.status == "failed"
+    assert restricted_result.entities == []
+    assert any("failed safely" in warning for warning in restricted_result.warnings)

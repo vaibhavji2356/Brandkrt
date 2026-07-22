@@ -5,7 +5,7 @@ import { Star } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function AuthLayout({ children, side = "left", tagline }) {
-  const { backendState } = useAuth();
+  const { backendState, refresh } = useAuth();
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">
       <div className={`relative hidden lg:flex ${side === "left" ? "order-first" : "order-last"} bg-primary text-white overflow-hidden`}>
@@ -43,6 +43,14 @@ export default function AuthLayout({ children, side = "left", tagline }) {
             {(backendState === "checking" || backendState === "waking") && (
               <div className="mb-5 rounded-xl border border-secondary/30 bg-secondary/10 px-4 py-3 text-sm text-foreground" role="status">
                 Waking server...
+              </div>
+            )}
+            {backendState === "unavailable" && (
+              <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-foreground" role="alert">
+                <span>Backend is unavailable. Please try again.</span>
+                <button type="button" onClick={refresh} className="shrink-0 font-semibold text-primary hover:underline">
+                  Retry
+                </button>
               </div>
             )}
             {children}

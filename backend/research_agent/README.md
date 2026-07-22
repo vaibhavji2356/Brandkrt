@@ -1,25 +1,21 @@
 # Research Agent architecture
 
-The Research Agent is an orchestration-only, fact-first pipeline:
+The Research Agent is a fact-first pipeline:
 
-`DiscoveryCriteria → task generation → validation → priority scheduling → sequential dispatch → result collection → existing normalization → existing deduplication → validation/bounding → existing ranking and identity suggestions → factual AI context → ResearchPackage`
+`DiscoveryCriteria -> task generation -> validation -> priority scheduling -> ProviderOrchestrator -> provider health/capability checks -> bounded execution -> aggregation/deduplication -> ranking and identity suggestions -> factual AI context -> ResearchPackage`
 
-No route, database handle, HTTP client, prompt, model call, or persistence mechanism is present. The dispatcher knows only the `ResearchExecutionProvider` interface. Its current providers wrap deterministic mock platform adapters. Real platform APIs, web search, website parsing, CRM, analytics, embeddings, vector search, and background workers are abstract hook contracts only.
+No route, database handle, prompt, model call, or persistence mechanism is present. The dispatcher delegates to `ProviderOrchestrator`, which knows only the unchanged `SourceProvider` interface. Deterministic mocks remain the default; production YouTube, Twitch, and X adapters can be injected without Research Agent changes. See `PROVIDER_ORCHESTRATOR.md` for lifecycle, timeout, aggregation, confidence, and future-provider rules.
 
 ## Tasks and scheduling
 
-`ResearchTask` contains type, ID, `HIGH`/`NORMAL`/`LOW` priority, optional platform and entity type, query, status, metadata, and creation time. Supported task types are creator search, brand search, profile lookup, keyword lookup, website lookup, platform lookup, and future custom task. Website and custom tasks have no implementation in this phase.
+`ResearchTask` contains type, ID, `HIGH`/`NORMAL`/`LOW` priority, optional platform and entity type, query, status, metadata, and creation time. Supported types are creator search, brand search, profile lookup, keyword lookup, website lookup, platform lookup, and future custom task. Website and custom tasks remain unimplemented.
 
-Scheduling is stable and sequential: priority, creation time, then task ID. Validation rejects empty or unsafe queries, duplicate task fingerprints, unknown platforms, capability mismatches, and unavailable network-only providers.
+Scheduling is stable by priority, creation time, and task ID. The orchestrator supports sequential provider execution by default and optional cross-provider concurrency with deterministic output ordering. Validation rejects empty or unsafe queries, duplicate fingerprints, unknown platforms, and unavailable capabilities.
 
 ## Context and package
 
-The context builder serializes measurable normalized facts, ranking summaries, source summaries, and the sanitized discovery request. It removes null/empty fields, deduplicates upstream profiles, never includes task IDs, priority, status, metadata, or business-email hashes, and estimates tokens deterministically from compact UTF-8 JSON. Entities that would exceed the configured limit are omitted with an explicit warning; a limit too small for even the request envelope fails safely.
+The context builder serializes measurable normalized facts, ranking summaries, source summaries, and a sanitized request. It removes null/empty fields, task internals, and business-email hashes, then estimates tokens deterministically. Oversized entity context is omitted with warnings; a request envelope that cannot fit fails safely.
 
-`ResearchPackage` includes the request summary, normalized entities, ranking summary, conservative identity suggestions, warnings, missing-information summary, aggregate confidence, source summary, context-size estimate, and bounded fact-only context. It contains no AI-generated prose.
+`ResearchPackage` retains its existing public schema: request summary, normalized entities, ranking summary, conservative identity suggestions, warnings, missing-information summary, aggregate confidence, source summary, context-size estimate, and bounded fact-only context. It contains no AI-generated prose.
 
-Metrics record only counts and timings: tasks created/completed, aggregate dispatcher milliseconds, validation failures, context characters, and estimated tokens. Queries, prompts, metadata, credentials, and secrets are never recorded.
-
-## Phase 5 boundary
-
-Phase 5 may implement selected hook contracts after credentials, platform policies, quota behavior, safe transport, retention rules, and provider-specific tests are approved. AI reasoning can consume `ai_context` later, but must remain downstream of factual validation and must not mutate factual metrics.
+Metrics record only counts and timings. Queries, prompts, metadata, credentials, and secrets are never recorded.

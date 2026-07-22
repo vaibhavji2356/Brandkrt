@@ -5,7 +5,6 @@ from itertools import combinations
 
 from brand_discovery_ai.discovery_schemas import DiscoveryCriteria, EntityType, Platform
 from brand_discovery_ai.identity import suggest_identity
-from brand_discovery_ai.normalization import deduplicate_profiles
 from brand_discovery_ai.ranking import rank_profiles
 from brand_discovery_ai.source_adapters import CAPABILITY_REGISTRY
 
@@ -64,13 +63,10 @@ class ResearchAgent:
         tasks, warnings = self.generate_tasks(request)
         valid = self.validator.validate_all(tasks)
         ordered = self.scheduler.order(valid)
-        results = []
-        for task in ordered:  # Intentionally sequential in this phase.
-            results.append(await self.dispatcher.dispatch(task, request))
-
-        entities = deduplicate_profiles([
-            entity for result in results for entity in result.entities
-        ])
+        orchestration = await self.dispatcher.dispatch_many(ordered, request)
+        results = orchestration.task_results
+        warnings.extend(orchestration.warnings)
+        entities = [item.entity for item in orchestration.aggregated_results]
         ranked = rank_profiles(entities, request)
         ranking_summary = [RankingSummaryItem(
             entity_key=f"{item.profile.platform.value}:{item.profile.platform_id}",
@@ -91,9 +87,6 @@ class ResearchAgent:
         if context_size.omitted_entities:
             warnings.append(f"{context_size.omitted_entities} entities omitted from AI context to respect the configured limit.")
         missing = _missing_information(entities)
-        confidence = round(
-            sum(entity.source_confidence for entity in entities) / len(entities), 4
-        ) if entities else 0.0
         package = ResearchPackage(
             request_summary=request.model_dump(mode="json", exclude_none=True),
             normalized_entities=entities,
@@ -101,7 +94,7 @@ class ResearchAgent:
             identity_suggestions=identities,
             warnings=list(dict.fromkeys(warnings + [warning for result in results for warning in result.warnings])),
             missing_information=missing,
-            confidence=confidence,
+            confidence=orchestration.aggregate_confidence,
             source_summary=sources,
             context_size_estimate=context_size,
             ai_context=context,

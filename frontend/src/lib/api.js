@@ -1,7 +1,13 @@
 import axios from "axios";
 import { API, normalizeAssetUrls } from "./brand";
 
-const DEFAULT_TIMEOUT_MS = 75000;
+function boundedApiTimeout() {
+  const configured = Number(process.env.REACT_APP_API_TIMEOUT_MS);
+  if (!Number.isFinite(configured) || configured <= 0) return 30000;
+  return Math.min(configured, 60000);
+}
+
+const DEFAULT_TIMEOUT_MS = boundedApiTimeout();
 const RETRYABLE_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const RETRYABLE_METHODS = new Set(["get", "head", "options"]);
 
@@ -28,7 +34,7 @@ function canRetryRequest(error) {
 const api = axios.create({
   baseURL: API,
   withCredentials: true,
-  timeout: Number(process.env.REACT_APP_API_TIMEOUT_MS || DEFAULT_TIMEOUT_MS),
+  timeout: DEFAULT_TIMEOUT_MS,
   headers: { "Content-Type": "application/json" },
 });
 

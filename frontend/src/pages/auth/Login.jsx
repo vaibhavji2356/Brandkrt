@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import AuthLayout from "./AuthLayout";
@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { getGoogleClientId, isGoogleConfigured, renderGoogleSignInButton, setGoogleClientId } from "@/lib/googleAuth";
 import api from "@/lib/api";
-import { waitForBackendReady } from "@/lib/backendStatus";
 
 export default function Login() {
   const { login, googleSignIn, formatApiError } = useAuth();
@@ -22,29 +21,35 @@ export default function Login() {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState("");
   const [googleEnabled, setGoogleEnabled] = useState(isGoogleConfigured());
-  const [googleConfigState, setGoogleConfigState] = useState("checking");
+  const [googleConfigState, setGoogleConfigState] = useState(isGoogleConfigured() ? "enabled" : "checking");
   const googleBtnRef = useRef(null);
+  const googleConfigPromiseRef = useRef(null);
 
-  // Wait for Render readiness before deciding whether Google is configured. A
-  // network failure during a cold start must not be shown as a config error.
-  useEffect(() => {
-    let alive = true;
-    waitForBackendReady({
-      onState: ({ state }) => {
-        if (alive && (state === "checking" || state === "waking")) setGoogleConfigState("waking");
-      },
-    }).then(() => api.get("/auth/google/config")).then((r) => {
-      if (!alive) return;
+  const loadGoogleConfiguration = useCallback(() => {
+    if (googleConfigPromiseRef.current) return googleConfigPromiseRef.current;
+    setGoogleConfigState("checking");
+    googleConfigPromiseRef.current = api.get("/auth/google/config", {
+      timeout: 10000,
+      __maxRetries: 0,
+    }).then((r) => {
       const clientId = r.data?.client_id || "";
       setGoogleClientId(clientId);
       const enabled = !!r.data?.enabled && !!clientId;
       setGoogleEnabled(enabled);
       setGoogleConfigState(enabled ? "enabled" : "disabled");
+      return enabled;
     }).catch(() => {
-      if (alive) setGoogleConfigState("unavailable");
+      setGoogleConfigState("unavailable");
+      return false;
+    }).finally(() => {
+      googleConfigPromiseRef.current = null;
     });
-    return () => { alive = false; };
+    return googleConfigPromiseRef.current;
   }, []);
+
+  // Google configuration is independent from the backend readiness banner. The
+  // fallback remains visible while this bounded request wakes or fails.
+  useEffect(() => { loadGoogleConfiguration(); }, [loadGoogleConfiguration]);
 
   const completeGoogleSignIn = async (credential) => {
     setGoogleBusy(true);
@@ -140,14 +145,17 @@ export default function Login() {
           </div>
         </div>
 
-        {!googleEnabled && googleConfigState !== "waking" && googleConfigState !== "checking" && (
+        {!googleEnabled && (
         <button
           type="button"
-          onClick={() => toast.error(
-            googleConfigState === "disabled"
-              ? "Google sign-in is not configured on this server yet."
-              : "Google sign-in is temporarily unavailable. Please try again shortly."
-          )}
+          onClick={async () => {
+            if (googleConfigState === "disabled") {
+              toast.error("Google sign-in is not configured on this server yet.");
+              return;
+            }
+            const enabled = await loadGoogleConfiguration();
+            if (!enabled) toast.error("Google sign-in is temporarily unavailable. Please try again shortly.");
+          }}
           disabled={googleBusy}
           data-testid="login-google"
           aria-label="Continue with Google"
@@ -159,7 +167,7 @@ export default function Login() {
         )}
         <div
           ref={googleBtnRef}
-          data-testid="login-google"
+          data-testid="login-google-container"
           className={`flex min-h-[44px] w-full justify-center overflow-hidden rounded-full ${googleBusy ? "pointer-events-none opacity-60" : ""} ${googleEnabled ? "" : "hidden"}`}
         />
 

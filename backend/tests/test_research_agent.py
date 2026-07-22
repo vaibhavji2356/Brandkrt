@@ -149,7 +149,8 @@ def test_research_agent_returns_complete_fact_only_package_and_metrics():
     assert package.ranking_summary
     assert package.source_summary
     assert package.context_size_estimate.estimated_tokens <= 2500
-    assert package.confidence == pytest.approx(0.82)
+    assert package.confidence == pytest.approx(0.7257)
+    assert package.confidence < 0.82  # Discovery/completeness never inflate raw source confidence.
     assert any("snapchat does not support brand" in warning for warning in package.warnings)
     assert any("follower_count" in item for item in package.missing_information)
     metrics = research_metrics.snapshot()
