@@ -107,12 +107,15 @@ def build_mock_adapters() -> dict[Platform, SourceProvider]:
 def build_source_adapters(
     *, youtube_settings=None, youtube_http_transport=None,
     twitch_settings=None, twitch_http_transport=None,
+    x_settings=None, x_http_transport=None,
 ) -> dict[Platform, SourceProvider]:
-    """Production factory: YouTube and Twitch are real; other platforms remain mocks."""
+    """Production factory: YouTube, Twitch, and X are real; other platforms remain mocks."""
     from .twitch_adapter import TwitchHelixAdapter
     from .twitch_config import TwitchSettings
     from .youtube_adapter import YouTubeDataAPIAdapter
     from .youtube_config import YouTubeSettings
+    from .x_adapter import XApiAdapter
+    from .x_config import XSettings
 
     adapters = build_mock_adapters()
     settings = youtube_settings or YouTubeSettings.from_env()
@@ -123,6 +126,8 @@ def build_source_adapters(
     adapters[Platform.TWITCH] = TwitchHelixAdapter(
         twitch, http_transport=twitch_http_transport,
     )
+    x = x_settings or XSettings.from_env()
+    adapters[Platform.X] = XApiAdapter(x, http_transport=x_http_transport)
     return adapters
 
 
