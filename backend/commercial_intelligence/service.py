@@ -12,7 +12,7 @@ from creator_intelligence.models import CreatorInsightInput, CreatorIntelligence
 from .models import (
     AnalyticsSummary, CampaignPerformanceCreate, CampaignPerformancePatch,
     CampaignPerformanceRecord, CommercialProfile, CommercialProfileCreate,
-    CommercialProfilePatch, MetricComparison, NegotiationCreate, NegotiationRecord,
+    CommercialProfilePatch, MetricComparison, MetricEvidenceStatus, NegotiationCreate, NegotiationRecord,
     PerformanceComparison, RateHistoryCreate, RateHistoryRecord, RateType,
     VerificationStatus,
 )
@@ -63,7 +63,8 @@ class CommercialService:
                     "verification_status": payload.rate_verification_status.value,
                     "effective_at": now, "notes": [], "created_at": now,
                 })
-        await self.repository.audit(actor_id, "creator_commercial.profile.create", "creator_commercial_profile", profile_id, list(document))
+        await self.repository.audit(actor_id, "creator_commercial.profile.create", "creator_commercial_profile", profile_id,
+                                    list(document), tenant_id=tenant_id, actor_category=user.get("role", "unknown"))
         return CommercialProfile.model_validate(public_document(profile))
 
     async def list_profiles(self, user: dict, limit: int, platform: str | None) -> list[CommercialProfile]:
@@ -84,7 +85,8 @@ class CommercialService:
         changes["updated_at"] = _now()
         updated = await self.repository.patch_profile(profile, str(user["_id"]), changes)
         await self.repository.audit(str(user["_id"]), "creator_commercial.profile.update",
-                                    "creator_commercial_profile", profile_id, list(changes))
+                                    "creator_commercial_profile", profile_id, list(changes),
+                                    tenant_id=profile["tenant_id"], actor_category=user.get("role", "unknown"))
         return CommercialProfile.model_validate(public_document(updated))
 
     async def append_rate(self, user: dict, profile_id: str,
@@ -110,7 +112,8 @@ class CommercialService:
             update["rate_verification_status"] = payload.verification_status.value
         await self.repository.patch_profile(profile, str(user["_id"]), update)
         await self.repository.audit(str(user["_id"]), "creator_commercial.rate.append",
-                                    "creator_rate_history", str(rate["_id"]), list(document))
+                                    "creator_rate_history", str(rate["_id"]), list(document),
+                                    tenant_id=profile["tenant_id"], actor_category=user.get("role", "unknown"))
         return RateHistoryRecord.model_validate(public_document(rate))
 
     async def list_rates(self, user: dict, profile_id: str, limit: int) -> list[RateHistoryRecord]:
@@ -132,7 +135,8 @@ class CommercialService:
             profile["tenant_id"], str(user["_id"]), profile_id, document,
         )
         await self.repository.audit(str(user["_id"]), "creator_commercial.negotiation.append",
-                                    "creator_negotiation", str(record["_id"]), list(document))
+                                    "creator_negotiation", str(record["_id"]), list(document),
+                                    tenant_id=profile["tenant_id"], actor_category=user.get("role", "unknown"))
         return NegotiationRecord.model_validate(public_document(record))
 
     async def list_negotiations(self, user: dict, profile_id: str, limit: int) -> list[NegotiationRecord]:
@@ -153,28 +157,29 @@ class CommercialService:
             "objective": payload.objective.value, "evidence_status": payload.evidence_status.value,
             "platform": profile["platform"], "platform_id": profile["platform_id"],
             "username": profile.get("username"), "warnings": warnings,
-            "created_at": now, "updated_at": now,
+            "created_at": now, "updated_at": now, "version": 1,
         })
         record = await self.repository.create_performance(profile["tenant_id"], str(user["_id"]), document)
         await self.repository.audit(str(user["_id"]), "campaign_performance.create",
-                                    "campaign_performance", str(record["_id"]), list(document))
-        return CampaignPerformanceRecord.model_validate(public_document(record))
+                                    "campaign_performance", str(record["_id"]), list(document),
+                                    tenant_id=profile["tenant_id"], actor_category=user.get("role", "unknown"))
+        return await self._performance_record(record)
 
     async def get_performance(self, user: dict, record_id: str) -> CampaignPerformanceRecord:
         record = await self._owned_performance(user, record_id)
-        return CampaignPerformanceRecord.model_validate(public_document(record))
+        return await self._performance_record(record)
 
     async def list_performance(self, user: dict, limit: int) -> list[CampaignPerformanceRecord]:
         require_commercial_role(user)
         records = await self.repository.list_performance(tenant_scope(user), limit)
-        return [CampaignPerformanceRecord.model_validate(public_document(item)) for item in records]
+        return [await self._performance_record(item) for item in records]
 
     async def patch_performance(self, user: dict, record_id: str,
                                 payload: CampaignPerformancePatch) -> CampaignPerformanceRecord:
         record = await self._owned_performance(user, record_id)
         changes = payload.model_dump(exclude_unset=True, exclude={"correction_reason"}, mode="python")
         if not changes:
-            return CampaignPerformanceRecord.model_validate(public_document(record))
+            return await self._performance_record(record)
         if record.get("evidence_status") == VerificationStatus.VERIFIED.value and not payload.correction_reason:
             raise HTTPException(status_code=409, detail="Verified performance corrections require correction_reason")
         merged_start = changes.get("measurement_period_start", record["measurement_period_start"])
@@ -188,16 +193,19 @@ class CommercialService:
             changes.get("deliverables_completed", record.get("deliverables_completed")),
         )
         changes["updated_at"] = _now()
+        changes["version"] = int(record.get("version", 1)) + 1
         updated = await self.repository.patch_performance(
             record, str(user["_id"]), changes, payload.correction_reason,
         )
         await self.repository.audit(str(user["_id"]), "campaign_performance.correct",
-                                    "campaign_performance", record_id, list(changes))
-        return CampaignPerformanceRecord.model_validate(public_document(updated))
+                                    "campaign_performance", record_id, list(changes),
+                                    tenant_id=record["tenant_id"], actor_category=user.get("role", "unknown"))
+        return await self._performance_record(updated)
 
     async def comparison(self, user: dict, record_id: str) -> PerformanceComparison:
         record = await self._owned_performance(user, record_id)
-        return build_performance_comparison(record)
+        evidence_summary, confidence = await self._evidence_support(record)
+        return build_performance_comparison(record, evidence_summary, confidence)
 
     async def analytics(self, user: dict, start: datetime, end: datetime,
                         limit: int, currency: str | None) -> AnalyticsSummary:
@@ -287,10 +295,26 @@ class CommercialService:
         if str(campaign.get("brand_id") or campaign.get("brand_user_id") or "") not in owned_ids:
             raise HTTPException(status_code=403, detail="Campaign is not owned by the authenticated brand")
 
+    async def _evidence_support(self, record: dict):
+        from .hardening_repository import HardeningRepository
+        from .hardening_service import metric_evidence_statuses
+        evidence = await HardeningRepository(self.db).active_evidence_for_performance(
+            record["tenant_id"], str(record["_id"]),
+        )
+        return metric_evidence_statuses(record, evidence)
 
-def build_performance_comparison(record: dict) -> PerformanceComparison:
-    verified = record.get("evidence_status") == VerificationStatus.VERIFIED.value
-    observed_status = "verified" if verified else "unverified"
+    async def _performance_record(self, record: dict) -> CampaignPerformanceRecord:
+        evidence_summary, confidence = await self._evidence_support(record)
+        public = public_document(record)
+        public["metric_evidence"] = evidence_summary
+        public["evidence_confidence"] = confidence
+        return CampaignPerformanceRecord.model_validate(public)
+
+
+def build_performance_comparison(record: dict, evidence_summary: list[MetricEvidenceStatus] | None = None,
+                                 evidence_confidence: float = 0) -> PerformanceComparison:
+    evidence_summary = evidence_summary or []
+    statuses = {item.metric: item.observation_status for item in evidence_summary}
     observed_engagements = _sum_if_any(record, "observed_likes", "observed_comments", "observed_shares")
     observed_reach = record.get("observed_reach")
     actual_cost = record.get("agreed_cost")
@@ -306,14 +330,18 @@ def build_performance_comparison(record: dict) -> PerformanceComparison:
         efficiency_values.append(max(0.0, min(100.0, 100 - actual_cpm * 2)))
     return PerformanceComparison(
         performance_record_id=str(record["_id"]), currency=record["currency"],
-        spend=_comparison(record.get("estimated_spend"), actual_cost, observed_status),
-        reach=_comparison(record.get("estimated_reach"), observed_reach, observed_status),
-        engagements=_comparison(record.get("estimated_engagements"), observed_engagements, observed_status),
-        cpe=_comparison(record.get("estimated_cpe"), actual_cpe, observed_status),
-        cpm=_comparison(record.get("estimated_cpm"), actual_cpm, observed_status),
-        deliverables=_comparison(committed, completed, observed_status),
+        spend=_comparison(record.get("estimated_spend"), actual_cost, statuses.get("agreed_cost", "unverified")),
+        reach=_comparison(record.get("estimated_reach"), observed_reach, statuses.get("observed_reach", "unverified")),
+        engagements=_comparison(record.get("estimated_engagements"), observed_engagements,
+                                _combined_status(statuses, record, "observed_likes", "observed_comments", "observed_shares")),
+        cpe=_comparison(record.get("estimated_cpe"), actual_cpe,
+                        _minimum_status(statuses.get("agreed_cost"), _combined_status(statuses, record, "observed_likes", "observed_comments", "observed_shares"))),
+        cpm=_comparison(record.get("estimated_cpm"), actual_cpm,
+                        _minimum_status(statuses.get("agreed_cost"), statuses.get("observed_reach"))),
+        deliverables=_comparison(committed, completed, statuses.get("deliverables", "unverified")),
         creator_quality_score_at_selection=record.get("creator_quality_score_at_selection"),
         observed_campaign_efficiency_score=round(fmean(efficiency_values), 2) if efficiency_values else None,
+        evidence_confidence=evidence_confidence, evidence_summary=evidence_summary,
         methodology="Deterministic estimate-versus-observation comparison; no causal attribution is claimed.",
         warnings=list(dict.fromkeys(record.get("warnings", []) + [
             "Revenue and conversion observations are reported only when supplied; causality is not inferred.",
@@ -449,6 +477,20 @@ def _comparison(estimate: float | int | None, observed: float | int | None,
         estimate_status="estimate" if estimate is not None else "unavailable",
         observed_status=observed_status if observed is not None else "unavailable",
     )
+
+
+def _combined_status(statuses: dict[str, str], record: dict, *metrics: str) -> str:
+    present = [statuses.get(metric, "unverified") for metric in metrics if record.get(metric) is not None]
+    if not present:
+        return "unavailable"
+    return "verified" if all(status == "verified" for status in present) else "unverified"
+
+
+def _minimum_status(first: str | None, second: str | None) -> str:
+    values = [value for value in (first, second) if value and value != "unavailable"]
+    if len(values) < 2:
+        return "unverified" if values else "unavailable"
+    return "verified" if all(value == "verified" for value in values) else "unverified"
 
 
 def _sum_if_any(record: dict, *fields: str) -> int | None:

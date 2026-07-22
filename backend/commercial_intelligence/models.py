@@ -52,12 +52,14 @@ class CommercialProfileCreate(BaseModel):
     current_negotiated_rate: Money | None = None
     rate_verification_status: VerificationStatus = VerificationStatus.UNVERIFIED
     pricing_notes: list[Note] = Field(default_factory=list, max_length=20)
+    internal_notes: list[Note] = Field(default_factory=list, max_length=20)
 
 
 class CommercialProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     username: str | None = Field(default=None, max_length=200)
     pricing_notes: list[Note] | None = Field(default=None, max_length=20)
+    internal_notes: list[Note] | None = Field(default=None, max_length=20)
     correction_reason: Note | None = None
 
 
@@ -86,6 +88,7 @@ class RateHistoryCreate(BaseModel):
     verification_status: VerificationStatus
     effective_at: datetime
     notes: list[Note] = Field(default_factory=list, max_length=20)
+    internal_notes: list[Note] = Field(default_factory=list, max_length=20)
 
     _effective_utc = field_validator("effective_at")(_aware_utc)
 
@@ -102,6 +105,7 @@ class RateHistoryCreate(BaseModel):
 
 
 class RateHistoryRecord(RateHistoryCreate):
+    internal_notes: list[Note] = Field(default_factory=list, exclude=True)
     id: str
     commercial_profile_id: str
     created_at: datetime
@@ -116,6 +120,7 @@ class NegotiationCreate(BaseModel):
     currency: Currency
     status: NegotiationStatus
     notes: list[Note] = Field(default_factory=list, max_length=20)
+    internal_notes: list[Note] = Field(default_factory=list, max_length=20)
     occurred_at: datetime
 
     _occurred_utc = field_validator("occurred_at")(_aware_utc)
@@ -132,6 +137,7 @@ class NegotiationCreate(BaseModel):
 
 
 class NegotiationRecord(NegotiationCreate):
+    internal_notes: list[Note] = Field(default_factory=list, exclude=True)
     id: str
     commercial_profile_id: str
     created_at: datetime
@@ -161,6 +167,7 @@ class CampaignPerformanceBase(BaseModel):
     measurement_period_start: datetime
     measurement_period_end: datetime
     notes: list[Note] = Field(default_factory=list, max_length=20)
+    internal_notes: list[Note] = Field(default_factory=list, max_length=20)
     estimated_spend: Money | None = None
     estimated_reach: int | None = Field(default=None, ge=0)
     estimated_engagements: int | None = Field(default=None, ge=0)
@@ -201,6 +208,7 @@ class CampaignPerformancePatch(BaseModel):
     measurement_period_start: datetime | None = None
     measurement_period_end: datetime | None = None
     notes: list[Note] | None = Field(default=None, max_length=20)
+    internal_notes: list[Note] | None = Field(default=None, max_length=20)
     estimated_spend: Money | None = None
     estimated_reach: int | None = Field(default=None, ge=0)
     estimated_engagements: int | None = Field(default=None, ge=0)
@@ -221,11 +229,15 @@ class CampaignPerformancePatch(BaseModel):
 
 
 class CampaignPerformanceRecord(CampaignPerformanceBase):
+    internal_notes: list[Note] = Field(default_factory=list, exclude=True)
     id: str
     platform: Platform
     platform_id: str
     username: str | None = None
+    version: int = Field(default=1, ge=1)
     warnings: list[str] = Field(default_factory=list)
+    metric_evidence: list["MetricEvidenceStatus"] = Field(default_factory=list)
+    evidence_confidence: float = Field(default=0, ge=0, le=1)
     created_at: datetime
     updated_at: datetime
 
@@ -249,8 +261,19 @@ class PerformanceComparison(BaseModel):
     deliverables: MetricComparison
     creator_quality_score_at_selection: float | None = Field(default=None, ge=0, le=100)
     observed_campaign_efficiency_score: float | None = Field(default=None, ge=0, le=100)
+    evidence_confidence: float = Field(default=0, ge=0, le=1)
+    evidence_summary: list["MetricEvidenceStatus"] = Field(default_factory=list)
     methodology: str
     warnings: list[str]
+
+
+class MetricEvidenceStatus(BaseModel):
+    metric: str = Field(min_length=1, max_length=80)
+    observation_status: Literal["verified", "unverified", "unavailable"]
+    evidence_status: Literal["verified", "unverified", "missing", "rejected", "deleted"]
+    supporting_evidence_ids: list[str] = Field(default_factory=list, max_length=20)
+    verification_level: Literal["reviewed", "reviewed_limited", "unreviewed", "none"]
+    confidence_note: str = Field(min_length=1, max_length=300)
 
 
 class AnalyticsSummary(BaseModel):

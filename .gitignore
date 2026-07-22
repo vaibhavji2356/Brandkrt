@@ -76,6 +76,9 @@ agenthub/agents/youtube/db
 # Build caches
 .cache/
 
+# Private commercial evidence/export bytes (never publicly served or committed)
+private_evidence/
+
 memory/test_credentials.md
 
 # Mobile development

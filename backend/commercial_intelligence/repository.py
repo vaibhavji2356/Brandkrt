@@ -111,10 +111,12 @@ class CommercialRepository:
         return await self.db.campaign_performance_records.find_one({"_id": record["_id"]})
 
     async def audit(self, actor_id: str, action: str, record_type: str,
-                    record_id: str, changed_fields: list[str]) -> None:
+                    record_id: str, changed_fields: list[str], *, tenant_id: str | None = None,
+                    actor_category: str = "unknown") -> None:
         await self.db.activity_logs.insert_one({
             "user_id": actor_id, "action": action, "entity": record_type,
             "entity_id": record_id, "meta": {"changed_fields": sorted(set(changed_fields))},
+            "tenant_id": tenant_id or actor_id, "actor_category": actor_category,
             "created_at": _utc_now(),
         })
 
@@ -165,12 +167,38 @@ async def setup_indexes(database) -> None:
     await database.commercial_record_versions.create_index(
         [("tenant_id", 1), ("record_type", 1), ("record_id", 1), ("created_at", -1)],
     )
+    await database.campaign_evidence_records.create_index(
+        [("tenant_id", 1), ("campaign_performance_record_id", 1), ("submitted_at", -1)],
+    )
+    await database.campaign_evidence_records.create_index(
+        [("tenant_id", 1), ("evidence_status", 1), ("verification_status", 1)],
+    )
+    await database.campaign_evidence_records.create_index(
+        [("tenant_id", 1), ("campaign_performance_record_id", 1), ("checksum_sha256", 1)],
+    )
+    await database.campaign_evidence_records.create_index(
+        [("tenant_id", 1), ("retention_expires_at", 1), ("deleted_at", 1)],
+    )
+    await database.commercial_correction_proposals.create_index(
+        [("tenant_id", 1), ("record_id", 1), ("status", 1), ("submitted_at", -1)],
+    )
+    await database.commercial_correction_proposals.create_index(
+        [("tenant_id", 1), ("retention_expires_at", 1)],
+    )
+    await database.commercial_export_artifacts.create_index(
+        [("tenant_id", 1), ("created_at", -1), ("expires_at", 1), ("deleted_at", 1)],
+    )
+    await database.activity_logs.create_index([("tenant_id", 1), ("created_at", -1)])
 
 
 def public_document(document: dict) -> dict:
     output = {
         key: value for key, value in document.items()
-        if key not in {"_id", "tenant_id", "created_by", "updated_by", "previous", "correction_reason"}
+        if key not in {
+            "_id", "tenant_id", "created_by", "updated_by", "previous", "correction_reason",
+            "internal_notes", "review_notes", "storage_key", "checksum_sha256", "deleted_by",
+            "submitted_by", "verified_by", "reviewed_by",
+        }
     }
     output["id"] = str(document["_id"])
     return _restore_utc(output)

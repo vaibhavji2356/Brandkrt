@@ -158,4 +158,5 @@ def create_commercial_intelligence_routers(get_current_user: Callable, database_
     ):
         return await manager.patch_performance(user, record_id, payload)
 
-    return commercial, performance
+    from .hardening_router import create_hardening_routers
+    return (commercial, performance, *create_hardening_routers(get_current_user, database_provider))
