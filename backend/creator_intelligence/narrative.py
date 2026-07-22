@@ -4,6 +4,7 @@ import json
 
 from brand_discovery_ai.costing import CONSERVATIVE_INPUT_PRICE_MULTIPLIER, MODEL_PRICING_USD_PER_MTOK, estimate_text_tokens
 from brand_discovery_ai.usage import UsageIdentity, ai_usage_accounting
+from operations.metrics import operational_metrics
 
 from .models import (
     CreatorIntelligenceRequest, CreatorIntelligenceResponse, CreatorNarrative,
@@ -29,8 +30,9 @@ class CreatorNarrativeService:
         if self.provider is None:
             return _fallback(result, fallback, "AI narrative is unavailable; deterministic narrative returned.")
         try:
+            operational_metrics.increment("ai_narrative_calls")
             prompt = build_narrative_prompt(request, result)
-            _reserve_if_paid(self.provider, prompt, usage_identity)
+            await _reserve_if_paid(self.provider, prompt, usage_identity)
             raw = await self.provider.narrate(prompt)
             narrative = PortfolioNarrative.model_validate(raw)
             validate_narrative(narrative, result)
@@ -39,6 +41,8 @@ class CreatorNarrativeService:
                 "narrative_degraded": False,
             })
         except Exception:
+            operational_metrics.increment("ai_narrative_failures")
+            operational_metrics.increment("ai_fallbacks")
             return _fallback(
                 result, fallback,
                 "AI narrative failed validation or was unavailable; deterministic narrative returned.",
@@ -108,7 +112,7 @@ def _bounded(value: str, limit: int = 500) -> str:
     return cleaned if len(cleaned) <= limit else cleaned[: limit - 1].rstrip() + "…"
 
 
-def _reserve_if_paid(provider: CreatorNarrativeProvider, prompt, identity: UsageIdentity | None) -> None:
+async def _reserve_if_paid(provider: CreatorNarrativeProvider, prompt, identity: UsageIdentity | None) -> None:
     serialized_prompt = json.dumps(prompt.as_messages(), ensure_ascii=False, separators=(",", ":"))
     schema_json = json.dumps(provider_narrative_schema(), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     input_tokens = estimate_text_tokens(serialized_prompt) + estimate_text_tokens(schema_json)
@@ -125,8 +129,9 @@ def _reserve_if_paid(provider: CreatorNarrativeProvider, prompt, identity: Usage
         input_tokens * input_price * CONSERVATIVE_INPUT_PRICE_MULTIPLIER
         + settings.max_output_tokens * output_price
     ) / 1_000_000, 8)
-    ai_usage_accounting.reserve(
+    await ai_usage_accounting.reserve(
         settings,
         identity or UsageIdentity(user_id="internal-creator-narrative", ip_address="internal-creator-narrative"),
         estimated_cost,
+        estimated_input_tokens=input_tokens, estimated_output_tokens=settings.max_output_tokens,
     )

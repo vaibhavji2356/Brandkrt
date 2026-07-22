@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+import hashlib
 import json
 from statistics import fmean
 from typing import Any
@@ -22,6 +23,8 @@ from .hardening_repository import HardeningRepository
 from .models import MetricEvidenceStatus, VerificationStatus
 from .repository import CommercialRepository, public_document
 from .retention import RetentionPolicy
+from operations.errors import StorageOperationError
+from operations.metrics import operational_metrics
 from .service import CommercialService, require_commercial_role, tenant_scope, write_tenant, _deliverable_warnings
 
 
@@ -83,7 +86,10 @@ class CommercialHardeningService:
         if duplicate:
             raise HTTPException(status_code=409, detail="Duplicate evidence content already exists for this performance record")
         now = _now()
-        storage_key = await self.storage.save(validated.data, validated.extension)
+        storage_key = await self.storage.save(
+            validated.data, validated.extension, content_type=validated.mime_type,
+            checksum_sha256=validated.checksum_sha256,
+        )
         warnings = []
         if metadata.evidence_type == EvidenceType.ANALYTICS_SCREENSHOT:
             warnings.append("Screenshots require explicit review and remain limited evidence for metric verification.")
@@ -106,6 +112,7 @@ class CommercialHardeningService:
             "verified_at": None, "verified_by": None, "review_reason": None,
             "created_at": now, "updated_at": now, "deleted_at": None, "deleted_by": None,
             "deletion_reason": None,
+            "consistency_status": "consistent", "consistency_checked_at": now,
             "retention_expires_at": self.retention.expiry("evidence_metadata", now),
             "file_retention_expires_at": self.retention.expiry("evidence_file", now),
             "warnings": warnings,
@@ -113,10 +120,14 @@ class CommercialHardeningService:
         try:
             evidence = await self.repository.create_evidence(document)
         except Exception:
-            await self.storage.mark_deleted(storage_key)
+            try:
+                await self.storage.mark_deleted(storage_key)
+            except Exception:
+                operational_metrics.increment("storage_compensation_failures")
             raise
         await self._audit(user, performance["tenant_id"], "campaign_evidence.upload",
                           "campaign_evidence", str(evidence["_id"]), list(document))
+        operational_metrics.record_evidence_upload(validated.size_bytes)
         return self._evidence_public(evidence)
 
     async def list_evidence(self, user: dict, performance_id: str, limit: int) -> list[CampaignEvidenceRecord]:
@@ -198,7 +209,12 @@ class CommercialHardeningService:
             "deleted_at": now, "deleted_by": str(user["_id"]), "deletion_reason": action.reason,
             "evidence_status": "deleted", "updated_at": now,
         })
-        await self.storage.mark_deleted(evidence["storage_key"])
+        try:
+            await self.storage.mark_deleted(evidence["storage_key"])
+        except Exception:
+            await self.repository.mark_evidence_inconsistent(evidence, "quarantine_failed", _now())
+            operational_metrics.increment("storage_operation_failures")
+            raise StorageOperationError("quarantine_failed") from None
         await self._audit(user, evidence["tenant_id"], "campaign_evidence.soft_delete",
                           "campaign_evidence", evidence_id, ["deleted_at", "evidence_status"])
         return self._evidence_public(updated)
@@ -213,7 +229,7 @@ class CommercialHardeningService:
             raise HTTPException(status_code=410, detail="Expired evidence cannot be restored")
         if _expired(evidence.get("file_retention_expires_at")):
             raise HTTPException(status_code=410, detail="Expired evidence file cannot be restored")
-        if not await self.storage.exists(evidence["storage_key"]):
+        if not await self._storage_exists(evidence):
             raise HTTPException(status_code=410, detail="Evidence file is unavailable")
         updated = await self.repository.restore_evidence(evidence, {
             "deleted_at": None, "deleted_by": None, "deletion_reason": None,
@@ -226,9 +242,15 @@ class CommercialHardeningService:
     async def download_evidence(self, user: dict, evidence_id: str) -> tuple[bytes, str, str]:
         evidence = await self._owned_evidence(user, evidence_id)
         self._ensure_evidence_file_available(evidence)
-        if not await self.storage.exists(evidence["storage_key"]):
+        if not await self._storage_exists(evidence):
             raise HTTPException(status_code=410, detail="Evidence file is unavailable")
-        data = await self.storage.read(evidence["storage_key"])
+        try:
+            data = await self.storage.read(evidence["storage_key"])
+        except StorageOperationError as exc:
+            status = "checksum_mismatch" if exc.code == "checksum_mismatch" else "storage_error"
+            await self.repository.mark_evidence_inconsistent(evidence, status, _now())
+            operational_metrics.increment("storage_operation_failures")
+            raise
         await self._audit(user, evidence["tenant_id"], "campaign_evidence.download",
                           "campaign_evidence", evidence_id, [])
         return data, evidence["mime_type"], evidence["safe_filename"]
@@ -332,7 +354,10 @@ class CommercialHardeningService:
         expires_at = self.retention.expiry("export_artifact", now)
         if expires_at is None:
             raise HTTPException(status_code=503, detail="Export retention must be finite")
-        storage_key = await self.storage.save(data, "json")
+        storage_key = await self.storage.save(
+            data, "json", content_type="application/json",
+            checksum_sha256=hashlib.sha256(data).hexdigest(),
+        )
         document = {
             "tenant_id": tenant_id, "schema_version": "1.0", "format": "json",
             "record_categories": [item.value for item in payload.record_categories],
@@ -346,7 +371,10 @@ class CommercialHardeningService:
         try:
             artifact = await self.repository.create_export(document)
         except Exception:
-            await self.storage.mark_deleted(storage_key)
+            try:
+                await self.storage.mark_deleted(storage_key)
+            except Exception:
+                operational_metrics.increment("storage_compensation_failures")
             raise
         await self._audit(user, tenant_id, "creator_commercial.export.create",
                           "commercial_export", str(artifact["_id"]), list(document))
@@ -471,6 +499,17 @@ class CommercialHardeningService:
         if _expired(evidence.get("file_retention_expires_at")):
             raise HTTPException(status_code=410, detail="Evidence file has expired")
 
+    async def _storage_exists(self, evidence: dict) -> bool:
+        try:
+            exists = await self.storage.exists(evidence["storage_key"])
+        except StorageOperationError:
+            await self.repository.mark_evidence_inconsistent(evidence, "storage_error", _now())
+            operational_metrics.increment("storage_operation_failures")
+            raise
+        if not exists:
+            await self.repository.mark_evidence_inconsistent(evidence, "object_missing", _now())
+        return exists
+
     def _require_reviewer(self, user: dict) -> None:
         if user.get("role") != "admin":
             raise HTTPException(status_code=403, detail="Evidence and correction review requires admin role")
@@ -504,6 +543,10 @@ class CommercialHardeningService:
             "indefinite" if evidence.get("retention_expires_at") is None else "active"
         ))
         review_message = evidence.get("review_reason") if evidence.get("verification_status") == "rejected" else None
+        consistency = evidence.get("consistency_status", "consistent")
+        warnings = list(evidence.get("warnings", []))
+        if consistency != "consistent":
+            warnings.append("The private storage object requires operator repair review.")
         return CampaignEvidenceRecord(
             id=str(evidence["_id"]),
             campaign_performance_record_id=evidence["campaign_performance_record_id"],
@@ -518,8 +561,9 @@ class CommercialHardeningService:
             captured_at=_maybe_aware(evidence.get("captured_at")),
             submitted_at=_aware(evidence["submitted_at"]), verified_at=_maybe_aware(evidence.get("verified_at")),
             review_message=review_message, retention_expires_at=_maybe_aware(evidence.get("retention_expires_at")),
-            retention_status=retention_status, download_available=not deleted and not expired and not file_expired,
-            warnings=evidence.get("warnings", []),
+            retention_status=retention_status, consistency_status=consistency,
+            download_available=not deleted and not expired and not file_expired and consistency == "consistent",
+            warnings=list(dict.fromkeys(warnings)),
         )
 
     def _correction_public(self, proposal: dict) -> CorrectionProposal:

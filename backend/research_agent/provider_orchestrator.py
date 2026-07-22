@@ -14,6 +14,7 @@ from brand_discovery_ai.discovery_schemas import (
 from brand_discovery_ai.source_adapters import SourceProvider
 
 from .models import ResearchTask, TaskResult, TaskStatus, TaskType
+from operations.metrics import operational_metrics
 
 
 SUPPORTED_TASK_TYPES = {
@@ -163,6 +164,7 @@ class ProviderOrchestrator:
                 self._run_provider(platform, tasks, criteria), timeout=timeout,
             )
         except asyncio.TimeoutError:
+            operational_metrics.increment("provider_orchestrator_timeouts")
             warning = f"{platform.value} provider timed out; other providers continued."
             for task in tasks:
                 task.status = TaskStatus.FAILED

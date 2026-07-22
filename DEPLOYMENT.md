@@ -146,6 +146,14 @@ private and are served only to their owner or an admin through
 `/api/uploads/{id}`; the legacy static mount does not expose the verification
 folder.
 
+Commercial evidence and tenant export artifacts use a separate private
+`EvidenceStorage` abstraction and must not use the public Cloudinary path.
+Production requires `EVIDENCE_STORAGE_PROVIDER=s3` with a private, durable
+S3-compatible bucket. Render local disk is development-only and is rejected by
+production configuration validation while evidence upload is enabled. See
+`backend/PRODUCTION_OPERATIONS_AND_LAUNCH.md` for configuration, backup,
+smoke-test, incident, and rollback requirements.
+
 ### Optional — Payments (Razorpay)
 ```
 PAYMENT_PROVIDER=razorpay

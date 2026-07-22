@@ -54,6 +54,12 @@ class AIDailyBudgetExceededError(AIServiceError):
     public_message = "The daily Brand Discovery budget has been reached."
 
 
+class AIAccountingUnavailableError(AIServiceError):
+    status_code = 503
+    code = "ai_accounting_unavailable"
+    public_message = "AI usage protection is temporarily unavailable."
+
+
 class AIProviderUnavailableError(AIServiceError):
     status_code = 503
     code = "ai_provider_unavailable"

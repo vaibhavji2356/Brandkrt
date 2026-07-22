@@ -20,6 +20,10 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depend
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
+from operations.configuration import require_valid_configuration
+from operations.errors import install_exception_handlers
+from operations.observability import RequestObservabilityMiddleware
+from operations.mongo import mongo_client_options
 
 # Part 5 production modules
 import security as _security  # noqa: E402
@@ -39,29 +43,96 @@ mongo_url = os.environ.get('MONGO_URL', 'mongodb://127.0.0.1:27017')
 db_name = os.environ.get('DB_NAME', 'brandkrt_db')
 client = AsyncIOMotorClient(
     mongo_url,
-    serverSelectionTimeoutMS=int(os.environ.get("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")),
-    connectTimeoutMS=int(os.environ.get("MONGO_CONNECT_TIMEOUT_MS", "5000")),
-    socketTimeoutMS=int(os.environ.get("MONGO_SOCKET_TIMEOUT_MS", "10000")),
-    maxPoolSize=int(os.environ.get("MONGO_MAX_POOL_SIZE", "50")),
-    minPoolSize=int(os.environ.get("MONGO_MIN_POOL_SIZE", "0")),
-    maxIdleTimeMS=int(os.environ.get("MONGO_MAX_IDLE_TIME_MS", "60000")),
+    **mongo_client_options(),
 )
 db = client[db_name]
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Database migrations and admin bootstrap intentionally live in
-    # database_setup.py, keeping the web process startup network-free.
+    global _readiness_cache, _readiness_checked_at
+    from brand_discovery_ai.usage import initialize_ai_usage_accounting, ai_usage_accounting
+    from commercial_intelligence.hardening_router import get_evidence_storage, reset_evidence_storage
+    from operations.index_verification import verify_critical_indexes
+    from operations.rate_limiting import initialize_rate_limiter, rate_limiter
+
     backend_status.mark_app_started()
-    logger.info("[STARTUP] expensive initialization disabled; run `python database_setup.py` during deployment")
+    _readiness_cache = None
+    _readiness_checked_at = 0.0
+    configuration = require_valid_configuration()
+    backend_status.set_component(
+        "configuration", ready=configuration.valid, required=True,
+        state="valid" if configuration.valid else "invalid",
+    )
+    production = configuration.production
+    storage = None
+    database_ready = False
+    try:
+        await asyncio.wait_for(
+            client.admin.command("ping"),
+            timeout=max(1.0, min(float(os.environ.get("STARTUP_DATABASE_TIMEOUT_SECONDS", "8")), 30.0)),
+        )
+        database_ready = True
+    except Exception:
+        logger.warning("Startup database connectivity check failed", extra={
+            "event": "startup.database_unavailable", "component": "database",
+        })
+    backend_status.set_component("database", ready=database_ready, required=True,
+                                 state="ready" if database_ready else "unavailable")
+
+    initialize_rate_limiter(db)
+    initialize_ai_usage_accounting(db)
+    backend_status.set_component(
+        "rate_limit", ready=True, required=production,
+        state=rate_limiter.backend_name,
+    )
+    backend_status.set_component(
+        "ai_usage", ready=True, required=bool(configuration.features["paid_ai_enabled"]),
+        state=str(ai_usage_accounting.snapshot().get("backend", "unknown")),
+    )
+
+    if database_ready:
+        try:
+            indexes = await verify_critical_indexes(db)
+            backend_status.set_component(
+                "indexes", ready=indexes.ready, required=True,
+                state="verified" if indexes.ready else f"missing:{len(indexes.missing)}",
+            )
+        except Exception:
+            backend_status.set_component("indexes", ready=False, required=True, state="verification_failed")
+    else:
+        backend_status.set_component("indexes", ready=False, required=True, state="database_unavailable")
+
+    try:
+        storage = get_evidence_storage()
+        storage_ready = await asyncio.wait_for(storage.health_check(), timeout=15)
+        backend_status.set_component(
+            "storage", ready=bool(storage_ready), required=production,
+            state=f"{storage.provider_name}:{'durable' if storage.durable else 'development'}",
+        )
+    except Exception:
+        backend_status.set_component("storage", ready=False, required=production, state="unavailable")
+
+    logger.info("Application startup checks complete", extra={
+        "event": "application.startup", "component": "lifecycle",
+        "ready": database_ready,
+    })
     try:
         yield
     finally:
+        if storage is not None:
+            try:
+                await asyncio.wait_for(storage.close(), timeout=5)
+            except Exception:
+                logger.warning("Storage shutdown did not complete cleanly", extra={
+                    "event": "application.storage_shutdown_failed", "component": "storage",
+                })
+        reset_evidence_storage()
         client.close()
 
 
 app = FastAPI(title="BrandKrt API", lifespan=lifespan)
+install_exception_handlers(app)
 api_router = APIRouter(prefix="/api")
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -78,26 +149,29 @@ auth_router = APIRouter(prefix="/auth", tags=["auth"])
 # Production origins are hard-coded as a safety net so a missing CORS_ORIGINS
 # env var on Render can never break the public frontend.
 # -----------------------------------------------------------------------------
-_DEFAULT_CORS_ORIGINS = [
+_PRODUCTION_CORS_ORIGINS = [
     "https://brandkrt.com",
     "https://www.brandkrt.com",
+]
+_DEVELOPMENT_CORS_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3000",
 ]
 _env_cors = [o.strip().rstrip("/") for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+_is_prod = os.environ.get("APP_ENV", "development").lower() != "development"
+_default_cors = _PRODUCTION_CORS_ORIGINS if _is_prod else _PRODUCTION_CORS_ORIGINS + _DEVELOPMENT_CORS_ORIGINS
 _seen = set()
 cors_origins = []
-for _o in _env_cors + _DEFAULT_CORS_ORIGINS:
+for _o in _env_cors + _default_cors:
     if _o and _o not in _seen:
         _seen.add(_o)
         cors_origins.append(_o)
-_is_prod = os.environ.get("APP_ENV", "development").lower() != "development"
 # 1) innermost — defence-in-depth headers
 app.add_middleware(_security.SecurityHeadersMiddleware, prod=_is_prod)
 # 2) origin-based CSRF guard for state-changing requests
 app.add_middleware(_security.OriginCSRFMiddleware, allow_origins=cors_origins)
-# CORS is attached at the end of this module so it remains outermost.
+# CORS is attached near the end; request correlation wraps it without changing CORS behavior.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("brandkrt")
 _readiness_lock = asyncio.Lock()
@@ -253,7 +327,7 @@ class EmailService:
                     if html:
                         params["html"] = html
                     resend.Emails.send(params)
-                    logger.info("[EMAIL:resend] sent to=%s subject=%s", to, subject)
+                    logger.info("Email sent via Resend", extra={"event": "email.sent", "component": "email"})
                     return
             except Exception as e:
                 if not self._allow_console_fallback():
@@ -287,7 +361,7 @@ class EmailService:
                         smtp.login(smtp_config["user"], smtp_config["password"])
                         smtp.send_message(message)
 
-                logger.info("[EMAIL:smtp] sent to=%s subject=%s host=%s port=%s", to, subject, smtp_config["host"], smtp_config["port"])
+                logger.info("Email sent via SMTP", extra={"event": "email.sent", "component": "email"})
                 return
             except Exception as e:
                 logger.error(
@@ -301,7 +375,9 @@ class EmailService:
         if not self._allow_console_fallback():
             raise RuntimeError("No transactional email provider is configured")
 
-        logger.info("[EMAIL:%s] to=%s subject=%s (console fallback; email body suppressed)", self.provider or "console", to, subject)
+        logger.info("Email console fallback used; content suppressed", extra={
+            "event": "email.console_fallback", "component": "email",
+        })
 
 
 email_service = EmailService()
@@ -385,6 +461,7 @@ async def get_current_user(request: Request) -> dict:
             raise HTTPException(status_code=401, detail="User not found")
         if user.get("status") == "suspended":
             raise HTTPException(status_code=403, detail="Account is suspended")
+        request.state.auth_role = user.get("role", "unknown")
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -404,10 +481,7 @@ def _aware(dt):
 
 
 def _client_ip(request: Request) -> str:
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return _security.client_ip(request)
 
 
 async def _is_locked(identifier: str) -> bool:
@@ -726,7 +800,7 @@ async def contact(payload: ContactIn, request: Request,
                   _rl: None = Depends(_security.limiter_dependency("contact", limit=10, window=600))):
     now = datetime.now(timezone.utc)
     await db.contact_messages.insert_one({**payload.model_dump(), "created_at": now})
-    logger.info("[CONTACT] %s <%s> - %s", payload.name, payload.email, payload.subject)
+    logger.info("Contact request stored", extra={"event": "contact.stored", "component": "contact"})
     return {"success": True, "message": "Thanks! We'll be in touch within 24 hours."}
 
 
@@ -751,6 +825,33 @@ async def health_ready(response: Response):
         async with _readiness_lock:
             now = asyncio.get_running_loop().time()
             if _readiness_cache is None or now - _readiness_checked_at >= _readiness_cache_seconds:
+                from brand_discovery_ai.usage import ai_usage_accounting
+                from commercial_intelligence.hardening_router import get_evidence_storage
+                from operations.rate_limiting import rate_limiter
+                try:
+                    storage = get_evidence_storage()
+                    storage_ready = await asyncio.wait_for(storage.health_check(), timeout=15)
+                    backend_status.set_component(
+                        "storage", ready=bool(storage_ready), required=_is_prod,
+                        state=f"{storage.provider_name}:{'durable' if storage.durable else 'development'}",
+                    )
+                except Exception:
+                    backend_status.set_component("storage", ready=False, required=_is_prod, state="unavailable")
+                try:
+                    await rate_limiter.backend.health_check()
+                    backend_status.set_component("rate_limit", ready=True, required=_is_prod,
+                                                 state=rate_limiter.backend_name)
+                except Exception:
+                    backend_status.set_component("rate_limit", ready=False, required=_is_prod, state="unavailable")
+                paid_ai = backend_status.configuration_status()["operational"]["features"]["paid_ai_enabled"]
+                try:
+                    await ai_usage_accounting.health_check()
+                    backend_status.set_component(
+                        "ai_usage", ready=True, required=paid_ai,
+                        state=str(ai_usage_accounting.snapshot().get("backend", "unknown")),
+                    )
+                except Exception:
+                    backend_status.set_component("ai_usage", ready=False, required=paid_ai, state="unavailable")
                 _readiness_cache = await backend_status.check_readiness(lambda: client.admin.command("ping"))
                 _readiness_checked_at = now
     status = _readiness_cache
@@ -771,6 +872,8 @@ from brand_discovery_ai.discovery_router import create_discovery_router  # noqa:
 from commercial_intelligence import create_commercial_intelligence_routers  # noqa: E402
 from creator_intelligence.router import create_creator_intelligence_router  # noqa: E402
 from match_intelligence.router import create_match_router  # noqa: E402
+from operations.router import create_operations_router  # noqa: E402
+from commercial_intelligence.hardening_router import get_evidence_storage  # noqa: E402
 
 api_router.include_router(create_brand_discovery_router(get_current_user))
 api_router.include_router(create_discovery_router(get_current_user))
@@ -778,6 +881,7 @@ api_router.include_router(create_match_router(get_current_user))
 api_router.include_router(create_creator_intelligence_router(get_current_user, lambda: db))
 for _commercial_router in create_commercial_intelligence_routers(get_current_user, lambda: db):
     api_router.include_router(_commercial_router)
+api_router.include_router(create_operations_router(get_current_user, lambda: db, get_evidence_storage))
 
 # Part 1B: domain routes
 import domain  # noqa: E402
@@ -826,8 +930,7 @@ async def cors_preflight(full_path: str):
     return Response(status_code=204)
 
 
-# Final middleware layer: keep CORS outermost so preflight and error responses
-# from auth/security routes always include Access-Control-Allow-Origin.
+# CORS still wraps auth/security routes; request observability is the final outer layer.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -837,3 +940,4 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,
 )
+app.add_middleware(RequestObservabilityMiddleware)

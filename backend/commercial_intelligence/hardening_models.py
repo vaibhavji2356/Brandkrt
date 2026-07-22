@@ -104,6 +104,7 @@ class CampaignEvidenceRecord(BaseModel):
     review_message: str | None = Field(default=None, max_length=500)
     retention_expires_at: datetime | None = None
     retention_status: Literal["active", "expired", "deleted", "indefinite"]
+    consistency_status: Literal["consistent", "object_missing", "checksum_mismatch", "quarantine_failed", "storage_error"] = "consistent"
     download_available: bool
     warnings: list[str] = Field(default_factory=list)
 

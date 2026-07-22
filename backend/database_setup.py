@@ -18,6 +18,7 @@ from pathlib import Path
 import bcrypt
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
+from operations.mongo import mongo_client_options
 
 
 ROOT_DIR = Path(__file__).parent
@@ -28,6 +29,7 @@ logger = logging.getLogger("brandkrt.database_setup")
 
 async def create_indexes(database) -> None:
     from commercial_intelligence.repository import setup_indexes as setup_commercial_indexes
+    from operations.index_verification import create_operational_indexes
     import domain
     import part4b
     import part4c
@@ -42,6 +44,7 @@ async def create_indexes(database) -> None:
     await part4b.setup_part4b_indexes(database)
     await part4c.setup_part4c_indexes(database)
     await setup_commercial_indexes(database)
+    await create_operational_indexes(database)
 
 
 async def bootstrap_admin(database) -> None:
@@ -67,7 +70,7 @@ async def bootstrap_admin(database) -> None:
         "created_at": now,
         "updated_at": now,
     })
-    logger.info("Created admin account %s", email)
+    logger.info("Created configured admin account")
 
 
 async def run() -> None:
@@ -78,9 +81,7 @@ async def run() -> None:
 
     client = AsyncIOMotorClient(
         mongo_url,
-        serverSelectionTimeoutMS=int(os.environ.get("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")),
-        connectTimeoutMS=int(os.environ.get("MONGO_CONNECT_TIMEOUT_MS", "5000")),
-        socketTimeoutMS=int(os.environ.get("MONGO_SOCKET_TIMEOUT_MS", "10000")),
+        **mongo_client_options(),
     )
     try:
         await client.admin.command("ping")

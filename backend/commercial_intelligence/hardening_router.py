@@ -3,13 +3,14 @@
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 import json
+import os
 from typing import Callable
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 
 import security
 
-from .evidence_storage import EvidenceStorage, LocalPrivateEvidenceStorage
+from .evidence_storage import EvidenceStorage, build_evidence_storage_from_env
 from .evidence_validation import evidence_max_bytes, validate_evidence_file
 from .hardening_models import (
     AuditReviewEvent, CampaignEvidenceRecord, CorrectionProposal, CorrectionProposalCreate,
@@ -22,7 +23,11 @@ from .hardening_service import CommercialHardeningService
 
 @lru_cache(maxsize=1)
 def get_evidence_storage() -> EvidenceStorage:
-    return LocalPrivateEvidenceStorage()
+    return build_evidence_storage_from_env()
+
+
+def reset_evidence_storage() -> None:
+    get_evidence_storage.cache_clear()
 
 
 def create_hardening_routers(get_current_user: Callable, database_provider: Callable):
@@ -50,6 +55,8 @@ def create_hardening_routers(get_current_user: Callable, database_provider: Call
         user: dict = Depends(get_current_user), _limit: None = Depends(write_limit),
         manager: CommercialHardeningService = Depends(service),
     ):
+        if os.environ.get("EVIDENCE_UPLOAD_ENABLED", "true").strip().casefold() not in {"1", "true", "yes", "on"}:
+            raise HTTPException(status_code=503, detail="Evidence uploads are disabled")
         try:
             metric_values = json.loads(supported_metrics)
             note_values = json.loads(internal_notes)

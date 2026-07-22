@@ -64,6 +64,21 @@ class HardeningRepository:
         )
         return await self.db.campaign_evidence_records.find_one({"_id": evidence["_id"]})
 
+    async def mark_evidence_inconsistent(self, evidence: dict, status: str, updated_at: datetime) -> None:
+        await self.db.campaign_evidence_records.update_one(
+            {"_id": evidence["_id"], "tenant_id": evidence["tenant_id"]},
+            {"$set": {"consistency_status": status, "consistency_checked_at": updated_at,
+                      "updated_at": updated_at}},
+        )
+
+    async def inconsistency_counts(self) -> dict[str, int]:
+        values = {}
+        for status in ("object_missing", "checksum_mismatch", "quarantine_failed", "storage_error"):
+            values[status] = await self.db.campaign_evidence_records.count_documents({
+                "consistency_status": status, "deleted_at": None,
+            })
+        return values
+
     async def active_evidence_for_performance(self, tenant_id: str, performance_id: str) -> list[dict]:
         return await self.db.campaign_evidence_records.find({
             "tenant_id": tenant_id, "campaign_performance_record_id": performance_id,

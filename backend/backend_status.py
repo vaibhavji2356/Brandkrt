@@ -11,6 +11,9 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, Optional
 
+from operations.configuration import validate_configuration
+from operations.metrics import operational_metrics
+
 
 logger = logging.getLogger("brandkrt.status")
 
@@ -32,6 +35,7 @@ class BackendStatus:
         self._last_mongo_ping_ms: Optional[float] = None
         self._readiness_ms: Optional[float] = None
         self._ready = False
+        self._components: dict[str, dict[str, Any]] = {}
 
     @property
     def environment(self) -> str:
@@ -40,6 +44,13 @@ class BackendStatus:
     @property
     def version(self) -> str:
         return os.environ.get("APP_VERSION", "1.0.0").strip() or "1.0.0"
+
+    @property
+    def commit(self) -> str:
+        value = os.environ.get("APP_COMMIT_SHA", "").strip()
+        if value and len(value) <= 64 and all(char.isalnum() or char in "._-" for char in value):
+            return value
+        return "unavailable"
 
     def mark_app_started(self) -> None:
         if self._app_started_at is not None:
@@ -111,12 +122,20 @@ class BackendStatus:
             "available": payment_configured,
         }
 
+        operational = validate_configuration()
+        required["PRODUCTION_CONFIGURATION"] = operational.valid
         config_ready = all(required.values())
         services_ready = all(not item["required"] or item["available"] for item in services.values())
         return {
             "valid": config_ready and services_ready,
             "required": required,
             "services": services,
+            "operational": operational.public(),
+        }
+
+    def set_component(self, name: str, *, ready: bool, required: bool, state: str) -> None:
+        self._components[name] = {
+            "ready": bool(ready), "required": bool(required), "state": str(state)[:80],
         }
 
     async def check_readiness(
@@ -137,7 +156,12 @@ class BackendStatus:
         self._last_mongo_ping_ms = mongo_ping_ms
         if self._database_connected and self._mongo_connection_ms is None:
             self._mongo_connection_ms = mongo_ping_ms
-        ready_now = bool(self._database_connected and config["valid"])
+        components_ready = all(
+            not item["required"] or item["ready"] for item in self._components.values()
+        )
+        ready_now = bool(self._database_connected and config["valid"] and components_ready)
+        if not ready_now:
+            operational_metrics.increment("readiness_failures")
         check_ms = round((time.perf_counter() - started) * 1000, 2)
         if ready_now and self._readiness_ms is None:
             # Capture the first dependency-ready duration once. Repeated health
@@ -170,7 +194,9 @@ class BackendStatus:
             "uptime": round(time.perf_counter() - self._boot_monotonic, 3),
             "startupTime": self._booted_at,
             "version": self.version,
+            "commit": self.commit,
             "environment": self.environment,
+            "components": {name: dict(value) for name, value in self._components.items()},
             "timings": {
                 "appBootMs": self._app_boot_ms,
                 "mongoConnectionMs": self._mongo_connection_ms,

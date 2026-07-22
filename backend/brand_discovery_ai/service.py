@@ -20,6 +20,7 @@ from .prompting import build_brand_discovery_prompt
 from .providers import BrandDiscoveryProvider, ProviderGeneration, response_json_schema
 from .schemas import BrandDiscoveryPreviewResponse, BrandDiscoveryRequest
 from .usage import UsageIdentity, ai_usage_accounting
+from operations.metrics import operational_metrics
 
 
 logger = logging.getLogger("brandkrt.ai")
@@ -44,6 +45,7 @@ class BrandDiscoveryService:
         self.settings = settings.validate()
         self.provider = provider
         self.last_call_summary: ProviderCallSummary | None = None
+        self._usage_reservation_id: str | None = None
 
     async def preview(
         self,
@@ -51,8 +53,9 @@ class BrandDiscoveryService:
         *,
         usage_identity: UsageIdentity | None = None,
     ) -> BrandDiscoveryPreviewResponse:
+        self._usage_reservation_id = None
         prompt = build_brand_discovery_prompt(request)
-        estimate = self._estimate_and_reserve(prompt, usage_identity)
+        estimate = await self._estimate_and_reserve(prompt, usage_identity)
         total_attempts = self.settings.max_retries + 1
         request_started = time.monotonic()
         model = self.settings.model if self.settings.openai_enabled else "mock"
@@ -96,6 +99,18 @@ class BrandDiscoveryService:
                     actual_output_tokens=actual_output_tokens,
                     actual_cost_usd=actual_cost_usd,
                 )
+                if self._usage_reservation_id:
+                    try:
+                        await ai_usage_accounting.record_actual(
+                            self._usage_reservation_id, input_tokens=actual_input_tokens,
+                            output_tokens=actual_output_tokens, actual_cost_usd=actual_cost_usd,
+                            success=True,
+                        )
+                    except AIServiceError:
+                        operational_metrics.increment("ai_accounting_update_failures")
+                        logger.warning(
+                            "AI actual-usage update failed after a successful reserved request",
+                        )
                 self.last_call_summary = ProviderCallSummary(
                     provider=self.provider.name,
                     model=model,
@@ -181,7 +196,7 @@ class BrandDiscoveryService:
 
         raise AIProviderUnavailableError()
 
-    def _estimate_and_reserve(
+    async def _estimate_and_reserve(
         self,
         prompt,
         usage_identity: UsageIdentity | None,
@@ -191,10 +206,12 @@ class BrandDiscoveryService:
         estimate = estimate_request_cost(self.settings, prompt, response_json_schema())
         identity = usage_identity or UsageIdentity(user_id="internal", ip_address="internal")
         try:
-            ai_usage_accounting.reserve(
+            self._usage_reservation_id = await ai_usage_accounting.reserve(
                 self.settings,
                 identity,
                 estimate.estimated_max_cost_usd,
+                estimated_input_tokens=estimate.estimated_input_tokens,
+                estimated_output_tokens=estimate.estimated_output_tokens,
             )
         except AIServiceError as exc:
             ai_metrics.record_budget_rejection(

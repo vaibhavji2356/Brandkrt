@@ -13,12 +13,16 @@ from __future__ import annotations
 import logging
 import os
 import time
+import ipaddress
 from collections import defaultdict, deque
 from typing import Iterable, Optional
 
 from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+
+from operations.metrics import operational_metrics
+from operations.rate_limiting import RateLimitBackendUnavailable, rate_limiter
 
 logger = logging.getLogger("brandkrt.security")
 
@@ -45,6 +49,8 @@ class _SecretRedactor(logging.Filter):
 
 def configure_logging() -> None:
     """Production-safe logging. INFO in prod, DEBUG in dev."""
+    from operations.observability import configure_structured_logging
+
     env = os.environ.get("APP_ENV", "development").lower()
     level = logging.INFO if env != "development" else logging.DEBUG
     root = logging.getLogger()
@@ -55,6 +61,10 @@ def configure_logging() -> None:
         format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
         force=False,
     )
+    configure_structured_logging()
+    for handler in logging.getLogger().handlers:
+        if not any(isinstance(item, _SecretRedactor) for item in handler.filters):
+            handler.addFilter(_SecretRedactor())
     # tame noisy libs in prod
     for noisy in ("uvicorn.access", "multipart.multipart", "watchfiles"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
@@ -130,7 +140,17 @@ class OriginCSRFMiddleware(BaseHTTPMiddleware):
 # ---------- Simple in-memory rate limiter ----------
 # NOTE: in-memory, suitable for single-worker deployments (Render free / hobby).
 # For multi-worker production use a Redis-backed limiter — interface stays the same.
-_RL_BUCKETS: "defaultdict[str, deque[float]]" = defaultdict(deque)
+class _LegacyRateLimitBuckets(defaultdict):
+    """Reset both legacy and selectable in-memory backends for compatibility."""
+
+    def clear(self) -> None:
+        super().clear()
+        reset = getattr(rate_limiter.backend, "reset", None)
+        if callable(reset):
+            reset()
+
+
+_RL_BUCKETS: "defaultdict[str, deque[float]]" = _LegacyRateLimitBuckets(deque)
 
 
 def rate_limit(key: str, *, limit: int = 10, window: int = 60) -> None:
@@ -145,14 +165,45 @@ def rate_limit(key: str, *, limit: int = 10, window: int = 60) -> None:
 
 
 def client_ip(request: Request) -> str:
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    direct = request.client.host if request.client else "unknown"
+    if os.environ.get("TRUST_PROXY_HEADERS", "false").strip().casefold() not in {"1", "true", "yes", "on"}:
+        return _safe_ip(direct)
+    values = [item.strip() for item in request.headers.get("x-forwarded-for", "").split(",") if item.strip()]
+    try:
+        trusted_hops = max(1, min(int(os.environ.get("TRUSTED_PROXY_HOPS", "1")), 5))
+    except ValueError:
+        trusted_hops = 1
+    if len(values) >= trusted_hops:
+        return _safe_ip(values[-trusted_hops])
+    return _safe_ip(direct)
 
 
 def limiter_dependency(action: str, limit: int = 10, window: int = 60):
     """FastAPI Depends() factory. Use:  Depends(limiter_dependency('register', 5, 300))"""
-    async def _dep(request: Request) -> None:
-        rate_limit(f"{action}:{client_ip(request)}", limit=limit, window=window)
+    async def _dep(request: Request, response: Response) -> None:
+        key = f"{action}:{client_ip(request)}"
+        try:
+            decision = await rate_limiter.acquire(key, limit, window)
+        except RateLimitBackendUnavailable:
+            operational_metrics.increment("rate_limit_backend_failures")
+            raise HTTPException(
+                status_code=503, detail="Request protection is temporarily unavailable.",
+                headers={"Retry-After": "5"},
+            ) from None
+        if not decision.allowed:
+            operational_metrics.increment("rate_limit_rejections")
+            raise HTTPException(
+                status_code=429, detail="Too many requests. Please slow down.",
+                headers={"Retry-After": str(decision.retry_after_seconds), "X-RateLimit-Limit": str(limit)},
+            )
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(decision.remaining)
+        response.headers["X-RateLimit-Reset"] = str(decision.retry_after_seconds)
     return _dep
+
+
+def _safe_ip(value: str) -> str:
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return "unknown"

@@ -8,6 +8,7 @@ from brand_discovery_ai.costing import (
 )
 from brand_discovery_ai.usage import UsageIdentity, ai_usage_accounting
 from research_agent.models import ResearchPackage
+from operations.metrics import operational_metrics
 
 from .fallback import category_for_score, deterministic_recommendations
 from .grounding import validate_provider_payload
@@ -31,7 +32,8 @@ class MatchEngine:
             return _fallback_response(package, fallback, "AI reasoning unavailable; deterministic recommendations returned.")
         prompt = build_match_prompt(package)
         try:
-            _reserve_if_paid(self.provider, prompt, usage_identity)
+            operational_metrics.increment("ai_reasoning_calls")
+            await _reserve_if_paid(self.provider, prompt, usage_identity)
             raw = await self.provider.reason(prompt)
             payload = ProviderPayload.model_validate(raw)
             expected = [item.profile_reference for item in fallback]
@@ -54,6 +56,8 @@ class MatchEngine:
                 reasoning_source="openai_grounded", warnings=list(package.warnings),
             )
         except Exception:
+            operational_metrics.increment("ai_provider_failures")
+            operational_metrics.increment("ai_fallbacks")
             return _fallback_response(
                 package, fallback,
                 "AI reasoning failed validation or was unavailable; deterministic recommendations returned.",
@@ -68,7 +72,7 @@ def _fallback_response(package, recommendations, warning):
     )
 
 
-def _reserve_if_paid(provider, prompt, identity):
+async def _reserve_if_paid(provider, prompt, identity):
     if not isinstance(provider, OpenAIMatchReasoningProvider):
         return
     settings = provider.settings
@@ -84,8 +88,9 @@ def _reserve_if_paid(provider, prompt, identity):
         + settings.max_output_tokens * output_price
     ) / 1_000_000
     estimated_cost = round(per_attempt * (settings.max_retries + 1), 8)
-    ai_usage_accounting.reserve(
+    await ai_usage_accounting.reserve(
         settings,
         identity or UsageIdentity(user_id="internal-match", ip_address="internal-match"),
         estimated_cost,
+        estimated_input_tokens=input_tokens, estimated_output_tokens=settings.max_output_tokens,
     )
