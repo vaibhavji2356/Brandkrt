@@ -24,6 +24,11 @@ import Settings from "@/pages/Settings";
 import AdminLayout from "@/pages/admin/AdminLayout";
 import AdminOverview from "@/pages/admin/AdminOverview";
 import { AdminUsers, AdminVerification, AdminEscrow, AdminWithdrawals, AdminReports, AdminLogs } from "@/pages/admin/AdminSections";
+import {
+  AdminAIActivityPage, AdminAISettingsPage, AdminCommercialIntelligencePage,
+  AdminLeadIntelligenceHome, AdminOperationsDashboard, LeadDiscoveryPage,
+  ResearchHistoryPage, SavedLeadsPage,
+} from "@/pages/admin/AdminAIPlatform";
 
 import InfluencerLayout from "@/pages/influencer/InfluencerLayout";
 import InfluencerOverview from "@/pages/influencer/InfluencerOverview";
@@ -89,6 +94,15 @@ export default function App() {
 
               <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
                 <Route index element={<AdminOverview />} />
+                <Route path="lead-intelligence" element={<AdminLeadIntelligenceHome />} />
+                <Route path="brand-discovery" element={<LeadDiscoveryPage entityType="brand" />} />
+                <Route path="creator-discovery" element={<LeadDiscoveryPage entityType="creator" />} />
+                <Route path="saved-leads" element={<SavedLeadsPage />} />
+                <Route path="research-history" element={<ResearchHistoryPage />} />
+                <Route path="commercial-intelligence" element={<AdminCommercialIntelligencePage />} />
+                <Route path="ai-activity" element={<AdminAIActivityPage />} />
+                <Route path="operations" element={<AdminOperationsDashboard />} />
+                <Route path="ai-settings" element={<AdminAISettingsPage />} />
                 <Route path="users" element={<AdminUsers />} />
                 <Route path="verification" element={<AdminVerification />} />
                 <Route path="escrow" element={<AdminEscrow />} />

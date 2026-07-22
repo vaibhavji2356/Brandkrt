@@ -58,6 +58,7 @@ def _base_environment(monkeypatch, *, production=False):
     monkeypatch.setenv("AI_MOCK_MODE", "true")
     monkeypatch.setenv("RATE_LIMIT_BACKEND", "mongo" if production else "memory")
     monkeypatch.setenv("AI_USAGE_BACKEND", "mongo" if production else "memory")
+    monkeypatch.setenv("ADMIN_LEAD_MOCK_MODE", "false")
     monkeypatch.setenv("EMAIL_PROVIDER", "auto")
     monkeypatch.setenv("PAYMENT_PROVIDER", "stub")
     monkeypatch.setenv("EVIDENCE_STORAGE_PROVIDER", "s3" if production else "local")
@@ -90,6 +91,7 @@ def test_configuration_accepts_safe_development_and_production(monkeypatch):
         ({"EVIDENCE_STORAGE_SECRET_KEY": ""}, "missing_storage_setting"),
         ({"EVIDENCE_STORAGE_SIGNED_URL_TTL_SECONDS": "86400"}, "unsafe_signed_url_ttl"),
         ({"RATE_LIMIT_BACKEND": "memory"}, "non_distributed_rate_limit_backend"),
+        ({"ADMIN_LEAD_MOCK_MODE": "true"}, "admin_lead_mock_mode_in_production"),
     ],
 )
 def test_production_configuration_fails_closed(monkeypatch, mutation, expected_code):

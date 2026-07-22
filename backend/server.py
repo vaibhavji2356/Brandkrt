@@ -874,11 +874,13 @@ from creator_intelligence.router import create_creator_intelligence_router  # no
 from match_intelligence.router import create_match_router  # noqa: E402
 from operations.router import create_operations_router  # noqa: E402
 from commercial_intelligence.hardening_router import get_evidence_storage  # noqa: E402
+from admin_lead_intelligence.router import create_admin_lead_router  # noqa: E402
 
 api_router.include_router(create_brand_discovery_router(get_current_user))
 api_router.include_router(create_discovery_router(get_current_user))
 api_router.include_router(create_match_router(get_current_user))
 api_router.include_router(create_creator_intelligence_router(get_current_user, lambda: db))
+api_router.include_router(create_admin_lead_router(get_current_user, lambda: db))
 for _commercial_router in create_commercial_intelligence_routers(get_current_user, lambda: db):
     api_router.include_router(_commercial_router)
 api_router.include_router(create_operations_router(get_current_user, lambda: db, get_evidence_storage))

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import api from "@/lib/api";
+import api, { formatApiError } from "@/lib/api";
 import { LineChart, Line, BarChart, Bar, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Users, Building2, Sparkles, DollarSign, ShieldCheck, Banknote, Activity, CheckCircle2, XCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const ICONS = { total_users: Users, total_brands: Building2, total_influencers: Sparkles, revenue_today: DollarSign,
   revenue_month: DollarSign, pending_verification: ShieldCheck, pending_withdrawals: Banknote,
@@ -32,12 +33,26 @@ function Card({ k, v }) {
 
 export default function AdminOverview() {
   const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await api.get("/admin/overview");
+      setData(response.data);
+    } catch (requestError) {
+      setError(formatApiError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
-    (async () => {
-      const r = await api.get("/admin/overview");
-      setData(r.data);
-    })();
-  }, []);
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loading) return <div className="text-muted-foreground" role="status">Loading platform overview...</div>;
+  if (error) return <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5"><p className="font-semibold text-destructive">Overview unavailable</p><p className="mt-1 text-sm text-muted-foreground">{error}</p><button onClick={load} className="mt-4 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Retry</button></div>;
 
   if (!data) return <div className="text-muted-foreground">Loading…</div>;
 
@@ -46,6 +61,11 @@ export default function AdminOverview() {
       <div>
         <h2 className="text-3xl font-display font-light text-primary dark:text-white">Platform overview</h2>
         <p className="text-sm text-muted-foreground mt-1">Real-time snapshot of BrandKrt across users, campaigns and revenue.</p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <AdminAIEntry to="/admin/brand-discovery" title="Discover brands" description="Research factual public brand signals." />
+        <AdminAIEntry to="/admin/creator-discovery" title="Discover creators" description="Compare fit, pricing signals and recommendations." />
+        <AdminAIEntry to="/admin/saved-leads" title="Outreach workspace" description="Plan contact, track replies and add internal notes." />
       </div>
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
         {Object.entries(data.cards).map(([k, v]) => <Card key={k} k={k} v={v} />)}
@@ -83,4 +103,12 @@ export default function AdminOverview() {
       </div>
     </div>
   );
+}
+
+function AdminAIEntry({ to, title, description }) {
+  return <Link to={to} className="group rounded-2xl border border-secondary/30 bg-secondary/5 p-5 transition hover:-translate-y-0.5 hover:shadow-luxe-sm">
+    <div className="flex items-center justify-between"><Sparkles className="h-5 w-5 text-secondary" /><span className="text-xs font-semibold text-primary dark:text-secondary">Open</span></div>
+    <h3 className="mt-4 font-semibold text-primary dark:text-white">{title}</h3>
+    <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+  </Link>;
 }

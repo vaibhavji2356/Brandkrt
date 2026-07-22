@@ -1,5 +1,21 @@
 # Production Operations and Launch Readiness
 
+## Phase 14 admin intelligence operations
+
+Admin Lead Intelligence adds `admin_research_jobs` and `admin_saved_leads`. Run
+`python database_setup.py` before deployment so job/status and unique fingerprint indexes exist;
+readiness treats the primary indexes as critical. Include both collections in Atlas backup scope
+and verify restored timestamps, lead statuses, note access, and audit references during drills.
+
+Research execution uses persisted FastAPI background tasks, not a durable worker queue. A deploy
+or process restart can interrupt active jobs. Inspect failed/stale jobs and rerun from the admin UI
+rather than editing records. Monitor `admin_research.failed`, rate-limit rejections, AI fallback
+counts, and provider-orchestrator timeouts. No research job sends outreach automatically.
+
+Production must keep `ADMIN_LEAD_MOCK_MODE=false`. Instagram and Snapchat stay unavailable until
+official factual adapters are added; never enable synthetic providers to fill production results.
+See `admin_lead_intelligence/README.md` for API and provider policy.
+
 ## Operational architecture
 
 ```text

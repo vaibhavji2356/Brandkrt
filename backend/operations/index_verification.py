@@ -30,6 +30,8 @@ CRITICAL_INDEXES = (
     IndexRequirement("commercial_correction_proposals", (("tenant_id", 1), ("record_id", 1), ("status", 1), ("submitted_at", -1))),
     IndexRequirement("commercial_export_artifacts", (("tenant_id", 1), ("created_at", -1), ("expires_at", 1), ("deleted_at", 1))),
     IndexRequirement("activity_logs", (("tenant_id", 1), ("created_at", -1))),
+    IndexRequirement("admin_research_jobs", (("created_at", -1),)),
+    IndexRequirement("admin_saved_leads", (("fingerprint", 1),), unique=True),
     IndexRequirement("operational_rate_limits", (("expires_at", 1),), ttl=True),
     IndexRequirement("ai_usage_counters", (("expires_at", 1),), ttl=True),
     IndexRequirement("ai_usage_reservations", (("expires_at", 1),), ttl=True),

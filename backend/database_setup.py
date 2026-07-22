@@ -28,6 +28,7 @@ logger = logging.getLogger("brandkrt.database_setup")
 
 
 async def create_indexes(database) -> None:
+    from admin_lead_intelligence.repository import create_admin_lead_indexes
     from commercial_intelligence.repository import setup_indexes as setup_commercial_indexes
     from operations.index_verification import create_operational_indexes
     import domain
@@ -44,6 +45,7 @@ async def create_indexes(database) -> None:
     await part4b.setup_part4b_indexes(database)
     await part4c.setup_part4c_indexes(database)
     await setup_commercial_indexes(database)
+    await create_admin_lead_indexes(database)
     await create_operational_indexes(database)
 
 

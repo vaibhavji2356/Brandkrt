@@ -125,6 +125,10 @@ def validate_configuration(environment: dict[str, str] | None = None) -> Configu
         if not key or _placeholder(key):
             errors.append(ConfigurationIssue("missing_paid_ai_key", "AI_API_KEY"))
 
+    admin_lead_mock_mode = _truthy(_value(values, "ADMIN_LEAD_MOCK_MODE", "false"))
+    if production and admin_lead_mock_mode:
+        errors.append(ConfigurationIssue("admin_lead_mock_mode_in_production", "ADMIN_LEAD_MOCK_MODE"))
+
     if not production and storage_provider == "local":
         warnings.append(ConfigurationIssue("development_local_storage", "EVIDENCE_STORAGE_PROVIDER"))
     if not production and limiter_backend == "memory":
@@ -142,6 +146,7 @@ def validate_configuration(environment: dict[str, str] | None = None) -> Configu
             "rate_limit_backend": limiter_backend,
             "ai_usage_backend": ai_backend,
             "paid_ai_enabled": paid_ai,
+            "admin_lead_mock_mode": admin_lead_mock_mode,
         },
     )
 
