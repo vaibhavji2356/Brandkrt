@@ -98,7 +98,7 @@ def test_production_factory_replaces_only_enabled_real_providers():
     )
     assert isinstance(adapters[Platform.TWITCH], TwitchHelixAdapter)
     assert not isinstance(adapters[Platform.TWITCH], TwitchMockAdapter)
-    assert adapters[Platform.INSTAGRAM].source == "mock:instagram"
+    assert adapters[Platform.INSTAGRAM].__class__.__name__ == "InstagramGraphAPIAdapter"
 
 
 def test_successful_creator_search_and_normalization():

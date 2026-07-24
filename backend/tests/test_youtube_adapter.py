@@ -79,11 +79,11 @@ def test_invalid_configuration_is_rejected(updates):
         settings(**updates).validate()
 
 
-def test_production_factory_replaces_only_youtube_mock():
+def test_production_factory_replaces_youtube_and_instagram_mocks():
     adapters = build_source_adapters(youtube_settings=settings())
     assert isinstance(adapters[Platform.YOUTUBE], YouTubeDataAPIAdapter)
     assert not isinstance(adapters[Platform.YOUTUBE], YouTubeMockAdapter)
-    assert adapters[Platform.INSTAGRAM].source == "mock:instagram"
+    assert adapters[Platform.INSTAGRAM].__class__.__name__ == "InstagramGraphAPIAdapter"
 
 
 def test_creator_search_fetches_details_normalizes_and_never_exposes_raw_response():
