@@ -36,13 +36,42 @@ def get_admin_research_agent() -> ResearchAgent:
     if environment not in {"production", "prod", "staging"} and mock_mode:
         return ResearchAgent()
     adapters = build_source_adapters()
-    # Instagram and Snapchat remain intentionally unavailable until official
-    # factual providers are implemented; synthetic adapters never enter production research.
-    factual = [adapters[platform] for platform in (Platform.YOUTUBE, Platform.TWITCH, Platform.X)]
+    # Snapchat remains unavailable until an official factual provider is implemented.
+    factual = [adapters[platform] for platform in (
+        Platform.INSTAGRAM, Platform.YOUTUBE, Platform.TWITCH, Platform.X,
+    )]
     dispatcher = ResearchDispatcher(
         orchestrator=ProviderOrchestrator(factual, concurrent=True),
     )
     return ResearchAgent(dispatcher=dispatcher)
+
+
+def _available_discovery_platforms(entity_type: EntityType) -> set[Platform]:
+    """Return only configured factual providers that support the requested search."""
+    agent = get_admin_research_agent()
+    dispatcher = getattr(agent, "dispatcher", None)
+    orchestrator = getattr(dispatcher, "orchestrator", None)
+    if orchestrator is None:
+        # Custom agents used by callers/tests own their validation contract.
+        return set(Platform)
+    providers = orchestrator.providers
+    available: set[Platform] = set()
+    requested = (
+        ("creator", "brand") if entity_type == EntityType.BOTH
+        else (entity_type.value,)
+    )
+    for platform, provider in providers.items():
+        settings = getattr(provider, "settings", None)
+        if settings is not None and not getattr(settings, "enabled", False):
+            continue
+        capabilities = provider.capabilities
+        if all(
+            capabilities.creator_discovery if kind == "creator"
+            else capabilities.brand_discovery
+            for kind in requested
+        ):
+            available.add(platform)
+    return available
 
 
 def create_admin_lead_router(get_current_user: Callable, database_provider: Callable) -> APIRouter:
@@ -71,6 +100,18 @@ def create_admin_lead_router(get_current_user: Callable, database_provider: Call
         user: dict = Depends(admin), _limit: None = Depends(research_limit),
         manager: AdminLeadService = Depends(service),
     ):
+        available = _available_discovery_platforms(payload.entity_type)
+        unsupported = [platform.value for platform in payload.platforms if platform not in available]
+        if unsupported:
+            names = ", ".join(unsupported)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"No configured factual {payload.entity_type.value} discovery provider "
+                    f"is available for: {names}. Enable a supported official provider "
+                    "or choose an available platform."
+                ),
+            )
         job = await manager.create_job(payload, user)
         background.add_task(
             manager.run_job, job.id, payload, user,

@@ -105,11 +105,14 @@ def build_mock_adapters() -> dict[Platform, SourceProvider]:
 
 
 def build_source_adapters(
-    *, youtube_settings=None, youtube_http_transport=None,
+    *, instagram_settings=None, instagram_http_transport=None,
+    youtube_settings=None, youtube_http_transport=None,
     twitch_settings=None, twitch_http_transport=None,
     x_settings=None, x_http_transport=None,
 ) -> dict[Platform, SourceProvider]:
-    """Production factory: YouTube, Twitch, and X are real; other platforms remain mocks."""
+    """Production factory: Instagram, YouTube, Twitch, and X use factual adapters."""
+    from .instagram_adapter import InstagramGraphAPIAdapter
+    from .instagram_config import InstagramSettings
     from .twitch_adapter import TwitchHelixAdapter
     from .twitch_config import TwitchSettings
     from .youtube_adapter import YouTubeDataAPIAdapter
@@ -118,6 +121,10 @@ def build_source_adapters(
     from .x_config import XSettings
 
     adapters = build_mock_adapters()
+    instagram = instagram_settings or InstagramSettings.from_env()
+    adapters[Platform.INSTAGRAM] = InstagramGraphAPIAdapter(
+        instagram, http_transport=instagram_http_transport,
+    )
     settings = youtube_settings or YouTubeSettings.from_env()
     adapters[Platform.YOUTUBE] = YouTubeDataAPIAdapter(
         settings, http_transport=youtube_http_transport,

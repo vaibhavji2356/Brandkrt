@@ -6,7 +6,6 @@ from itertools import combinations
 from brand_discovery_ai.discovery_schemas import DiscoveryCriteria, EntityType, Platform
 from brand_discovery_ai.identity import suggest_identity
 from brand_discovery_ai.ranking import rank_profiles
-from brand_discovery_ai.source_adapters import CAPABILITY_REGISTRY
 
 from .context import ContextBuilder
 from .dispatcher import ResearchDispatcher, build_mock_dispatcher
@@ -40,9 +39,14 @@ class ResearchAgent:
             else [request.entity_type.value]
         )
         for platform in request.platforms:
-            capabilities = CAPABILITY_REGISTRY[platform]
+            provider = self.dispatcher.orchestrator.providers.get(platform)
+            capabilities = provider.capabilities if provider else None
             for entity_type in entity_types:
-                supported = capabilities.creator_discovery if entity_type == "creator" else capabilities.brand_discovery
+                supported = bool(capabilities) and (
+                    capabilities.creator_discovery
+                    if entity_type == "creator"
+                    else capabilities.brand_discovery
+                )
                 if not supported:
                     warnings.append(f"{platform.value} does not support {entity_type} discovery; no task was created.")
                     continue
