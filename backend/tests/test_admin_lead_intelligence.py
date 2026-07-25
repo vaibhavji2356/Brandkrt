@@ -97,6 +97,51 @@ def test_every_endpoint_is_admin_only(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_apollo_csv_import_normalizes_deduplicates_and_saves(monkeypatch):
+    async def scenario():
+        database, client = await _context(monkeypatch)
+        csv_content = (
+            "First Name,Last Name,Title,Company Name,Email,Phone,Website,LinkedIn URL,"
+            "City,Country,Industry,Number of Employees,Apollo Contact Id\n"
+            "Asha,Shah,Founder,Green Cart,asha@greencart.example,+91 9999999999,"
+            "greencart.example,linkedin.com/in/asha-shah,Mumbai,India,Retail,25,person-1\n"
+            "Asha,Shah,Founder,Green Cart,asha@greencart.example,+91 9999999999,"
+            "greencart.example,linkedin.com/in/asha-shah,Mumbai,India,Retail,25,person-1\n"
+        )
+        try:
+            response = await client.post(
+                "/api/admin/lead-intelligence/imports/apollo-csv",
+                files={"file": ("apollo.csv", csv_content, "text/csv")},
+                data={"research_name": "Apollo Mumbai founders"},
+                headers={"x-test-role": "admin"},
+            )
+            assert response.status_code == 201, response.text
+            body = response.json()
+            assert body["status"] == "completed"
+            assert body["result_count"] == 1
+            assert body["platforms"] == ["apollo"]
+            result = body["results"][0]
+            assert result["platform"] == "apollo"
+            assert result["company_name"] == "Green Cart"
+            assert result["owner_name"] == "Asha Shah"
+            assert result["business_email"] == "asha@greencart.example"
+            assert result["linkedin_url"] == "https://linkedin.com/in/asha-shah"
+            assert result["employee_count"] == 25
+            assert any("duplicate" in warning.casefold() for warning in body["warnings"])
+
+            saved = await client.post(
+                "/api/admin/lead-intelligence/leads",
+                json={"research_id": body["id"], "entity_key": result["entity_key"]},
+                headers={"x-test-role": "admin"},
+            )
+            assert saved.status_code == 200, saved.text
+            assert saved.json()["result"]["platform"] == "apollo"
+            assert await database.admin_saved_leads.count_documents({}) == 1
+        finally:
+            await client.aclose()
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("payload,entity_type", [(CREATOR_REQUEST, "creator"), (BRAND_REQUEST, "brand")])
 def test_research_job_returns_grounded_normalized_results(monkeypatch, payload, entity_type):
     async def scenario():

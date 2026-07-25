@@ -6,7 +6,7 @@ from functools import lru_cache
 import os
 from typing import Callable, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 
 import security
 from brand_discovery_ai.discovery_schemas import EntityType, Platform
@@ -119,6 +119,24 @@ def create_admin_lead_router(get_current_user: Callable, database_provider: Call
         )
         return job
 
+    @router.post(
+        "/imports/apollo-csv", response_model=ResearchJobDetail,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def import_apollo_csv(
+        file: UploadFile = File(...),
+        research_name: str | None = Form(default=None, max_length=120),
+        user: dict = Depends(admin), _limit: None = Depends(write_limit),
+        manager: AdminLeadService = Depends(service),
+    ):
+        if file.content_type not in {
+            "text/csv", "application/csv", "application/vnd.ms-excel",
+            "text/plain", "application/octet-stream",
+        } and not (file.filename or "").casefold().endswith(".csv"):
+            raise HTTPException(status_code=422, detail="Upload an Apollo .csv export.")
+        content = await file.read(2 * 1024 * 1024 + 1)
+        return await manager.import_apollo_csv(content, research_name, user)
+
     @router.get("/research/jobs/{job_id}", response_model=ResearchJobDetail)
     async def get_research_job(
         job_id: str, _user: dict = Depends(admin), _limit: None = Depends(read_limit),
@@ -132,7 +150,7 @@ def create_admin_lead_router(get_current_user: Callable, database_provider: Call
         page_size: int = Query(default=20, ge=1, le=50),
         search: str | None = Query(default=None, max_length=100),
         entity_type: Literal["creator", "brand", "both"] | None = None,
-        platform: Platform | None = None,
+        platform: str | None = Query(default=None, max_length=50),
         job_status: ResearchJobStatus | None = Query(default=None, alias="status"),
         sort_by: Literal["created_at", "results", "confidence"] = "created_at",
         sort_order: Literal["asc", "desc"] = "desc",
@@ -141,7 +159,7 @@ def create_admin_lead_router(get_current_user: Callable, database_provider: Call
     ):
         return await manager.history(
             page=page, page_size=page_size, search=search, entity_type=entity_type,
-            platform=platform.value if platform else None,
+            platform=platform,
             status=job_status.value if job_status else None,
             sort_by=sort_by, sort_order=sort_order,
         )
@@ -175,7 +193,7 @@ def create_admin_lead_router(get_current_user: Callable, database_provider: Call
         page_size: int = Query(default=20, ge=1, le=50),
         search: str | None = Query(default=None, max_length=100),
         entity_type: Literal["creator", "brand"] | None = None,
-        platform: Platform | None = None,
+        platform: str | None = Query(default=None, max_length=50),
         lead_status: LeadStatus | None = Query(default=None, alias="status"),
         priority: LeadPriority | None = None,
         archived: bool = False,
@@ -186,7 +204,7 @@ def create_admin_lead_router(get_current_user: Callable, database_provider: Call
     ):
         return await manager.leads(
             page=page, page_size=page_size, search=search, entity_type=entity_type,
-            platform=platform.value if platform else None,
+            platform=platform,
             status=lead_status.value if lead_status else None,
             priority=priority.value if priority else None, archived=archived,
             sort_by=sort_by, sort_order=sort_order,

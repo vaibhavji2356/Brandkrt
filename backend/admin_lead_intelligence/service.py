@@ -23,6 +23,7 @@ from .models import (
     ResearchHistoryPage, ResearchJobDetail, ResearchJobStatus, ResearchJobSummary,
     SaveLeadRequest, SavedLead, SavedLeadPage,
 )
+from .apollo_csv import parse_apollo_csv
 from .repository import AdminLeadRepository
 
 
@@ -46,6 +47,61 @@ class AdminLeadService:
         document = await self.repository.create_job(request, actor_id)
         operational_metrics.increment("admin_research_jobs_created")
         return _job_summary(document)
+
+    async def import_apollo_csv(
+        self, content: bytes, research_name: str | None, user: dict,
+    ) -> ResearchJobDetail:
+        profiles, import_warnings = parse_apollo_csv(content)
+        request = AdminResearchRequest(
+            research_name=research_name or "Apollo CSV import",
+            entity_type="brand",
+            platforms=["x"],
+            result_limit=min(50, len(profiles)),
+        )
+        summary = await self.create_job(request, user)
+        results = []
+        for profile, details in profiles[:50]:
+            result = _lead_result(
+                profile, None, profile.source_confidence, request, None,
+                "deterministic_grounded", True, None, [],
+            )
+            result = result.model_copy(update={
+                **details,
+                "platform": "apollo",
+                "entity_key": f"apollo:{profile.platform_id}",
+            })
+            results.append(result)
+        results.sort(key=lambda item: (-item.priority.score, item.entity_key))
+        await self.repository.update_job(summary.id, {
+            "status": ResearchJobStatus.COMPLETED.value,
+            "progress": 100,
+            "result_count": len(results),
+            "confidence": 80.0,
+            "reasoning_source": "deterministic_grounded",
+            "degraded": True,
+            "results": [item.model_dump(mode="json") for item in results],
+            "warnings": import_warnings,
+            "missing_information": [
+                "Google Places verification is pending until a Places API key is configured.",
+                "LinkedIn profile data is not scraped; only URLs present in the Apollo export are retained.",
+            ],
+            "source_summary": [{
+                "provider": "apollo_csv", "platform": "apollo",
+                "record_count": len(results), "confidence": 0.8,
+            }],
+            "platforms": ["apollo"],
+            "criteria": {
+                **request.model_dump(mode="json", exclude_none=True),
+                "platforms": ["apollo"],
+            },
+            "started_at": datetime.now(timezone.utc),
+            "completed_at": datetime.now(timezone.utc),
+        })
+        await self.repository.audit_event(
+            str(user.get("_id", "unknown")), "admin_apollo_csv_imported",
+            "admin_research_job", summary.id, ["results"],
+        )
+        return await self.get_job(summary.id)
 
     async def run_job(
         self, job_id: str, request: AdminResearchRequest, user: dict,
