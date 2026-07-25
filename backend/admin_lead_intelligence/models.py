@@ -95,13 +95,23 @@ class LeadIntelligenceResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
     entity_key: str = Field(min_length=3, max_length=420)
     entity_type: Literal["creator", "brand"]
-    platform: Platform
+    platform: str = Field(min_length=1, max_length=50)
     platform_id: str = Field(min_length=1, max_length=200)
     username: str | None = Field(default=None, max_length=200)
     display_name: str | None = Field(default=None, max_length=200)
     profile_url: str | None = None
     biography: str | None = Field(default=None, max_length=2000)
     website: str | None = None
+    owner_name: str | None = Field(default=None, max_length=200)
+    job_title: str | None = Field(default=None, max_length=200)
+    business_email: str | None = Field(default=None, max_length=320)
+    phone_number: str | None = Field(default=None, max_length=100)
+    company_name: str | None = Field(default=None, max_length=200)
+    company_domain: str | None = Field(default=None, max_length=253)
+    employee_count: int | None = Field(default=None, ge=0)
+    linkedin_url: str | None = None
+    apollo_person_id: str | None = Field(default=None, max_length=200)
+    apollo_company_id: str | None = Field(default=None, max_length=200)
     public_social_profiles: list[str] = Field(default_factory=list, max_length=20)
     available_platforms: list[str] = Field(default_factory=list, max_length=10)
     categories: list[str] = Field(default_factory=list, max_length=30)
@@ -136,7 +146,7 @@ class ResearchJobSummary(BaseModel):
     id: str
     research_name: str | None = None
     entity_type: EntityType
-    platforms: list[Platform]
+    platforms: list[str]
     query_summary: str
     status: ResearchJobStatus
     progress: int = Field(ge=0, le=100)

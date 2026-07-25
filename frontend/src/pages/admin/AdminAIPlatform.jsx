@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import {
   Activity, Archive, ArrowUpRight, BarChart3, Bookmark, Bot, Building2,
   CheckCircle2, Clock3, ExternalLink, MessageSquareText, RefreshCw,
-  Search, Send, Sparkles, UserRound, Users,
+  Search, Send, Sparkles, Upload, UserRound, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 
 
 const PLATFORMS = ["instagram", "youtube", "snapchat", "twitch", "x"];
+const SAVED_LEAD_PLATFORMS = [...PLATFORMS, "apollo", "linkedin"];
 const LEAD_STATUSES = [
   "new", "contact_planned", "contacted", "follow_up_required", "replied",
   "negotiating", "converted", "closed",
@@ -208,6 +209,8 @@ export function LeadDiscoveryPage({ entityType }) {
   const [resultSearch, setResultSearch] = useState("");
   const [sortBy, setSortBy] = useState("priority");
   const [page, setPage] = useState(1);
+  const [apolloFile, setApolloFile] = useState(null);
+  const [importingApollo, setImportingApollo] = useState(false);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
@@ -274,6 +277,27 @@ export function LeadDiscoveryPage({ entityType }) {
       toast.success("Lead saved to the outreach workspace");
     } catch (requestError) {
       toast.error(formatApiError(requestError));
+    }
+  };
+
+  const importApollo = async (event) => {
+    event.preventDefault();
+    if (!apolloFile) {
+      setError("Choose an Apollo CSV export first.");
+      return;
+    }
+    const body = new FormData();
+    body.append("file", apolloFile);
+    if (form.research_name.trim()) body.append("research_name", form.research_name.trim());
+    setImportingApollo(true); setError(""); setSaved({}); setPage(1);
+    try {
+      const { data } = await api.post("/admin/lead-intelligence/imports/apollo-csv", body);
+      setJob(data);
+      toast.success(`${data.result_count} Apollo lead${data.result_count === 1 ? "" : "s"} imported`);
+    } catch (requestError) {
+      setError(formatApiError(requestError));
+    } finally {
+      setImportingApollo(false);
     }
   };
 
@@ -348,6 +372,29 @@ export function LeadDiscoveryPage({ entityType }) {
         </form>
       </Panel>
 
+      {isBrand && <Panel className="border-secondary/30 bg-secondary/5">
+        <form onSubmit={importApollo} className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between" data-testid="apollo-csv-import">
+          <div>
+            <div className="flex items-center gap-2">
+              <Upload className="h-5 w-5 text-secondary" />
+              <h3 className="font-semibold text-primary dark:text-white">Import Apollo leads</h3>
+            </div>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Export People or Companies from Apollo as CSV, then upload it here. Company, owner, title,
+              email, phone, website, and LinkedIn URL are normalized without scraping.
+            </p>
+            <input
+              className="mt-3 block w-full text-sm file:mr-3 file:rounded-full file:border-0 file:bg-primary file:px-4 file:py-2 file:font-semibold file:text-primary-foreground"
+              type="file" accept=".csv,text/csv" onChange={(event) => setApolloFile(event.target.files?.[0] || null)}
+              aria-label="Apollo CSV file"
+            />
+          </div>
+          <button disabled={importingApollo} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+            {importingApollo ? <><RefreshCw className="h-4 w-4 animate-spin" /> Importing...</> : <><Upload className="h-4 w-4" /> Import CSV</>}
+          </button>
+        </form>
+      </Panel>}
+
       {job?.status === "completed" && <>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -397,6 +444,11 @@ function LeadResultCard({ result, onSave, savedId }) {
         </button>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {result.owner_name && <Mini label="Owner / contact" value={result.owner_name} />}
+        {result.job_title && <Mini label="Job title" value={result.job_title} />}
+        {result.business_email && <Mini label="Business email" value={result.business_email} />}
+        {result.phone_number && <Mini label="Phone" value={result.phone_number} />}
+        {result.employee_count != null && <Mini label="Employees" value={number(result.employee_count)} />}
         <Mini label="Priority" value={`${result.priority.score.toFixed(1)}/100`} />
         <Mini label="Recommendation" value={`${result.recommendation_score.toFixed(1)}/100`} />
         <Mini label="Confidence" value={`${result.confidence.toFixed(1)}%`} />
@@ -427,8 +479,10 @@ function LeadResultCard({ result, onSave, savedId }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 text-xs text-muted-foreground">
         <span>Source: {result.discovery_source} · Collected {date(result.collected_at)}</span>
         <span className="flex gap-3">
+          {result.business_email && <a href={`mailto:${result.business_email}`} className="inline-flex items-center gap-1 text-primary dark:text-secondary">Email <ExternalLink className="h-3 w-3" /></a>}
+          {result.phone_number && <a href={`tel:${result.phone_number}`} className="inline-flex items-center gap-1 text-primary dark:text-secondary">Call <ExternalLink className="h-3 w-3" /></a>}
           {result.website && <a href={result.website} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary dark:text-secondary">Website <ExternalLink className="h-3 w-3" /></a>}
-          {result.profile_url && <a href={result.profile_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary dark:text-secondary">Profile <ArrowUpRight className="h-3 w-3" /></a>}
+          {(result.linkedin_url || result.profile_url) && <a href={result.linkedin_url || result.profile_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary dark:text-secondary">Profile <ArrowUpRight className="h-3 w-3" /></a>}
         </span>
       </div>
     </Panel>
@@ -470,7 +524,7 @@ export function SavedLeadsPage() {
         <input aria-label="Search saved leads" value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Search leads" className="rounded-xl border border-border bg-background px-3 py-2 text-sm" />
         <FilterSelect label="Status" value={filters.status} values={LEAD_STATUSES} onChange={(value) => setFilters((current) => ({ ...current, status: value, page: 1 }))} />
         <FilterSelect label="Type" value={filters.entity_type} values={["creator", "brand"]} onChange={(value) => setFilters((current) => ({ ...current, entity_type: value, page: 1 }))} />
-        <FilterSelect label="Platform" value={filters.platform} values={PLATFORMS} onChange={(value) => setFilters((current) => ({ ...current, platform: value, page: 1 }))} />
+        <FilterSelect label="Platform" value={filters.platform} values={SAVED_LEAD_PLATFORMS} onChange={(value) => setFilters((current) => ({ ...current, platform: value, page: 1 }))} />
         <FilterSelect label="Priority" value={filters.priority} values={["high", "medium", "low"]} onChange={(value) => setFilters((current) => ({ ...current, priority: value, page: 1 }))} />
         <button className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Search</button>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={filters.archived} onChange={(event) => setFilters((current) => ({ ...current, archived: event.target.checked, page: 1 }))} /> Show archived</label>
