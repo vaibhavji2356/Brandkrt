@@ -55,11 +55,42 @@ async def bootstrap_admin(database) -> None:
     if not email or not password:
         logger.info("Admin bootstrap skipped; ADMIN_EMAIL or ADMIN_PASSWORD is not configured")
         return
-    if await database.users.find_one({"email": email}):
-        logger.info("Admin account already exists; password was not changed")
+    now = datetime.now(timezone.utc)
+    configured_user = await database.users.find_one({"email": email})
+    if configured_user and configured_user.get("role") != "admin":
+        raise RuntimeError("ADMIN_EMAIL is already used by a non-admin account")
+
+    if configured_user:
+        if bcrypt.checkpw(password.encode("utf-8"), configured_user["password_hash"].encode("utf-8")):
+            logger.info("Configured admin credentials are already current")
+            return
+        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        await database.users.update_one(
+            {"_id": configured_user["_id"], "role": "admin"},
+            {"$set": {"password_hash": password_hash, "email_verified": True, "updated_at": now}},
+        )
+        logger.info("Rotated configured admin password")
         return
 
-    now = datetime.now(timezone.utc)
+    admins = await database.users.find({"role": "admin"}, {"_id": 1}).limit(2).to_list(2)
+    if len(admins) > 1:
+        raise RuntimeError("Multiple admins exist; rotate the intended account explicitly")
+    if len(admins) == 1:
+        password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        await database.users.update_one(
+            {"_id": admins[0]["_id"], "role": "admin"},
+            {
+                "$set": {
+                    "email": email,
+                    "password_hash": password_hash,
+                    "email_verified": True,
+                    "updated_at": now,
+                }
+            },
+        )
+        logger.info("Rotated configured admin email and password")
+        return
+
     password_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     await database.users.insert_one({
         "email": email,

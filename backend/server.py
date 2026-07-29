@@ -93,6 +93,9 @@ async def lifespan(_app: FastAPI):
 
     if database_ready:
         try:
+            from database_setup import bootstrap_admin
+
+            await bootstrap_admin(db)
             indexes = await verify_critical_indexes(db)
             backend_status.set_component(
                 "indexes", ready=indexes.ready, required=True,

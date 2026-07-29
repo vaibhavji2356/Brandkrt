@@ -68,8 +68,10 @@ cd backend
 python database_setup.py
 ```
 
-The command is idempotent for indexes. It creates the configured admin only
-when that email does not exist and never resets an existing admin password.
+The command is idempotent for indexes. The configured `ADMIN_EMAIL` and
+`ADMIN_PASSWORD` are also reconciled with the single admin account during
+database setup and application startup. Keep both values in the hosting
+platform's encrypted environment settings.
 Use a Render pre-deploy command when the plan supports one; otherwise run it as
 a one-off shell command before switching traffic to the new release.
 
