@@ -12,6 +12,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Literal
+from urllib.parse import urlparse
 
 import bcrypt
 import jwt
@@ -269,7 +270,17 @@ class EmailService:
     def __init__(self) -> None:
         self.provider = os.environ.get("EMAIL_PROVIDER", "").strip().lower() or "auto"
         self.from_addr = os.environ.get("EMAIL_FROM") or os.environ.get("SMTP_FROM") or "support@brandkrt.com"
-        self.frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+        configured_frontend = os.environ.get("FRONTEND_URL", "").strip().rstrip("/")
+        if not configured_frontend:
+            configured_frontend = "https://brandkrt.com" if _is_production_like_environment() else "http://localhost:3000"
+        hostname = (urlparse(configured_frontend).hostname or "").lower()
+        if _is_production_like_environment() and hostname.endswith(".onrender.com"):
+            logger.warning(
+                "FRONTEND_URL points to the backend host; using the canonical public site for email links",
+                extra={"event": "email.frontend_url_corrected", "component": "email"},
+            )
+            configured_frontend = "https://brandkrt.com"
+        self.frontend_url = configured_frontend
 
     async def send_verification(self, to: str, token: str) -> None:
         from email_templates import verify_email as tpl  # lazy import
