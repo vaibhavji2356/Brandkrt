@@ -21,12 +21,56 @@ function isImageDocument(doc) {
 }
 
 function VerificationImage({ url, label, className = "h-40 w-full" }) {
+  const [previewUrl, setPreviewUrl] = useState("");
   const [broken, setBroken] = useState(false);
-  if (!url || broken) return null;
+  const isPrivateUpload = String(url || "").startsWith("/api/uploads/");
+
+  useEffect(() => {
+    if (!url) return undefined;
+
+    if (isPrivateUpload) {
+      let active = true;
+      let objectUrl = "";
+      api.get(String(url).replace(/^\/api/, ""), { responseType: "blob" })
+        .then(({ data }) => {
+          if (!active) return;
+          objectUrl = URL.createObjectURL(data);
+          setPreviewUrl(objectUrl);
+          setBroken(false);
+        })
+        .catch(() => {
+          if (active) setBroken(true);
+        });
+      return () => {
+        active = false;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      };
+    }
+
+    setPreviewUrl(url);
+    setBroken(false);
+    return undefined;
+  }, [url, isPrivateUpload]);
+
+  if (!url) return null;
+  if (isPrivateUpload && !previewUrl && !broken) {
+    return (
+      <div className="rounded-xl border border-border bg-accent/30 px-3 py-6 text-sm text-muted-foreground">
+        Loading secure preview…
+      </div>
+    );
+  }
+  if (broken) {
+    return (
+      <a href={url} target="_blank" rel="noreferrer" className="block rounded-xl border border-border px-3 py-4 text-sm font-medium text-secondary hover:bg-accent">
+        {label} · Preview unavailable — open file
+      </a>
+    );
+  }
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-xl border border-border bg-accent/30">
+    <a href={previewUrl || url} target="_blank" rel="noreferrer" className="group block overflow-hidden rounded-xl border border-border bg-accent/30">
       <img
-        src={url}
+        src={previewUrl || url}
         alt={label}
         className={`${className} object-cover transition-transform group-hover:scale-[1.02]`}
         onError={() => setBroken(true)}
