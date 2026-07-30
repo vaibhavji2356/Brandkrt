@@ -16,9 +16,23 @@ const rawBackendUrl = process.env.REACT_APP_BACKEND_URL?.trim();
 // requests same-origin makes HTTP-only auth cookies reliable in browsers that
 // block third-party cookies. A custom API origin remains an explicit override.
 const DEFAULT_BACKEND_ORIGIN = "";
-export const BACKEND_ORIGIN = rawBackendUrl
-  ? rawBackendUrl.replace(/\/api\/?$/, "").replace(/\/$/, "")
-  : DEFAULT_BACKEND_ORIGIN;
+
+export function resolveBackendOrigin(configuredUrl, hostname = "") {
+  const normalizedHostname = String(hostname || "").toLowerCase();
+  const usesProductionProxy = (
+    ["brandkrt.com", "www.brandkrt.com"].includes(normalizedHostname)
+    || normalizedHostname.endsWith(".vercel.app")
+  );
+  if (usesProductionProxy) return DEFAULT_BACKEND_ORIGIN;
+  return configuredUrl
+    ? configuredUrl.replace(/\/api\/?$/, "").replace(/\/$/, "")
+    : DEFAULT_BACKEND_ORIGIN;
+}
+
+export const BACKEND_ORIGIN = resolveBackendOrigin(
+  rawBackendUrl,
+  typeof window !== "undefined" ? window.location.hostname : "",
+);
 export const API = BACKEND_ORIGIN ? `${BACKEND_ORIGIN}/api` : "/api";
 
 export function assetUrl(value) {
