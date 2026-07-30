@@ -125,11 +125,15 @@ class AdminLeadService:
             extra_warnings: list[str] = []
             budget_excluded = 0
             budget_unavailable = 0
+            entity_type_excluded = 0
             if request.minimum_audience_quality is not None:
                 extra_warnings.append(
                     "Audience-quality filtering was not applied where an official quality measurement was unavailable."
                 )
             for profile in package.normalized_entities:
+                if profile.entity_type != request.entity_type:
+                    entity_type_excluded += 1
+                    continue
                 entity_key = f"{profile.platform.value}:{profile.platform_id}"
                 ranked = ranking.get(entity_key)
                 commercial = await self.repository.commercial_summary(
@@ -147,6 +151,12 @@ class AdminLeadService:
                 if budget_status == "unavailable":
                     budget_unavailable += 1
                 results.append(result)
+            if entity_type_excluded:
+                extra_warnings.append(
+                    f"Excluded {entity_type_excluded} provider "
+                    f"{'result' if entity_type_excluded == 1 else 'results'} that did not match "
+                    f"the requested {request.entity_type.value} entity type."
+                )
             if budget_excluded:
                 extra_warnings.append(
                     f"Excluded {budget_excluded} creator {'result' if budget_excluded == 1 else 'results'} "

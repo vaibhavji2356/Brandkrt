@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import admin_lead_intelligence.router as lead_router
 import security
 from admin_lead_intelligence.repository import create_admin_lead_indexes
+from brand_discovery_ai.discovery_schemas import EntityType
 from match_intelligence.engine import MatchEngine
 from operations.rate_limiting import InMemoryRateLimitBackend, rate_limiter
 from research_agent.agent import ResearchAgent
@@ -47,10 +48,10 @@ BRAND_REQUEST = {
 }
 
 
-async def _context(monkeypatch):
+async def _context(monkeypatch, research_agent=None):
     database = AsyncMongoMockClient()["admin_lead_test"]
     await create_admin_lead_indexes(database)
-    monkeypatch.setattr(lead_router, "get_admin_research_agent", lambda: ResearchAgent())
+    monkeypatch.setattr(lead_router, "get_admin_research_agent", lambda: research_agent or ResearchAgent())
     monkeypatch.setattr(lead_router, "get_match_engine", lambda: MatchEngine())
     rate_limiter.configure(InMemoryRateLimitBackend())
     security._RL_BUCKETS.clear()
@@ -161,6 +162,28 @@ def test_research_job_returns_grounded_normalized_results(monkeypatch, payload, 
             assert result["last_observed_activity"] is None
             assert result["audience_quality"] is None
             assert "password" not in str(detail).casefold()
+        finally:
+            await client.aclose()
+    asyncio.run(scenario())
+
+
+def test_brand_research_excludes_mixed_creator_provider_results(monkeypatch):
+    class MixedResearchAgent:
+        async def research(self, request):
+            return await ResearchAgent().research(
+                request.model_copy(update={"entity_type": EntityType.BOTH})
+            )
+
+    async def scenario():
+        _database, client = await _context(monkeypatch, MixedResearchAgent())
+        try:
+            detail = await _create_completed(client, BRAND_REQUEST)
+            assert detail["result_count"] > 0
+            assert {item["entity_type"] for item in detail["results"]} == {"brand"}
+            assert any(
+                "did not match the requested brand entity type" in warning
+                for warning in detail["warnings"]
+            )
         finally:
             await client.aclose()
     asyncio.run(scenario())

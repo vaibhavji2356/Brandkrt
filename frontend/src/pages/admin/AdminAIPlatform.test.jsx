@@ -28,7 +28,7 @@ jest.mock("lucide-react", () => {
     Activity: Icon, Archive: Icon, ArrowUpRight: Icon, BarChart3: Icon, Bookmark: Icon,
     Bot: Icon, Building2: Icon, CheckCircle2: Icon, Clock3: Icon, ExternalLink: Icon,
     MessageSquareText: Icon, RefreshCw: Icon, Search: Icon, Send: Icon, Sparkles: Icon,
-    UserRound: Icon, Users: Icon,
+    Upload: Icon, UserRound: Icon, Users: Icon,
   };
 });
 
@@ -143,6 +143,32 @@ describe("Admin AI Lead Intelligence UI", () => {
     expect(submit.disabled).toBe(false);
     expect(submit.textContent).toContain("Start factual research");
     expect(container.querySelector('[data-testid="lead-discovery-error"]').textContent).toContain("unavailable");
+  });
+
+  test("brand discovery hides creator records from a mixed API response", async () => {
+    const brandResult = {
+      ...RESULT,
+      entity_key: "instagram:brand-1",
+      entity_type: "brand",
+      platform_id: "brand-1",
+      username: "ethical_brand",
+      display_name: "Ethical Brand",
+      pricing: null,
+    };
+    const mixedJob = {
+      ...JOB,
+      entity_type: "brand",
+      result_count: 2,
+      results: [RESULT, brandResult],
+    };
+    mockPost.mockResolvedValueOnce({ data: { ...mixedJob, status: "queued", progress: 0, results: undefined } });
+    mockGet.mockResolvedValueOnce({ data: mixedJob });
+    await act(async () => root.render(<LeadDiscoveryPage entityType="brand" />));
+    const form = container.querySelector('[data-testid="lead-discovery-form"]');
+    await act(async () => form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(container.textContent).toContain("Ethical Brand");
+    expect(container.textContent).not.toContain("Ethical Creator");
+    expect(container.textContent).toContain("1 normalized results");
   });
 
   test("saved-lead outreach workspace changes status without sending messages", async () => {

@@ -303,15 +303,18 @@ export function LeadDiscoveryPage({ entityType }) {
 
   const filtered = useMemo(() => {
     const term = resultSearch.trim().toLowerCase();
-    const values = (job?.results || []).filter((item) => !term || [
-      item.display_name, item.username, item.platform, ...(item.categories || []), ...(item.keywords || []),
-    ].some((value) => String(value || "").toLowerCase().includes(term)));
+    const values = (job?.results || []).filter((item) => (
+      item.entity_type === entityType
+      && (!term || [
+        item.display_name, item.username, item.platform, ...(item.categories || []), ...(item.keywords || []),
+      ].some((value) => String(value || "").toLowerCase().includes(term)))
+    ));
     return [...values].sort((a, b) => sortBy === "confidence"
       ? b.confidence - a.confidence
       : sortBy === "followers" ? (b.follower_count ?? -1) - (a.follower_count ?? -1)
         : sortBy === "recommendation" ? b.recommendation_score - a.recommendation_score
           : b.priority.score - a.priority.score);
-  }, [job, resultSearch, sortBy]);
+  }, [entityType, job, resultSearch, sortBy]);
   const pageSize = 6;
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
 
@@ -398,7 +401,7 @@ export function LeadDiscoveryPage({ entityType }) {
       {job?.status === "completed" && <>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-xl font-semibold text-primary dark:text-white">{job.result_count} normalized results</h3>
+            <h3 className="text-xl font-semibold text-primary dark:text-white">{filtered.length} normalized results</h3>
             <p className="text-xs text-muted-foreground">{title(job.reasoning_source)} · {job.confidence.toFixed(1)}% aggregate confidence</p>
           </div>
           <div className="flex gap-2">
