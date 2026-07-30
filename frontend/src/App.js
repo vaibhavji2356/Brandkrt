@@ -92,7 +92,7 @@ export default function App() {
               <Route path="/profile" element={<DashboardRedirect />} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
-              <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+              <Route path="/admin" element={<ProtectedRoute allowedRoles={["admin"]}><AdminLayout /></ProtectedRoute>}>
                 <Route index element={<AdminOverview />} />
                 <Route path="lead-intelligence" element={<AdminLeadIntelligenceHome />} />
                 <Route path="brand-discovery" element={<LeadDiscoveryPage entityType="brand" />} />
@@ -111,7 +111,7 @@ export default function App() {
                 <Route path="logs" element={<AdminLogs />} />
               </Route>
 
-              <Route path="/influencer" element={<ProtectedRoute><InfluencerLayout /></ProtectedRoute>}>
+              <Route path="/influencer" element={<ProtectedRoute allowedRoles={["influencer"]}><InfluencerLayout /></ProtectedRoute>}>
                 <Route index element={<InfluencerOverview />} />
                 <Route path="profile" element={<InfluencerProfile />} />
                 <Route path="verification" element={<InfluencerOverview verificationOnly />} />
@@ -126,7 +126,7 @@ export default function App() {
                 <Route path="analytics" element={<InfluencerAnalytics />} />
               </Route>
 
-              <Route path="/brand" element={<ProtectedRoute><BrandLayout /></ProtectedRoute>}>
+              <Route path="/brand" element={<ProtectedRoute allowedRoles={["brand"]}><BrandLayout /></ProtectedRoute>}>
                 <Route index element={<BrandOverview />} />
                 <Route path="profile" element={<BrandProfile />} />
                 <Route path="verification" element={<BrandOverview verificationOnly />} />

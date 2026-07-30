@@ -52,6 +52,13 @@ def doc_out(doc: dict) -> dict:
             d[k] = v.isoformat()
     return d
 
+def public_profile_out(doc: dict) -> dict:
+    """Serialize a discoverable profile without exposing its owning account id."""
+    result = doc_out(doc)
+    if result:
+        result.pop("user_id", None)
+    return result
+
 async def require_role(user: dict, *roles: str) -> None:
     if user.get("role") not in roles:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -477,14 +484,14 @@ def register_handlers():
         if q:
             query["company_name"] = {"$regex": q, "$options": "i"}
         cur = db.brands.find(query).limit(min(limit, 100))
-        return {"brands": [doc_out(x) async for x in cur]}
+        return {"brands": [public_profile_out(x) async for x in cur]}
 
     @brand_router.get("/{brand_id}", operation_id="get_brand")
     async def _get_brand(brand_id: str, user: dict = Depends(get_current_user)):
         doc = await db.brands.find_one({"_id": oid(brand_id)})
         if not doc:
             raise HTTPException(404, "Brand not found")
-        return {"brand": doc_out(doc)}
+        return {"brand": public_profile_out(doc)}
 
     # ----- INFLUENCER -----
     @influencer_router.put("/me")
@@ -586,14 +593,14 @@ def register_handlers():
         if category:
             query["category"] = category
         cur = db.influencers.find(query).limit(min(limit, 100))
-        return {"influencers": [doc_out(x) async for x in cur]}
+        return {"influencers": [public_profile_out(x) async for x in cur]}
 
     @influencer_router.get("/{inf_id}")
     async def _get_inf(inf_id: str, user: dict = Depends(get_current_user)):
         doc = await db.influencers.find_one({"_id": oid(inf_id)})
         if not doc:
             raise HTTPException(404, "Influencer not found")
-        return {"influencer": doc_out(doc)}
+        return {"influencer": public_profile_out(doc)}
 
     # ----- CAMPAIGN -----
     @campaign_router.post("")

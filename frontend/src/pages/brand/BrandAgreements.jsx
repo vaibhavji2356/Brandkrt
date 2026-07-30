@@ -118,7 +118,7 @@ function NewAgreementModal({ onClose, onCreated }) {
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
-    influencer_user_id: "",
+    influencer_id: "",
     influencer_name: "",
     brand_name: "",
     campaign: "",
@@ -167,21 +167,21 @@ function NewAgreementModal({ onClose, onCreated }) {
   const pickCreator = (cr) => {
     setForm((f) => ({
       ...f,
-      influencer_user_id: cr.user_id,
+      influencer_id: cr.id,
       influencer_name: cr.username || cr.name || "Creator",
     }));
   };
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!form.influencer_user_id) return toast.error("Pick a creator");
+    if (!form.influencer_id) return toast.error("Pick a creator");
     if (!form.brand_name.trim()) return toast.error("Brand name is required");
     if (!form.influencer_name.trim()) return toast.error("Influencer name is required");
     if (!form.payment_amount || Number(form.payment_amount) < 0) return toast.error("Payment amount is required");
     setSubmitting(true);
     try {
       const payload = {
-        influencer_user_id: form.influencer_user_id,
+        influencer_id: form.influencer_id,
         brand_name: form.brand_name.trim(),
         influencer_name: form.influencer_name.trim(),
         campaign: form.campaign?.trim() || null,
@@ -228,7 +228,7 @@ function NewAgreementModal({ onClose, onCreated }) {
                   type="button"
                   onClick={() => pickCreator(cr)}
                   data-testid={`agreement-pick-${cr.id}`}
-                  className={`w-full text-left flex items-center gap-3 px-3 py-2.5 ${form.influencer_user_id === cr.user_id ? "bg-accent" : "hover:bg-accent/60"}`}
+                  className={`w-full text-left flex items-center gap-3 px-3 py-2.5 ${form.influencer_id === cr.id ? "bg-accent" : "hover:bg-accent/60"}`}
                 >
                   <CreatorAvatar creator={cr} />
                   <div className="min-w-0 flex-1">

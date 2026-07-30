@@ -139,7 +139,8 @@ AGREEMENT_STATUSES = ["draft", "pending_acceptance", "accepted", "rejected", "ca
 
 class AgreementIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    influencer_user_id: str
+    influencer_id: Optional[str] = None
+    influencer_user_id: Optional[str] = None
     brand_name: str
     influencer_name: str
     campaign: Optional[str] = None  # campaign title or id text
@@ -587,11 +588,19 @@ def register_handlers():
     @agreement_router.post("")
     async def _create_agreement(payload: AgreementIn, user: dict = Depends(get_current_user)):
         await require_role(user, "brand", "admin")
-        # Validate influencer user
+        influencer_user_id = payload.influencer_user_id
+        if payload.influencer_id:
+            profile = await db.influencers.find_one({"_id": oid(payload.influencer_id)}, {"user_id": 1})
+            if not profile:
+                raise HTTPException(404, "Influencer not found")
+            influencer_user_id = str(profile.get("user_id") or "")
+        if not influencer_user_id:
+            raise HTTPException(400, "Pick a valid influencer")
+        # Validate influencer user without exposing its account id in discovery responses.
         try:
-            inf_user = await db.users.find_one({"_id": ObjectId(payload.influencer_user_id)})
+            inf_user = await db.users.find_one({"_id": ObjectId(influencer_user_id)})
         except Exception:
-            raise HTTPException(400, "Invalid influencer_user_id")
+            raise HTTPException(400, "Invalid influencer")
         if not inf_user:
             raise HTTPException(404, "Influencer user not found")
         if inf_user.get("role") != "influencer":
@@ -612,7 +621,7 @@ def register_handlers():
 
         doc = {
             "brand_user_id": str(user["_id"]),
-            "influencer_user_id": payload.influencer_user_id,
+            "influencer_user_id": influencer_user_id,
             "brand_name": payload.brand_name.strip(),
             "influencer_name": payload.influencer_name.strip(),
             "campaign": payload.campaign,
@@ -642,7 +651,7 @@ def register_handlers():
         res = await db.agreements.insert_one(doc)
 
         await notify(
-            payload.influencer_user_id, "contract.requested",
+            influencer_user_id, "contract.requested",
             "New digital agreement to review",
             f"{doc['brand_name']} sent you a campaign agreement to sign.",
             {"agreement_id": str(res.inserted_id)},

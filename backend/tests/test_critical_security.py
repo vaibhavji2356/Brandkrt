@@ -65,10 +65,10 @@ def test_cross_tenant_deals_payments_and_legacy_messages_are_blocked(monkeypatch
         creator_two = await _seed_user(database, role="influencer", email="creator-two@example.com")
         admin = await _seed_user(database, role="admin", email="admin@example.com")
 
-        brand_one_profile = (await database.brands.insert_one({"user_id": str(brand_one["_id"]), "company_name": "One"})).inserted_id
-        brand_two_profile = (await database.brands.insert_one({"user_id": str(brand_two["_id"]), "company_name": "Two"})).inserted_id
-        creator_one_profile = (await database.influencers.insert_one({"user_id": str(creator_one["_id"]), "username": "one"})).inserted_id
-        creator_two_profile = (await database.influencers.insert_one({"user_id": str(creator_two["_id"]), "username": "two"})).inserted_id
+        brand_one_profile = (await database.brands.insert_one({"user_id": str(brand_one["_id"]), "company_name": "One", "status": "active"})).inserted_id
+        brand_two_profile = (await database.brands.insert_one({"user_id": str(brand_two["_id"]), "company_name": "Two", "status": "active"})).inserted_id
+        creator_one_profile = (await database.influencers.insert_one({"user_id": str(creator_one["_id"]), "username": "one", "status": "active"})).inserted_id
+        creator_two_profile = (await database.influencers.insert_one({"user_id": str(creator_two["_id"]), "username": "two", "status": "active"})).inserted_id
         campaign_one = (await database.campaigns.insert_one({"brand_id": str(brand_one_profile), "title": "One", "status": "active"})).inserted_id
         campaign_two = (await database.campaigns.insert_one({"brand_id": str(brand_two_profile), "title": "Two", "status": "active"})).inserted_id
         deal_one = (await database.deals.insert_one({
@@ -90,6 +90,12 @@ def test_cross_tenant_deals_payments_and_legacy_messages_are_blocked(monkeypatch
         brand_one_client, brand_two_client, creator_one_client, creator_two_client, admin_client = clients
         bearer_only_client = httpx.AsyncClient(transport=transport, base_url="https://brandkrt.com")
         try:
+            public_creators = (await brand_one_client.get("/api/influencers")).json()["influencers"]
+            public_brands = (await creator_one_client.get("/api/brands")).json()["brands"]
+            assert public_creators and all("user_id" not in row for row in public_creators)
+            assert public_brands and all("user_id" not in row for row in public_brands)
+            assert (await brand_one_client.get("/api/admin/users")).status_code == 403
+
             bearer_only = await bearer_only_client.get("/api/auth/me", headers={
                 "Authorization": f"Bearer {server.create_access_token(str(brand_one['_id']), brand_one['email'], 'brand')}"
             })
