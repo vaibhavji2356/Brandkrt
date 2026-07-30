@@ -41,6 +41,12 @@ const api = axios.create({
 let refreshPromise = null;
 
 api.interceptors.response.use((response) => {
+  if (
+    (typeof Blob !== "undefined" && response.data instanceof Blob)
+    || response.data instanceof ArrayBuffer
+  ) {
+    return response;
+  }
   response.data = normalizeAssetUrls(response.data);
   return response;
 }, async (error) => {
