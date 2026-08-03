@@ -21,7 +21,7 @@ const EXPLAINER_SCENES = [
   {
     icon: UserRound,
     label: "Creator ki problem",
-    time: "0–20 sec",
+    time: "0–8 sec",
     title: "Talent hai, par sahi brand aur payment ka bharosa nahi.",
     detail: "Random DMs, unclear brief aur delayed payment creator ka time waste karte hain.",
     tone: "bg-violet-500/15 text-violet-300",
@@ -29,7 +29,7 @@ const EXPLAINER_SCENES = [
   {
     icon: SearchX,
     label: "Brand ki problem",
-    time: "20–40 sec",
+    time: "8–16 sec",
     title: "Campaign ke liye genuine local creator kaise mile?",
     detail: "Fake profiles, unclear pricing aur scattered conversations se selection mushkil hota hai.",
     tone: "bg-rose-500/15 text-rose-300",
@@ -37,14 +37,14 @@ const EXPLAINER_SCENES = [
   {
     icon: BadgeCheck,
     label: "BrandKrt solution",
-    time: "40–60 sec",
+    time: "16–24 sec",
     title: "Match se payment tak—sab ek jagah.",
     detail: "Verified match · clear brief · protected payment",
     tone: "bg-emerald-500/15 text-emerald-300",
   },
 ];
 
-const EXPLAINER_SCENE_MS = 20000;
+const EXPLAINER_SCENE_MS = 8000;
 
 function HindiExplainer() {
   const [scene, setScene] = useState(0);
@@ -57,7 +57,7 @@ function HindiExplainer() {
     <div className="relative overflow-hidden rounded-[2rem] border border-white/15 bg-[#102a55] p-5 shadow-2xl" aria-label="BrandKrt Hindi visual explainer">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#f0c94b]"><PlayCircle className="h-4 w-4" /> Hindi visual story</div>
-        <div className="rounded-full bg-white/10 px-2.5 py-1 text-[9px] text-white/65">60 sec · Auto playing</div>
+        <div className="rounded-full bg-white/10 px-2.5 py-1 text-[9px] text-white/65">24 sec · Auto playing</div>
       </div>
       <div className="relative mt-5 min-h-[255px] overflow-hidden rounded-2xl border border-white/10 bg-[#071a3d] p-6">
         <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" />
