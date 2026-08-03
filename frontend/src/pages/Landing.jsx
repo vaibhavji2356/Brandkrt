@@ -2,9 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  ArrowRight, BadgeCheck, BarChart3, Check, CreditCard, FileSignature,
+  ArrowRight, BadgeCheck, BarChart3, Building2, Check, CreditCard, FileSignature,
   Instagram, Mail, MessageCircle, Play, Search, Send, ShieldCheck,
-  Sparkles, Star, UserRound, Youtube,
+  Megaphone, Sparkles, Star, UserRound, Youtube,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
@@ -55,7 +55,7 @@ function HeroVisual() {
             <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">Live campaign board</div>
             <div className="mt-1 text-lg font-semibold text-white">Find a local creator</div>
           </div>
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary text-primary"><Search className="h-4 w-4" /></div>
+          <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary text-[#071a3d]"><Search className="h-4 w-4" /></div>
         </div>
         <div className="mt-5 flex gap-2">
           {["Food", "Pune", "Instagram"].map((tag) => <span key={tag} className="rounded-full bg-white/10 px-3 py-1.5 text-[10px] text-white/75">{tag}</span>)}
@@ -98,7 +98,7 @@ function HeroVisual() {
 
 function Hero() {
   return (
-    <section className="relative overflow-hidden bg-primary py-20 text-white md:py-28">
+    <section className="relative overflow-hidden bg-[#071a3d] py-20 text-white dark:bg-[#050b18] md:py-28">
       <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:32px_32px]" />
       <div className="container-luxe relative grid items-center gap-16 lg:grid-cols-[0.95fr_1.05fr]">
         <motion.div initial="hidden" animate="show" variants={rise}>
@@ -112,16 +112,33 @@ function Hero() {
             Discover, collaborate and pay—without scattered DMs.
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-            <Link to="/register?role=brand" data-testid="hero-cta-brand" className="inline-flex items-center justify-center gap-2 rounded-full bg-secondary px-7 py-3.5 text-sm font-semibold text-primary transition-transform hover:scale-[1.03]">
+            <Link to="/register?role=brand" data-testid="hero-cta-brand" className="inline-flex items-center justify-center gap-2 rounded-full bg-secondary px-7 py-3.5 text-sm font-semibold text-[#071a3d] transition-transform hover:scale-[1.03]">
               Find creators <ArrowRight className="h-4 w-4" />
             </Link>
             <Link to="/register?role=influencer" data-testid="hero-cta-influencer" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-7 py-3.5 text-sm font-semibold text-white hover:bg-white/15">
               Join as creator <Play className="h-4 w-4" />
             </Link>
           </div>
-          <div className="mt-9 flex flex-wrap gap-5 text-xs text-white/55">
-            <span className="flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-secondary" /> Verified profiles</span>
-            <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-secondary" /> Protected workflow</span>
+          <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm" aria-label="BrandKrt campaign flow">
+            <div className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-center">
+              {[
+                { icon: Building2, label: "Business" },
+                { icon: UserRound, label: "Right creator" },
+                { icon: Megaphone, label: "Campaign live" },
+              ].map((item, index) => (
+                <React.Fragment key={item.label}>
+                  <motion.div whileHover={{ y: -3 }} className="flex min-w-0 flex-col items-center gap-2 rounded-xl bg-white/[0.06] px-2 py-3">
+                    <item.icon className="h-5 w-5 text-secondary" />
+                    <span className="text-[10px] font-semibold text-white/80 sm:text-xs">{item.label}</span>
+                  </motion.div>
+                  {index < 2 && <motion.div animate={{ x: [0, 4, 0] }} transition={{ duration: 1.5, repeat: Infinity, delay: index * 0.3 }}><ArrowRight className="h-4 w-4 text-secondary" /></motion.div>}
+                </React.Fragment>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center justify-center gap-5 text-[10px] text-white/50">
+              <span className="flex items-center gap-1.5"><BadgeCheck className="h-3.5 w-3.5 text-secondary" /> Verified</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-secondary" /> Protected</span>
+            </div>
           </div>
         </motion.div>
         <HeroVisual />
@@ -140,7 +157,7 @@ const JOURNEY = [
 
 function VisualJourney() {
   return (
-    <section id="how-it-works" className="section-y overflow-hidden">
+    <section id="how-it-works" className="section-y scroll-mt-24 overflow-hidden">
       <div className="container-luxe">
         <div className="text-center">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">How it works</p>
@@ -165,14 +182,14 @@ function VisualJourney() {
 
 function BentoBenefits() {
   return (
-    <section id="features" className="section-y bg-accent dark:bg-card">
+    <section id="features" className="section-y scroll-mt-24 bg-accent dark:bg-[#08152d]">
       <div className="container-luxe">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Built for clarity</p><h2 className="mt-4 text-4xl font-light tracking-tight text-primary dark:text-white sm:text-5xl">See the work. Skip the noise.</h2></div>
           <p className="max-w-sm text-sm text-muted-foreground">Everything important stays visible—from match to payout.</p>
         </div>
         <div className="mt-14 grid gap-5 md:grid-cols-6 md:grid-rows-2">
-          <motion.div whileHover={{ y: -5 }} className="relative overflow-hidden rounded-[2rem] bg-primary p-8 text-white md:col-span-3 md:row-span-2">
+          <motion.div whileHover={{ y: -5 }} className="relative overflow-hidden rounded-[2rem] bg-[#071a3d] p-8 text-white dark:bg-[#0d2246] md:col-span-3 md:row-span-2">
             <div className="absolute -right-12 -top-12 h-52 w-52 rounded-full bg-secondary/20 blur-2xl" />
             <BadgeCheck className="h-9 w-9 text-secondary" />
             <h3 className="mt-12 text-3xl font-light">Creator discovery,<br />made visual.</h3>
@@ -205,7 +222,7 @@ const REVIEWS = [
 
 function Reviews() {
   return (
-    <section className="section-y bg-primary text-white">
+    <section className="section-y bg-[#071a3d] text-white dark:bg-[#050b18]">
       <div className="container-luxe">
         <div className="flex items-end justify-between gap-6"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">People</p><h2 className="mt-4 text-4xl font-light sm:text-5xl">Simple words. Indian voices.</h2></div><UserRound className="hidden h-16 w-16 text-white/10 sm:block" /></div>
         <div className="mt-14 grid gap-5 md:grid-cols-3">
@@ -213,7 +230,7 @@ function Reviews() {
             <motion.figure key={review.name} initial={{ opacity: 0, scale: 0.96 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="rounded-[2rem] border border-white/10 bg-white/5 p-7">
               <div className="flex gap-1 text-secondary">{Array.from({ length: 5 }).map((_, x) => <Star key={x} className="h-3.5 w-3.5 fill-current" />)}</div>
               <blockquote className="mt-8 text-xl font-light leading-snug">“{review.text}”</blockquote>
-              <figcaption className="mt-8 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-secondary font-bold text-primary">{review.name[0]}</div><span className="text-sm font-semibold">{review.name}</span></figcaption>
+              <figcaption className="mt-8 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-secondary font-bold text-[#071a3d]">{review.name[0]}</div><span className="text-sm font-semibold">{review.name}</span></figcaption>
             </motion.figure>
           ))}
         </div>
@@ -230,7 +247,7 @@ const FAQS = [
 
 function QuickAnswers() {
   return (
-    <section id="faq" className="section-y">
+    <section id="faq" className="section-y scroll-mt-24">
       <div className="container-luxe grid gap-12 lg:grid-cols-[0.75fr_1.25fr]">
         <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Quick answers</p><h2 className="mt-4 text-4xl font-light tracking-tight text-primary dark:text-white">No long manual.</h2><p className="mt-4 text-sm text-muted-foreground">Bas jo zaroori hai.</p></div>
         <Accordion type="single" collapsible className="space-y-3">{FAQS.map((item, i) => <AccordionItem key={item.q} value={`faq-${i}`} className="rounded-2xl border border-border bg-card px-6"><AccordionTrigger className="text-left">{item.q}</AccordionTrigger><AccordionContent className="text-sm text-muted-foreground">{item.a}</AccordionContent></AccordionItem>)}</Accordion>
@@ -249,15 +266,15 @@ function ContactSection() {
     finally { setSubmitting(false); }
   };
   return (
-    <section id="contact" className="section-y bg-accent dark:bg-card">
-      <div className="container-luxe overflow-hidden rounded-[2.5rem] bg-primary text-white">
+    <section id="contact" className="section-y scroll-mt-24 bg-accent dark:bg-[#08152d]">
+      <div className="container-luxe overflow-hidden rounded-[2.5rem] bg-[#071a3d] text-white dark:bg-[#050b18]">
         <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
           <div className="relative p-8 md:p-12"><div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-secondary/20 blur-3xl" /><Mail className="relative h-9 w-9 text-secondary" /><h2 className="relative mt-12 text-4xl font-light">Let’s build your<br />next collaboration.</h2><a href="mailto:support@brandkrt.com" className="relative mt-8 inline-flex items-center gap-2 text-sm text-white/65 hover:text-secondary">support@brandkrt.com <ArrowRight className="h-4 w-4" /></a></div>
           <form onSubmit={submit} className="space-y-4 bg-white p-8 text-foreground dark:bg-background md:p-12" data-testid="contact-form">
             <div className="grid gap-4 sm:grid-cols-2"><Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /><Input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
             <Input placeholder="What do you need?" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} required />
             <Textarea rows={4} placeholder="Tell us briefly…" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
-            <button type="submit" disabled={submitting} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary px-6 py-3 text-sm font-semibold text-primary disabled:opacity-60">{submitting ? "Sending…" : <>Send <Send className="h-4 w-4" /></>}</button>
+            <button type="submit" disabled={submitting} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary px-6 py-3 text-sm font-semibold text-[#071a3d] disabled:opacity-60">{submitting ? "Sending…" : <>Send <Send className="h-4 w-4" /></>}</button>
           </form>
         </div>
       </div>

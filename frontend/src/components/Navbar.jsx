@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, LogOut, User as UserIcon, Settings as SettingsIcon, LayoutDashboard } from "lucide-react";
 import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
@@ -46,6 +46,18 @@ export default function Navbar() {
     navigate(path);
   };
 
+  const scrollMarketingSection = (to) => {
+    setOpen(false);
+    const hash = to.includes("#") ? to.split("#")[1] : "";
+    if (!hash) {
+      if (to === "/" && location.pathname === "/") window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  };
+
   const signOut = async () => {
     await logout();
     setOpen(false);
@@ -63,18 +75,22 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
-          {links.map((l) => (
-            <NavLink
+          {links.map((l) => {
+            const [path, hash = ""] = l.to.split("#");
+            const active = location.pathname === path && location.hash === (hash ? `#${hash}` : "");
+            return (
+            <Link
               key={l.to}
               to={l.to}
+              onClick={() => scrollMarketingSection(l.to)}
               data-testid={`nav-link-${l.label.toLowerCase()}`}
-              className={({ isActive }) =>
-                `text-sm font-medium transition-colors ${isActive ? "text-primary dark:text-white" : "text-muted-foreground hover:text-primary dark:hover:text-white"}`
-              }
+              aria-current={active ? "page" : undefined}
+              className={`relative py-2 text-sm font-medium transition-colors ${active ? "text-primary dark:text-secondary" : "text-muted-foreground hover:text-primary dark:hover:text-white"}`}
             >
               {l.label}
-            </NavLink>
-          ))}
+              <span className={`absolute inset-x-0 -bottom-1 mx-auto h-0.5 rounded-full bg-secondary transition-all ${active ? "w-full opacity-100" : "w-0 opacity-0"}`} />
+            </Link>
+          )})}
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
@@ -180,7 +196,7 @@ export default function Navbar() {
               <Link
                 key={l.to}
                 to={l.to}
-                onClick={() => setOpen(false)}
+                onClick={() => scrollMarketingSection(l.to)}
                 className="py-2 text-base text-foreground"
                 data-testid={`mobile-nav-${l.label.toLowerCase()}`}
               >
