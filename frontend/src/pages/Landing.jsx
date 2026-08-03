@@ -19,40 +19,45 @@ const rise = {
 
 const EXPLAINER_SCENES = [
   {
-    icon: SearchX,
-    label: "Brand ki problem",
-    title: "Sahi local creator kahan milega?",
-    detail: "Random DMs, unclear pricing aur fake profiles.",
-    tone: "bg-rose-500/15 text-rose-300",
-  },
-  {
     icon: UserRound,
     label: "Creator ki problem",
-    title: "Kaam clear hai, payment kab milega?",
-    detail: "Brief, approval aur payout alag-alag jagah.",
+    time: "0–20 sec",
+    title: "Talent hai, par sahi brand aur payment ka bharosa nahi.",
+    detail: "Random DMs, unclear brief aur delayed payment creator ka time waste karte hain.",
     tone: "bg-violet-500/15 text-violet-300",
+  },
+  {
+    icon: SearchX,
+    label: "Brand ki problem",
+    time: "20–40 sec",
+    title: "Campaign ke liye genuine local creator kaise mile?",
+    detail: "Fake profiles, unclear pricing aur scattered conversations se selection mushkil hota hai.",
+    tone: "bg-rose-500/15 text-rose-300",
   },
   {
     icon: BadgeCheck,
     label: "BrandKrt solution",
+    time: "40–60 sec",
     title: "Match se payment tak—sab ek jagah.",
     detail: "Verified match · clear brief · protected payment",
     tone: "bg-emerald-500/15 text-emerald-300",
   },
 ];
 
+const EXPLAINER_SCENE_MS = 20000;
+
 function HindiExplainer() {
   const [scene, setScene] = useState(0);
   useEffect(() => {
-    const timer = window.setInterval(() => setScene((current) => (current + 1) % EXPLAINER_SCENES.length), 3600);
+    const timer = window.setInterval(() => setScene((current) => (current + 1) % EXPLAINER_SCENES.length), EXPLAINER_SCENE_MS);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [scene]);
   const current = EXPLAINER_SCENES[scene];
   return (
     <div className="relative overflow-hidden rounded-[2rem] border border-white/15 bg-[#102a55] p-5 shadow-2xl" aria-label="BrandKrt Hindi visual explainer">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#f0c94b]"><PlayCircle className="h-4 w-4" /> Hindi visual story</div>
-        <div className="rounded-full bg-white/10 px-2.5 py-1 text-[9px] text-white/55">Auto playing</div>
+        <div className="rounded-full bg-white/10 px-2.5 py-1 text-[9px] text-white/65">60 sec · Auto playing</div>
       </div>
       <div className="relative mt-5 min-h-[255px] overflow-hidden rounded-2xl border border-white/10 bg-[#071a3d] p-6">
         <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" />
@@ -60,7 +65,10 @@ function HindiExplainer() {
           <motion.div key={scene} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -28 }} transition={{ duration: 0.45 }} className="relative flex min-h-[205px] flex-col justify-between">
             <div className={`grid h-14 w-14 place-items-center rounded-2xl ${current.tone}`}><current.icon className="h-7 w-7" /></div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#f0c94b]">{current.label}</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#f0c94b]">{current.label}</p>
+                <span className="shrink-0 text-[10px] font-semibold text-white/45">{current.time}</span>
+              </div>
               <h3 className="mt-2 max-w-md text-2xl font-medium leading-tight text-white">{current.title}</h3>
               <p className="mt-3 text-sm text-white/55">{current.detail}</p>
             </div>
@@ -70,7 +78,11 @@ function HindiExplainer() {
       <div className="mt-4 grid grid-cols-3 gap-2">
         {EXPLAINER_SCENES.map((item, index) => (
           <button key={item.label} type="button" onClick={() => setScene(index)} aria-label={`Show ${item.label}`} className="group py-1">
-            <span className={`block h-1 rounded-full transition-colors ${index === scene ? "bg-[#f0c94b]" : "bg-white/15 group-hover:bg-white/30"}`} />
+            <span className="block h-1 overflow-hidden rounded-full bg-white/15">
+              {index === scene && (
+                <motion.span key={`${scene}-progress`} className="block h-full origin-left rounded-full bg-[#f0c94b]" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: EXPLAINER_SCENE_MS / 1000, ease: "linear" }} />
+              )}
+            </span>
             <span className={`mt-2 block truncate text-[9px] ${index === scene ? "text-white" : "text-white/40"}`}>{index + 1}. {item.label}</span>
           </button>
         ))}
