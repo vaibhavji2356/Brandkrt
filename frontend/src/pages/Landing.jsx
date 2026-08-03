@@ -21,30 +21,33 @@ const EXPLAINER_SCENES = [
   {
     icon: UserRound,
     label: "Creator ki problem",
-    time: "0–8 sec",
+    time: "0–5 sec",
     title: "Talent hai, par sahi brand aur payment ka bharosa nahi.",
     detail: "Random DMs, unclear brief aur delayed payment creator ka time waste karte hain.",
+    chips: ["Unclear brief", "Late payment", "Random DMs"],
     tone: "bg-violet-500/15 text-violet-300",
   },
   {
     icon: SearchX,
     label: "Brand ki problem",
-    time: "8–16 sec",
+    time: "5–10 sec",
     title: "Campaign ke liye genuine local creator kaise mile?",
     detail: "Fake profiles, unclear pricing aur scattered conversations se selection mushkil hota hai.",
+    chips: ["Fake profiles", "No pricing", "Slow search"],
     tone: "bg-rose-500/15 text-rose-300",
   },
   {
     icon: BadgeCheck,
     label: "BrandKrt solution",
-    time: "16–24 sec",
+    time: "10–15 sec",
     title: "Match se payment tak—sab ek jagah.",
     detail: "Verified match · clear brief · protected payment",
+    chips: ["Verified", "Clear brief", "Safe payment"],
     tone: "bg-emerald-500/15 text-emerald-300",
   },
 ];
 
-const EXPLAINER_SCENE_MS = 8000;
+const EXPLAINER_SCENE_MS = 5000;
 
 function HindiExplainer() {
   const [scene, setScene] = useState(0);
@@ -57,13 +60,14 @@ function HindiExplainer() {
     <div className="relative overflow-hidden rounded-[2rem] border border-white/15 bg-[#102a55] p-5 shadow-2xl" aria-label="BrandKrt Hindi visual explainer">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#f0c94b]"><PlayCircle className="h-4 w-4" /> Hindi visual story</div>
-        <div className="rounded-full bg-white/10 px-2.5 py-1 text-[9px] text-white/65">24 sec · Auto playing</div>
+        <div className="flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[9px] text-white/65"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />15 sec · Auto playing</div>
       </div>
       <div className="relative mt-5 min-h-[255px] overflow-hidden rounded-2xl border border-white/10 bg-[#071a3d] p-6">
         <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" />
+        <motion.div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#e0b52f]/15 blur-3xl" animate={{ x: [0, -35, 0], y: [0, 30, 0], scale: [1, 1.2, 1] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }} />
         <AnimatePresence mode="wait">
           <motion.div key={scene} initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -28 }} transition={{ duration: 0.45 }} className="relative flex min-h-[205px] flex-col justify-between">
-            <div className={`grid h-14 w-14 place-items-center rounded-2xl ${current.tone}`}><current.icon className="h-7 w-7" /></div>
+            <motion.div className={`grid h-14 w-14 place-items-center rounded-2xl ${current.tone}`} animate={{ y: [0, -5, 0], rotate: [0, 2, 0] }} transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}><current.icon className="h-7 w-7" /></motion.div>
             <div>
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#f0c94b]">{current.label}</p>
@@ -71,6 +75,11 @@ function HindiExplainer() {
               </div>
               <h3 className="mt-2 max-w-md text-2xl font-medium leading-tight text-white">{current.title}</h3>
               <p className="mt-3 text-sm text-white/55">{current.detail}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {current.chips.map((chip, index) => (
+                  <motion.span key={chip} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 + index * 0.12 }} className="rounded-full border border-white/10 bg-white/[0.07] px-2.5 py-1 text-[9px] font-semibold text-white/70">{chip}</motion.span>
+                ))}
+              </div>
             </div>
           </motion.div>
         </AnimatePresence>
