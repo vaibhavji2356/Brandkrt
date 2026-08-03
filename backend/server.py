@@ -202,17 +202,19 @@ def _jwt_secret() -> str:
     return os.environ["JWT_SECRET"]
 
 
-def create_access_token(user_id: str, email: str, role: str) -> str:
+def create_access_token(user_id: str, email: str, role: str, token_version: int = 0) -> str:
     payload = {
         "sub": user_id, "email": email, "role": role, "type": "access",
+        "iat": datetime.now(timezone.utc), "jti": secrets.token_urlsafe(24), "ver": token_version,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
     }
     return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, token_version: int = 0) -> str:
     payload = {
         "sub": user_id, "type": "refresh",
+        "iat": datetime.now(timezone.utc), "jti": secrets.token_urlsafe(32), "ver": token_version,
         "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DAYS),
     }
     return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
@@ -419,7 +421,7 @@ Role = Literal["influencer", "brand", "admin"]
 
 
 class RegisterIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=2, max_length=80)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
@@ -473,8 +475,10 @@ async def get_current_user(request: Request) -> dict:
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        if user.get("status") == "suspended":
-            raise HTTPException(status_code=403, detail="Account is suspended")
+        if user.get("status") in {"suspended", "disabled", "deleted"}:
+            raise HTTPException(status_code=403, detail="Account is unavailable")
+        if int(payload.get("ver", 0)) != int(user.get("token_version", 0)):
+            raise HTTPException(status_code=401, detail="Session is no longer valid")
         request.state.auth_role = user.get("role", "unknown")
         return user
     except jwt.ExpiredSignatureError:
@@ -550,7 +554,8 @@ async def send_register_otp(payload: RegisterOtpIn, _rl: None = Depends(_securit
 
 
 @auth_router.post("/register")
-async def register(payload: RegisterIn, response: Response):
+async def register(payload: RegisterIn, response: Response,
+                   _rl: None = Depends(_security.limiter_dependency("register", limit=5, window=600))):
     if not payload.accept_terms:
         raise HTTPException(status_code=400, detail="You must accept the terms to continue")
     if payload.role == "admin":
@@ -594,7 +599,8 @@ async def register(payload: RegisterIn, response: Response):
 
 
 @auth_router.post("/login")
-async def login(payload: LoginIn, request: Request, response: Response):
+async def login(payload: LoginIn, request: Request, response: Response,
+                _rl: None = Depends(_security.limiter_dependency("login", limit=20, window=300))):
     email = payload.email.lower().strip()
     ip = _client_ip(request)
     identifier = f"{ip}:{email}"
@@ -608,8 +614,9 @@ async def login(payload: LoginIn, request: Request, response: Response):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     await _clear_failed(identifier)
-    access = create_access_token(str(user["_id"]), email, user.get("role", "influencer"))
-    refresh = create_refresh_token(str(user["_id"]))
+    version = int(user.get("token_version", 0))
+    access = create_access_token(str(user["_id"]), email, user.get("role", "influencer"), version)
+    refresh = create_refresh_token(str(user["_id"]), version)
     set_auth_cookies(response, access, refresh)
     return {"user": serialize_user(user)}
 
@@ -637,8 +644,13 @@ async def refresh_token(request: Request, response: Response):
         user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        access = create_access_token(str(user["_id"]), user["email"], user.get("role", "influencer"))
-        new_refresh = create_refresh_token(str(user["_id"]))
+        if user.get("status") in {"suspended", "disabled", "deleted"}:
+            raise HTTPException(status_code=403, detail="Account is unavailable")
+        version = int(user.get("token_version", 0))
+        if int(payload.get("ver", 0)) != version:
+            raise HTTPException(status_code=401, detail="Session is no longer valid")
+        access = create_access_token(str(user["_id"]), user["email"], user.get("role", "influencer"), version)
+        new_refresh = create_refresh_token(str(user["_id"]), version)
         set_auth_cookies(response, access, new_refresh)
         return {"user": serialize_user(user)}
     except jwt.ExpiredSignatureError:
@@ -673,7 +685,8 @@ async def reset_password(payload: ResetPasswordIn):
         raise HTTPException(status_code=400, detail="Reset token has expired")
     await db.users.update_one(
         {"_id": ObjectId(rec["user_id"])},
-        {"$set": {"password_hash": hash_password(payload.new_password), "updated_at": datetime.now(timezone.utc)}},
+        {"$set": {"password_hash": hash_password(payload.new_password), "updated_at": datetime.now(timezone.utc)},
+         "$inc": {"token_version": 1}},
     )
     await db.password_reset_tokens.update_one({"_id": rec["_id"]}, {"$set": {"used": True}})
     return {"success": True, "message": "Password updated. You can now log in."}
@@ -741,8 +754,9 @@ async def google_signin(payload: GoogleSignInIn, request: Request, response: Res
             )
             user = await db.users.find_one({"_id": user["_id"]})
 
-    access = create_access_token(str(user["_id"]), email, user.get("role", "influencer"))
-    refresh = create_refresh_token(str(user["_id"]))
+    version = int(user.get("token_version", 0))
+    access = create_access_token(str(user["_id"]), email, user.get("role", "influencer"), version)
+    refresh = create_refresh_token(str(user["_id"]), version)
     set_auth_cookies(response, access, refresh)
     return {"user": serialize_user(user)}
 
@@ -792,7 +806,8 @@ async def change_password(payload: PasswordChangeIn, user: dict = Depends(get_cu
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     await db.users.update_one(
         {"_id": user["_id"]},
-        {"$set": {"password_hash": hash_password(payload.new_password), "updated_at": datetime.now(timezone.utc)}},
+        {"$set": {"password_hash": hash_password(payload.new_password), "updated_at": datetime.now(timezone.utc)},
+         "$inc": {"token_version": 1}},
     )
     return {"success": True}
 

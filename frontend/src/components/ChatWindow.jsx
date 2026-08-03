@@ -83,7 +83,7 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
     const tick = async () => {
       try {
         const { data } = await api.get(`/conversations/${conversation.id}/typing`);
-        if (alive) setTypingPeers(data.typing || []);
+        if (alive) setTypingPeers(data.typing ? [true] : []);
       } catch (_) { /* ignore */ }
     };
     tick();
@@ -270,8 +270,8 @@ export default function ChatWindow({ conversation, onBack, onUpdated }) {
               </div>
             );
           }
-          const isMine = item.sender_id === meId;
-          const readByPeer = (item.read_by || []).some((id) => id !== meId);
+          const isMine = Boolean(item.is_mine);
+          const readByPeer = Boolean(item.read_by_peer);
           return (
             <div key={item.key} className={`flex ${isMine ? "justify-end" : "justify-start"}`} data-testid={`chat-msg-${item.id}`}>
               <div className={`max-w-[78%] md:max-w-[68%] rounded-2xl px-3.5 py-2.5 ${

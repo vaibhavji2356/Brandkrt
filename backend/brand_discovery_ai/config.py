@@ -7,7 +7,12 @@ import os
 from .errors import AIConfigurationError
 
 
-SUPPORTED_MODEL_IDS = frozenset({"gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"})
+SUPPORTED_MODEL_IDS = frozenset({
+    "gpt-4.1-mini",
+    "gpt-5.6-luna",
+    "gpt-5.6-terra",
+    "gpt-5.6-sol",
+})
 
 
 def _parse_bool(value: str) -> bool:
@@ -80,11 +85,26 @@ class AISettings:
     @classmethod
     def from_env(cls) -> "AISettings":
         try:
+            # Accept the conventional OpenAI variable names as a backwards-compatible
+            # production shortcut. Explicit AI_* settings still take precedence.
+            api_key = (
+                os.environ.get("AI_API_KEY", "").strip()
+                or os.environ.get("OPENAI_API_KEY", "").strip()
+            )
+            model = (
+                os.environ.get("AI_MODEL", "").strip()
+                or os.environ.get("OPENAI_MODEL", "").strip()
+            )
+            provider_default = "openai" if api_key else "mock"
+            mock_default = "false" if api_key else "true"
+            allowed_default = model
             settings = cls(
-                provider=os.environ.get("AI_PROVIDER", "mock").strip().lower() or "mock",
-                api_key=os.environ.get("AI_API_KEY", "").strip(),
-                model=os.environ.get("AI_MODEL", "").strip(),
-                allowed_models=_parse_allowed_models(os.environ.get("AI_ALLOWED_MODELS", "")),
+                provider=os.environ.get("AI_PROVIDER", provider_default).strip().lower() or provider_default,
+                api_key=api_key,
+                model=model,
+                allowed_models=_parse_allowed_models(
+                    os.environ.get("AI_ALLOWED_MODELS", allowed_default)
+                ),
                 timeout_seconds=float(os.environ.get("AI_TIMEOUT_SECONDS", "20")),
                 max_retries=int(os.environ.get("AI_MAX_RETRIES", "1")),
                 max_output_tokens=int(os.environ.get("AI_MAX_OUTPUT_TOKENS", "4000")),
@@ -98,7 +118,7 @@ class AISettings:
                 max_estimated_cost_per_request_usd=float(
                     os.environ.get("AI_MAX_ESTIMATED_COST_PER_REQUEST_USD", "0.06")
                 ),
-                mock_mode=_parse_bool(os.environ.get("AI_MOCK_MODE", "true")),
+                mock_mode=_parse_bool(os.environ.get("AI_MOCK_MODE", mock_default)),
             )
             if len(settings.model) > 100 or len(settings.api_key) > 1000:
                 raise AIConfigurationError("invalid_provider_credentials")

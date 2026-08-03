@@ -186,6 +186,46 @@ def test_openai_provider_uses_structured_output_with_mocked_transport():
     assert body["text"]["verbosity"] == "low"
 
 
+def test_conventional_openai_environment_aliases_enable_provider(monkeypatch):
+    for name in (
+        "AI_PROVIDER", "AI_API_KEY", "AI_MODEL", "AI_ALLOWED_MODELS", "AI_MOCK_MODE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4.1-mini")
+
+    settings = AISettings.from_env()
+
+    assert settings.openai_enabled is True
+    assert settings.api_key == "test-key"
+    assert settings.model == "gpt-4.1-mini"
+    assert settings.allowed_models == ("gpt-4.1-mini",)
+
+
+def test_gpt_4_1_mini_request_omits_gpt_5_only_options():
+    pkg = package()
+    expected = qualitative_payload(pkg)
+    calls = []
+
+    async def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={"output_text": __import__("json").dumps(expected)})
+
+    settings = AISettings(
+        provider="openai", api_key="test-key", model="gpt-4.1-mini",
+        allowed_models=("gpt-4.1-mini",), timeout_seconds=2, max_retries=0,
+        max_output_tokens=1000, mock_mode=False,
+    )
+    provider = OpenAIMatchReasoningProvider(
+        settings, http_transport=httpx.MockTransport(handler),
+    )
+
+    assert run(provider.reason(build_match_prompt(pkg))) == expected
+    body = __import__("json").loads(calls[0].content)
+    assert "reasoning" not in body
+    assert "verbosity" not in body["text"]
+
+
 async def authenticated_client(monkeypatch):
     mongo = AsyncMongoMockClient()
     database = mongo["match_endpoint"]

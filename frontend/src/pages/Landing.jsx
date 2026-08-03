@@ -2,8 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  ShieldCheck, FileSignature, CreditCard, BarChart3, Users, Sparkles,
-  ArrowRight, Check, Star, Mail, Send, ChevronRight,
+  ArrowRight, BadgeCheck, BarChart3, Check, CreditCard, FileSignature,
+  Instagram, Mail, MessageCircle, Play, Search, Send, ShieldCheck,
+  Sparkles, Star, UserRound, Youtube,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
@@ -11,190 +12,149 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
 
-/* ---------- Hero ---------- */
-function Hero() {
-  return (
-    <section className="relative overflow-hidden">
-      <div className="absolute inset-0 -z-10 grid-bg opacity-30" />
-      <div className="absolute inset-x-0 top-0 -z-10 h-px bg-secondary/40" />
-      <div className="absolute inset-x-0 bottom-0 -z-10 h-px bg-border/80" />
-      <div className="container-luxe pt-24 md:pt-32 pb-20 md:pb-28">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
-          className="max-w-4xl"
-        >
-          <span className="inline-flex items-center gap-2 rounded-full border border-secondary/30 bg-accent px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-secondary" data-testid="hero-badge">
-            <Sparkles className="h-3.5 w-3.5" /> Affordable influencer marketing for every business
-          </span>
-          <h1 className="mt-8 text-5xl sm:text-6xl lg:text-7xl font-light tracking-tighter text-primary dark:text-white leading-[1.02]" data-testid="hero-headline">
-            Where local businesses<br />
-            meet the <span className="gold-text font-semibold">right</span> creators.
-          </h1>
-          <p className="mt-7 text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed" data-testid="hero-subtitle">
-            BrandKrt connects small &amp; medium businesses - restaurants, cafes, salons, gyms, clothing stores, coaching institutes, D2C and home brands - with verified nano &amp; micro creators on Instagram, YouTube and Facebook. Verified collaborations, secure escrow payments and one simple dashboard to run every campaign.
-          </p>
-          <div className="mt-10 flex flex-col sm:flex-row gap-3">
-            <Link
-              to="/register?role=influencer"
-              data-testid="hero-cta-influencer"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-7 py-3.5 text-sm font-semibold transition-colors"
-            >
-              I&apos;m a Creator - Earn from Brands <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              to="/register?role=brand"
-              data-testid="hero-cta-brand"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/90 px-7 py-3.5 text-sm font-semibold transition-colors"
-            >
-              Promote my Business <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <div className="mt-12 flex flex-wrap items-center gap-x-8 gap-y-4 text-sm text-muted-foreground">
-            {["Verified creators", "Escrow-secured payments", "Affordable for any budget"].map((t) => (
-              <div key={t} className="flex items-center gap-2"><Check className="h-4 w-4 text-secondary" /> {t}</div>
-            ))}
-          </div>
-        </motion.div>
+const rise = {
+  hidden: { opacity: 0, y: 22 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.55 } },
+};
 
-        <motion.div
-          initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.2 }}
-          className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6"
-          data-testid="hero-stats"
-        >
+function CreatorCard({ name, city, niche, accent, delay = 0 }) {
+  return (
+    <motion.div
+      animate={{ y: [0, -7, 0] }}
+      transition={{ duration: 4.5, repeat: Infinity, delay, ease: "easeInOut" }}
+      className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-xl shadow-2xl"
+    >
+      <div className="flex items-center gap-3">
+        <div className={`grid h-11 w-11 place-items-center rounded-xl ${accent} text-sm font-bold text-white`}>
+          {name.split(" ").map((part) => part[0]).join("")}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
+            {name} <BadgeCheck className="h-4 w-4 text-secondary" />
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-white/60">
+            <span>{niche}</span><span>•</span><span>{city}</span>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function HeroVisual() {
+  return (
+    <div className="relative mx-auto min-h-[470px] w-full max-w-[560px]" aria-label="Creator campaign matching preview">
+      <div className="absolute inset-8 rounded-[2rem] bg-secondary/20 blur-3xl" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.7, delay: 0.2 }}
+        className="absolute inset-x-4 top-8 rounded-[2rem] border border-white/15 bg-[#102851]/90 p-5 shadow-2xl backdrop-blur-xl sm:inset-x-8"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">Live campaign board</div>
+            <div className="mt-1 text-lg font-semibold text-white">Find a local creator</div>
+          </div>
+          <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary text-primary"><Search className="h-4 w-4" /></div>
+        </div>
+        <div className="mt-5 flex gap-2">
+          {["Food", "Pune", "Instagram"].map((tag) => <span key={tag} className="rounded-full bg-white/10 px-3 py-1.5 text-[10px] text-white/75">{tag}</span>)}
+        </div>
+        <div className="mt-5 space-y-3">
+          <CreatorCard name="Aditi Rao" city="Pune" niche="Food" accent="bg-rose-500" />
+          <CreatorCard name="Arjun Mehta" city="Pune" niche="Lifestyle" accent="bg-indigo-500" delay={0.7} />
+        </div>
+        <div className="mt-5 grid grid-cols-3 gap-2">
           {[
-            { v: "12K+", l: "Verified Creators" },
-            { v: "2,400+", l: "Local & D2C Brands" },
-            { v: "Rs 0", l: "To Get Started" },
-            { v: "4.9 star", l: "Average Rating" },
-          ].map((s) => (
-            <div key={s.l} className="rounded-2xl border border-border bg-card p-6">
-              <div className="text-3xl md:text-4xl font-display font-light text-primary dark:text-white">{s.v}</div>
-              <div className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{s.l}</div>
+            [MessageCircle, "Brief"], [ShieldCheck, "Escrow"], [BarChart3, "Track"],
+          ].map(([Icon, label]) => (
+            <div key={label} className="rounded-xl bg-white/5 p-3 text-center text-[10px] text-white/65">
+              <Icon className="mx-auto mb-1.5 h-4 w-4 text-secondary" />{label}
             </div>
           ))}
-        </motion.div>
-      </div>
-    </section>
+        </div>
+      </motion.div>
+      <motion.div
+        animate={{ x: [0, 8, 0] }} transition={{ duration: 4, repeat: Infinity }}
+        className="absolute -left-1 bottom-9 rounded-2xl border border-border bg-card p-4 shadow-xl dark:border-white/10 sm:left-0"
+      >
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check className="h-5 w-5" /></div>
+          <div><div className="text-xs font-semibold">Content approved</div><div className="text-[10px] text-muted-foreground">Ready for publishing</div></div>
+        </div>
+      </motion.div>
+      <motion.div
+        animate={{ x: [0, -8, 0] }} transition={{ duration: 4.5, repeat: Infinity }}
+        className="absolute -right-1 bottom-20 rounded-2xl border border-border bg-card p-4 shadow-xl dark:border-white/10 sm:right-0"
+      >
+        <div className="flex items-center gap-3">
+          <CreditCard className="h-5 w-5 text-secondary" />
+          <div><div className="text-xs font-semibold">Payment protected</div><div className="text-[10px] text-muted-foreground">Escrow workflow</div></div>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
-/* ---------- Features ---------- */
-const FEATURES = [
-  { icon: ShieldCheck, title: "Verified Collaborations", desc: "Every creator and business is identity-checked and handle-verified before they can collaborate. No fake followers, no ghost brands." },
-  { icon: CreditCard, title: "Secure Escrow Payments", desc: "Brands fund the campaign upfront, money stays safely in escrow, and creators get paid the moment deliverables go live." },
-  { icon: Sparkles, title: "Built for Small Budgets", desc: "Designed for cafes, salons, gyms, clothing stores and home businesses. Start with a single nano-creator campaign for as little as Rs 999." },
-  { icon: Users, title: "Nano & Micro Creator Network", desc: "Discover authentic creators across Instagram, YouTube and Facebook - sorted by niche, city and audience quality, not vanity followers." },
-  { icon: FileSignature, title: "Simple Contracts & Briefs", desc: "Auto-generated agreements with clear deliverables, deadlines and revision rules - so nothing slips through the cracks." },
-  { icon: BarChart3, title: "Easy Campaign Management", desc: "One dashboard to brief, chat, approve content, track posts and review ROI. No spreadsheets, no DMs, no chasing." },
-];
-
-function Features() {
+function Hero() {
   return (
-    <section id="features" className="section-y">
-      <div className="container-luxe">
-        <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary" data-testid="features-overline">Features</p>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white" data-testid="features-heading">
-            Everything a local business needs<br /> to run creator campaigns.
-          </h2>
-          <p className="mt-5 text-lg text-muted-foreground">From your first nano-creator post to a multi-city micro-influencer rollout - BrandKrt makes the whole journey affordable, verified and effortless.</p>
-        </div>
-        <div className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.05 }}
-              className="group rounded-2xl border border-border bg-card p-8 hover:-translate-y-1 hover:shadow-luxe transition-all"
-              data-testid={`feature-card-${i}`}
-            >
-              <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center text-secondary group-hover:bg-secondary group-hover:text-secondary-foreground transition-colors">
-                <f.icon className="h-5 w-5" />
-              </div>
-              <h3 className="mt-6 text-xl font-medium text-primary dark:text-white">{f.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- How it works ---------- */
-const STEPS = [
-  { n: "01", t: "Sign Up Free", d: "Create your free account as a business or as a creator in under a minute." },
-  { n: "02", t: "Get Verified", d: "Quick KYC + social handle check so every collaboration on BrandKrt is genuine and safe." },
-  { n: "03", t: "Find Your Match", d: "Brands shortlist nano & micro creators by city, niche and price. Creators browse open campaigns." },
-  { n: "04", t: "Run the Campaign", d: "Send the brief, agree on deliverables, ship the product or share details, approve the content - all inside BrandKrt." },
-  { n: "05", t: "Get Paid Safely", d: "Money sits in escrow and is released to the creator the moment the post goes live and is approved." },
-];
-
-function HowItWorks() {
-  return (
-    <section id="how-it-works" className="section-y bg-accent dark:bg-card">
-      <div className="container-luxe">
-        <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">How It Works</p>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            From sign up to live post in five simple steps.
-          </h2>
-        </div>
-        <div className="mt-16 grid gap-8 lg:grid-cols-5">
-          {STEPS.map((s, i) => (
-            <motion.div
-              key={s.n}
-              initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.07 }}
-              className="relative rounded-2xl border border-border bg-background p-6"
-              data-testid={`step-card-${i}`}
-            >
-              <div className="text-secondary text-sm font-semibold tracking-[0.3em]">{s.n}</div>
-              <h3 className="mt-4 text-lg font-medium text-primary dark:text-white">{s.t}</h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{s.d}</p>
-              {i < STEPS.length - 1 && (
-                <ChevronRight className="hidden lg:block absolute -right-5 top-1/2 -translate-y-1/2 h-5 w-5 text-secondary/50" />
-              )}
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- Benefits / Why Choose ---------- */
-function WhyChoose() {
-  const items = [
-    { t: "Affordable for any business", d: "Restaurants, cafes, salons, gyms, coaching institutes, clothing stores, D2C and home businesses - start campaigns from as little as Rs 999. No monthly minimums." },
-    { t: "Verified creators only", d: "Every nano, micro, Instagram, YouTube and Facebook creator on BrandKrt clears ID + social handle verification. Real people, real audiences." },
-    { t: "Secure escrow payments", d: "Brands pay safely upfront. Creators are guaranteed payment the moment their content goes live and is approved. No more chasing." },
-    { t: "Easy campaign management", d: "Brief, chat, approve and track every collab in one dashboard. Built for owners who don't have a marketing team." },
-  ];
-  return (
-    <section className="section-y">
-      <div className="container-luxe grid gap-16 lg:grid-cols-2 items-center">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Why BrandKrt</p>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            Influencer marketing - finally built for small businesses and everyday creators.
-          </h2>
-          <p className="mt-6 text-lg text-muted-foreground">We replaced expensive agencies, random DMs and risky payments with one premium, verified marketplace that any local shop, cafe, salon or D2C brand can use - and any nano or micro creator can earn from.</p>
-          <div className="mt-8">
-            <Link to="/register" data-testid="why-cta" className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 text-sm font-semibold">
-              Create your free account <ArrowRight className="h-4 w-4" />
+    <section className="relative overflow-hidden bg-primary py-20 text-white md:py-28">
+      <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:32px_32px]" />
+      <div className="container-luxe relative grid items-center gap-16 lg:grid-cols-[0.95fr_1.05fr]">
+        <motion.div initial="hidden" animate="show" variants={rise}>
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs text-white/80">
+            <Sparkles className="h-3.5 w-3.5 text-secondary" /> Brands meet creators
+          </div>
+          <h1 className="mt-7 max-w-2xl text-5xl font-light leading-[0.98] tracking-tighter sm:text-6xl lg:text-7xl" data-testid="hero-headline">
+            Local reach.<br /><span className="gold-text font-semibold">Real creators.</span>
+          </h1>
+          <p className="mt-6 max-w-lg text-lg text-white/65" data-testid="hero-subtitle">
+            Discover, collaborate and pay—without scattered DMs.
+          </p>
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <Link to="/register?role=brand" data-testid="hero-cta-brand" className="inline-flex items-center justify-center gap-2 rounded-full bg-secondary px-7 py-3.5 text-sm font-semibold text-primary transition-transform hover:scale-[1.03]">
+              Find creators <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link to="/register?role=influencer" data-testid="hero-cta-influencer" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-7 py-3.5 text-sm font-semibold text-white hover:bg-white/15">
+              Join as creator <Play className="h-4 w-4" />
             </Link>
           </div>
+          <div className="mt-9 flex flex-wrap gap-5 text-xs text-white/55">
+            <span className="flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-secondary" /> Verified profiles</span>
+            <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-secondary" /> Protected workflow</span>
+          </div>
+        </motion.div>
+        <HeroVisual />
+      </div>
+    </section>
+  );
+}
+
+const JOURNEY = [
+  { icon: Search, label: "Discover", detail: "Niche + city" },
+  { icon: MessageCircle, label: "Discuss", detail: "One clear brief" },
+  { icon: FileSignature, label: "Agree", detail: "Terms together" },
+  { icon: CreditCard, label: "Protect", detail: "Escrow flow" },
+  { icon: BarChart3, label: "Track", detail: "One dashboard" },
+];
+
+function VisualJourney() {
+  return (
+    <section id="how-it-works" className="section-y overflow-hidden">
+      <div className="container-luxe">
+        <div className="text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">How it works</p>
+          <h2 className="mt-4 text-4xl font-light tracking-tight text-primary dark:text-white sm:text-5xl">One smooth campaign flow.</h2>
         </div>
-        <div className="grid sm:grid-cols-2 gap-5">
-          {items.map((it, i) => (
-            <motion.div
-              key={it.t}
-              initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.06 }}
-              className="rounded-2xl border border-border bg-card p-6"
-              data-testid={`why-card-${i}`}
-            >
-              <div className="h-9 w-9 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center font-semibold">{i + 1}</div>
-              <h3 className="mt-4 text-lg font-medium text-primary dark:text-white">{it.t}</h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{it.d}</p>
+        <div className="relative mt-16 grid gap-4 md:grid-cols-5">
+          <div className="absolute left-[10%] right-[10%] top-12 hidden h-px bg-gradient-to-r from-transparent via-secondary to-transparent md:block" />
+          {JOURNEY.map((item, i) => (
+            <motion.div key={item.label} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="relative text-center">
+              <motion.div whileHover={{ scale: 1.08, rotate: 2 }} className="relative z-10 mx-auto grid h-24 w-24 place-items-center rounded-[2rem] border border-border bg-card shadow-lg">
+                <item.icon className="h-8 w-8 text-secondary" />
+              </motion.div>
+              <h3 className="mt-5 text-base font-semibold text-primary dark:text-white">{item.label}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
             </motion.div>
           ))}
         </div>
@@ -203,42 +163,57 @@ function WhyChoose() {
   );
 }
 
-/* ---------- Testimonials ---------- */
-const TESTIMONIALS = [
-  { name: "Priya Sharma", role: "Owner, Bloom Cafe - Pune", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "We ran our first BrandKrt campaign with five nano creators in Pune. Footfall doubled the next weekend - for less than what one ad agency was quoting us." },
-  { name: "Rohit Verma", role: "Founder, FitNation Gym - Jaipur", img: "https://images.pexels.com/photos/29086752/pexels-photo-29086752.jpeg", q: "BrandKrt got us 18 verified micro creators for our new branch launch. Escrow gave us total peace of mind on payments." },
-  { name: "Aanya Mehta", role: "Instagram Creator - 22K followers", img: "https://images.pexels.com/photos/27086922/pexels-photo-27086922.jpeg", q: "I'm a nano creator and I'm finally getting paid on time, every time. BrandKrt is the only platform where small brands actually find me." },
+function BentoBenefits() {
+  return (
+    <section id="features" className="section-y bg-accent dark:bg-card">
+      <div className="container-luxe">
+        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+          <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Built for clarity</p><h2 className="mt-4 text-4xl font-light tracking-tight text-primary dark:text-white sm:text-5xl">See the work. Skip the noise.</h2></div>
+          <p className="max-w-sm text-sm text-muted-foreground">Everything important stays visible—from match to payout.</p>
+        </div>
+        <div className="mt-14 grid gap-5 md:grid-cols-6 md:grid-rows-2">
+          <motion.div whileHover={{ y: -5 }} className="relative overflow-hidden rounded-[2rem] bg-primary p-8 text-white md:col-span-3 md:row-span-2">
+            <div className="absolute -right-12 -top-12 h-52 w-52 rounded-full bg-secondary/20 blur-2xl" />
+            <BadgeCheck className="h-9 w-9 text-secondary" />
+            <h3 className="mt-12 text-3xl font-light">Creator discovery,<br />made visual.</h3>
+            <div className="mt-8 space-y-3">
+              {["Food · Pune", "Beauty · Jaipur", "Fitness · Delhi"].map((row, i) => <motion.div key={row} initial={{ x: 20, opacity: 0 }} whileInView={{ x: 0, opacity: 1 }} transition={{ delay: i * 0.12 }} viewport={{ once: true }} className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3 text-xs"><span>{row}</span><ArrowRight className="h-3.5 w-3.5 text-secondary" /></motion.div>)}
+            </div>
+          </motion.div>
+          <motion.div whileHover={{ y: -5 }} className="rounded-[2rem] border border-border bg-card p-7 md:col-span-3">
+            <div className="flex items-center justify-between"><ShieldCheck className="h-8 w-8 text-emerald-600" /><span className="rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-bold text-emerald-700">PROTECTED</span></div>
+            <h3 className="mt-8 text-2xl font-medium">Clear payment stages</h3>
+            <div className="mt-5 flex items-center gap-2">{["Funded", "Approved", "Released"].map((x, i) => <React.Fragment key={x}><span className="rounded-full bg-accent px-3 py-2 text-[10px]">{x}</span>{i < 2 && <div className="h-px flex-1 bg-secondary/50" />}</React.Fragment>)}</div>
+          </motion.div>
+          <motion.div whileHover={{ y: -5 }} className="rounded-[2rem] border border-border bg-card p-7 md:col-span-2">
+            <MessageCircle className="h-7 w-7 text-secondary" /><h3 className="mt-7 text-xl font-medium">Chat in context</h3><p className="mt-2 text-xs text-muted-foreground">Briefs and updates stay together.</p>
+          </motion.div>
+          <motion.div whileHover={{ y: -5 }} className="rounded-[2rem] border border-border bg-card p-7 md:col-span-1">
+            <div className="flex gap-2"><Instagram className="h-6 w-6 text-pink-500" /><Youtube className="h-6 w-6 text-red-500" /></div><p className="mt-8 text-sm font-semibold">Multi-platform</p>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const REVIEWS = [
+  { name: "Priya Sharma", text: "Campaign manage karna simple laga." },
+  { name: "Rohit Verma", text: "Creator search clear aur easy hai." },
+  { name: "Aditi Mehta", text: "Brief aur payment ek jagah milte hain." },
 ];
 
-function Testimonials() {
+function Reviews() {
   return (
     <section className="section-y bg-primary text-white">
       <div className="container-luxe">
-        <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Loved by businesses &amp; creators</p>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight">
-            Trusted by local shops, D2C brands and everyday creators.
-          </h2>
-        </div>
-        <div className="mt-16 grid gap-6 md:grid-cols-3">
-          {TESTIMONIALS.map((t, i) => (
-            <motion.figure
-              key={t.name}
-              initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4, delay: i * 0.07 }}
-              className="rounded-2xl border border-white/10 bg-white/5 p-7"
-              data-testid={`testimonial-${i}`}
-            >
-              <div className="flex gap-1 text-secondary">
-                {Array.from({ length: 5 }).map((_, k) => <Star key={k} className="h-4 w-4 fill-current" />)}
-              </div>
-              <blockquote className="mt-5 text-base leading-relaxed text-white/90">"{t.q}"</blockquote>
-              <figcaption className="mt-6 flex items-center gap-3">
-                <img src={t.img} alt={t.name} className="h-10 w-10 rounded-full object-cover" />
-                <div>
-                  <div className="text-sm font-semibold">{t.name}</div>
-                  <div className="text-xs text-white/60">{t.role}</div>
-                </div>
-              </figcaption>
+        <div className="flex items-end justify-between gap-6"><div><p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">People</p><h2 className="mt-4 text-4xl font-light sm:text-5xl">Simple words. Indian voices.</h2></div><UserRound className="hidden h-16 w-16 text-white/10 sm:block" /></div>
+        <div className="mt-14 grid gap-5 md:grid-cols-3">
+          {REVIEWS.map((review, i) => (
+            <motion.figure key={review.name} initial={{ opacity: 0, scale: 0.96 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: i * 0.08 }} className="rounded-[2rem] border border-white/10 bg-white/5 p-7">
+              <div className="flex gap-1 text-secondary">{Array.from({ length: 5 }).map((_, x) => <Star key={x} className="h-3.5 w-3.5 fill-current" />)}</div>
+              <blockquote className="mt-8 text-xl font-light leading-snug">“{review.text}”</blockquote>
+              <figcaption className="mt-8 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-full bg-secondary font-bold text-primary">{review.name[0]}</div><span className="text-sm font-semibold">{review.name}</span></figcaption>
             </motion.figure>
           ))}
         </div>
@@ -247,184 +222,55 @@ function Testimonials() {
   );
 }
 
-/* ---------- Pricing ---------- */
-const PLANS = [
-  { name: "Starter", price: "Free", per: "forever", features: ["For solo founders, home businesses &amp; new creators", "Up to 2 active campaigns", "Verified creator search", "Escrow-secured payments", "Email support"], cta: "Start free", testId: "pricing-starter", highlight: false },
-  { name: "Growth", price: "Rs 1,499", per: "/ month", features: ["For cafes, salons, gyms, clothing stores &amp; D2C brands", "Unlimited campaigns", "Priority creator matchmaking", "Multi-city &amp; multi-platform reach", "Campaign analytics &amp; ROI tracking", "Priority support"], cta: "Start 14-day free trial", testId: "pricing-growth", highlight: true },
-  { name: "Business+", price: "Custom", per: "billed annually", features: ["For coaching institutes, retail chains &amp; growing D2C brands", "Dedicated account manager", "Custom contracts &amp; campaign briefs", "Bulk creator onboarding", "Quarterly performance reviews", "24/7 white-glove support"], cta: "Talk to us", testId: "pricing-enterprise", highlight: false },
-];
-
-function Pricing() {
-  return (
-    <section id="pricing" className="section-y">
-      <div className="container-luxe">
-        <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Pricing</p>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            Affordable plans for every kind of business.
-          </h2>
-          <p className="mt-5 text-lg text-muted-foreground">Flat 10% platform fee on campaign payouts - no agency markups, no hidden charges. Creators always sign up free.</p>
-        </div>
-        <div className="mt-16 grid gap-6 lg:grid-cols-3">
-          {PLANS.map((p) => (
-            <div
-              key={p.name}
-              data-testid={p.testId}
-              className={`relative rounded-2xl p-8 transition-all hover:-translate-y-1 ${p.highlight ? "bg-card border-2 border-secondary shadow-gold-glow" : "bg-card border border-border hover:shadow-luxe"}`}
-            >
-              {p.highlight && (
-                <span className="absolute -top-3 left-8 inline-flex items-center gap-1 rounded-full bg-secondary text-secondary-foreground px-3 py-1 text-xs font-semibold">
-                  Most Popular
-                </span>
-              )}
-              <h3 className="text-xl font-medium text-primary dark:text-white">{p.name}</h3>
-              <div className="mt-5 flex items-baseline gap-2">
-                <span className="text-4xl font-display font-light text-primary dark:text-white">{p.price}</span>
-                <span className="text-sm text-muted-foreground">{p.per}</span>
-              </div>
-              <ul className="mt-7 space-y-3">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-foreground/80">
-                    <Check className="h-4 w-4 mt-0.5 text-secondary shrink-0" /> <span dangerouslySetInnerHTML={{ __html: f }} />
-                  </li>
-                ))}
-              </ul>
-              <Link
-                to="/register"
-                className={`mt-8 inline-flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition-colors ${
-                  p.highlight ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border border-border hover:bg-accent"
-                }`}
-                data-testid={`${p.testId}-cta`}
-              >
-                {p.cta}
-              </Link>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ---------- FAQ ---------- */
 const FAQS = [
-  { q: "Who is BrandKrt for?", a: "Any business that wants reach without the agency cost - restaurants, cafes, salons, gyms, coaching institutes, clothing stores, local shops, D2C brands and home businesses - and any creator: nano, micro, Instagram, YouTube or Facebook." },
-  { q: "How affordable is influencer marketing on BrandKrt?", a: "You can run your first verified nano-creator campaign for as little as Rs 999. There are no signup fees and no monthly minimums on the free plan - only a 10% platform fee on successful campaigns." },
-  { q: "How do you verify creators and businesses?", a: "Every creator clears ID verification plus social handle ownership check. Every business is identity-verified before they can run a campaign. Verified profiles get a trust badge." },
-  { q: "How are payments handled?", a: "Brands fund the campaign upfront. The amount sits safely in escrow and is released to the creator only after the deliverables (post, reel, video) are live and approved. Creators are never ghosted on payment." },
-  { q: "What platforms do you support?", a: "Right now Instagram, YouTube and Facebook - including Reels, Shorts, posts, stories and long-form videos. You can match with nano creators (1K-10K), micro creators (10K-100K) and established content creators all in one place." },
-  { q: "Can I run a campaign for my local shop or home business?", a: "Absolutely - that's exactly who BrandKrt is built for. Filter creators by your city and niche, send a brief, and your store can be featured by real local creators within days." },
+  { q: "Brand ke liye kya milega?", a: "Creator discovery, briefs, collaboration tracking and payment workflow." },
+  { q: "Creator ke liye kya milega?", a: "Relevant opportunities, clear deliverables and a structured payout flow." },
+  { q: "Kaunse platforms supported hain?", a: "Instagram, YouTube and other campaign formats shown inside the platform." },
 ];
 
-function FAQ() {
+function QuickAnswers() {
   return (
-    <section id="faq" className="section-y bg-accent dark:bg-card">
-      <div className="container-luxe grid gap-12 lg:grid-cols-2">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">FAQ</p>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            Questions, answered.
-          </h2>
-          <p className="mt-6 text-muted-foreground">Can&apos;t find what you need? <Link to="/contact" className="text-secondary underline-offset-4 hover:underline">Talk to our team.</Link></p>
-        </div>
-        <Accordion type="single" collapsible className="space-y-3">
-          {FAQS.map((f, i) => (
-            <AccordionItem key={f.q} value={`item-${i}`} className="rounded-2xl border border-border bg-background px-6" data-testid={`faq-item-${i}`}>
-              <AccordionTrigger className="text-left text-base font-medium text-primary dark:text-white">{f.q}</AccordionTrigger>
-              <AccordionContent className="text-sm text-muted-foreground leading-relaxed">{f.a}</AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+    <section id="faq" className="section-y">
+      <div className="container-luxe grid gap-12 lg:grid-cols-[0.75fr_1.25fr]">
+        <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Quick answers</p><h2 className="mt-4 text-4xl font-light tracking-tight text-primary dark:text-white">No long manual.</h2><p className="mt-4 text-sm text-muted-foreground">Bas jo zaroori hai.</p></div>
+        <Accordion type="single" collapsible className="space-y-3">{FAQS.map((item, i) => <AccordionItem key={item.q} value={`faq-${i}`} className="rounded-2xl border border-border bg-card px-6"><AccordionTrigger className="text-left">{item.q}</AccordionTrigger><AccordionContent className="text-sm text-muted-foreground">{item.a}</AccordionContent></AccordionItem>)}</Accordion>
       </div>
     </section>
   );
 }
 
-/* ---------- Contact ---------- */
 function ContactSection() {
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const { data } = await api.post("/contact", form);
-      toast.success(data.message || "Thanks - we'll be in touch.");
-      setForm({ name: "", email: "", subject: "", message: "" });
-    } catch (err) {
-      toast.error(formatApiError(err));
-    } finally {
-      setSubmitting(false);
-    }
+  const submit = async (event) => {
+    event.preventDefault(); setSubmitting(true);
+    try { const { data } = await api.post("/contact", form); toast.success(data.message || "Message sent."); setForm({ name: "", email: "", subject: "", message: "" }); }
+    catch (error) { toast.error(formatApiError(error)); }
+    finally { setSubmitting(false); }
   };
-
   return (
-    <section id="contact" className="section-y">
-      <div className="container-luxe grid gap-12 lg:grid-cols-2">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-secondary">Contact</p>
-          <h2 className="mt-4 text-4xl sm:text-5xl font-light tracking-tight text-primary dark:text-white">
-            Tell us about your business or your creator journey.
-          </h2>
-          <p className="mt-6 text-lg text-muted-foreground">Whether you&apos;re a cafe owner planning your first campaign, a salon launching a new service, a D2C brand scaling up, or a creator who wants to start earning - we&apos;re here. We typically reply within 24 hours.</p>
-          <div className="mt-8 space-y-3 text-sm text-muted-foreground">
-            <a href="mailto:support@brandkrt.com" className="flex items-center gap-3 hover:text-secondary"><Mail className="h-4 w-4" /> support@brandkrt.com</a>
-            <a href="mailto:vaibhav@brandkrt.com" className="flex items-center gap-3 hover:text-secondary"><Mail className="h-4 w-4" /> vaibhav@brandkrt.com</a>
-          </div>
+    <section id="contact" className="section-y bg-accent dark:bg-card">
+      <div className="container-luxe overflow-hidden rounded-[2.5rem] bg-primary text-white">
+        <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="relative p-8 md:p-12"><div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-secondary/20 blur-3xl" /><Mail className="relative h-9 w-9 text-secondary" /><h2 className="relative mt-12 text-4xl font-light">Let’s build your<br />next collaboration.</h2><a href="mailto:support@brandkrt.com" className="relative mt-8 inline-flex items-center gap-2 text-sm text-white/65 hover:text-secondary">support@brandkrt.com <ArrowRight className="h-4 w-4" /></a></div>
+          <form onSubmit={submit} className="space-y-4 bg-white p-8 text-foreground dark:bg-background md:p-12" data-testid="contact-form">
+            <div className="grid gap-4 sm:grid-cols-2"><Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /><Input type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
+            <Input placeholder="What do you need?" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} required />
+            <Textarea rows={4} placeholder="Tell us briefly…" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required />
+            <button type="submit" disabled={submitting} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-secondary px-6 py-3 text-sm font-semibold text-primary disabled:opacity-60">{submitting ? "Sending…" : <>Send <Send className="h-4 w-4" /></>}</button>
+          </form>
         </div>
-        <form onSubmit={submit} className="rounded-2xl border border-border bg-card p-8 space-y-5" data-testid="contact-form">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Name</label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required data-testid="contact-name" className="mt-2" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Email</label>
-              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required data-testid="contact-email" className="mt-2" />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Subject</label>
-            <Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} required data-testid="contact-subject" className="mt-2" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Message</label>
-            <Textarea rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required data-testid="contact-message" className="mt-2" />
-          </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            data-testid="contact-submit"
-            className="inline-flex items-center justify-center gap-2 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90 px-6 py-3 text-sm font-semibold disabled:opacity-60"
-          >
-            {submitting ? "Sending..." : (<>Send Message <Send className="h-4 w-4" /></>)}
-          </button>
-        </form>
       </div>
     </section>
   );
 }
 
-/* ---------- Landing ---------- */
 export default function Landing() {
-  // hash scroll
   useEffect(() => {
     if (window.location.hash) {
-      const el = document.getElementById(window.location.hash.slice(1));
-      if (el) setTimeout(() => el.scrollIntoView({ behavior: "smooth" }), 100);
+      const element = document.getElementById(window.location.hash.slice(1));
+      if (element) setTimeout(() => element.scrollIntoView({ behavior: "smooth" }), 100);
     }
   }, []);
-  return (
-    <div data-testid="landing-page">
-      <Hero />
-      <Features />
-      <HowItWorks />
-      <WhyChoose />
-      <Testimonials />
-      <Pricing />
-      <FAQ />
-      <ContactSection />
-    </div>
-  );
+  return <div data-testid="landing-page"><Hero /><VisualJourney /><BentoBenefits /><Reviews /><QuickAnswers /><ContactSection /></div>;
 }

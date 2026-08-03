@@ -294,3 +294,34 @@ def test_cors_is_exact_and_frontend_does_not_persist_access_jwts():
     mounted_paths = {getattr(route, "path", None) for route in server.app.routes}
     assert "/uploads" not in mounted_paths
     assert "/uploads/verification" not in mounted_paths
+
+
+def test_performance_endpoints_never_expose_profile_phone_or_payout_details(monkeypatch):
+    async def scenario():
+        mongo, database = await _security_context(monkeypatch, "performance_privacy")
+        creator = await _seed_user(database, role="influencer", email="creator-private@example.com")
+        stranger = await _seed_user(database, role="brand", email="stranger@example.com")
+        await database.influencers.insert_one({
+            "user_id": str(creator["_id"]), "username": "pooja-public",
+            "phone": "+91-private-number", "upi": "private@upi",
+            "bank_details": {"account_number": "private-account", "ifsc": "PRIVATE"},
+            "documents": ["/private/storage/proof.pdf"], "status": "active",
+        })
+        transport = httpx.ASGITransport(app=server.app)
+        creator_client = _authenticated_client(transport, creator)
+        stranger_client = _authenticated_client(transport, stranger)
+        try:
+            own = await creator_client.get("/api/performance/influencer/me")
+            assert own.status_code == 200
+            serialized = own.text.lower()
+            for secret in ("+91-private-number", "private@upi", "private-account", "private/storage"):
+                assert secret not in serialized
+
+            cross_user = await stranger_client.get(f"/api/performance/influencer/{creator['_id']}")
+            assert cross_user.status_code == 403
+        finally:
+            await creator_client.aclose()
+            await stranger_client.aclose()
+            mongo.close()
+
+    asyncio.run(scenario())

@@ -12,6 +12,7 @@ from .prompting import BrandDiscoveryPrompt
 
 # USD per one million tokens. Keep this table explicit so unknown models fail closed.
 MODEL_PRICING_USD_PER_MTOK = {
+    "gpt-4.1-mini": (0.40, 1.60),
     "gpt-5.6-luna": (1.00, 6.00),
     "gpt-5.6-terra": (2.50, 15.00),
     "gpt-5.6-sol": (5.00, 30.00),

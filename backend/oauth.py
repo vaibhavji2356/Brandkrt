@@ -91,9 +91,10 @@ def verify_google_id_token(token: str) -> dict:
         raise HTTPException(503, "Google sign-in dependency missing on server")
     try:
         info = gid_token.verify_oauth2_token(token, _get_google_request(g_requests.Request), client_id)
-    except (ValueError, g_exceptions.GoogleAuthError) as e:
+    except (ValueError, g_exceptions.GoogleAuthError):
         # invalid signature, expired, wrong audience…
-        raise HTTPException(401, f"Invalid Google credential: {e}")
+        logger.warning("Google credential verification failed")
+        raise HTTPException(401, "Invalid Google credential")
     if info.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
         raise HTTPException(401, "Invalid Google issuer")
     if not info.get("email"):

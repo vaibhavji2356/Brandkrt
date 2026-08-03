@@ -10,6 +10,7 @@ import os
 import re
 import secrets
 import math
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, List, Literal
 
@@ -20,6 +21,9 @@ from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 from upload_security import validate_upload
+import security
+
+logger = logging.getLogger("brandkrt.domain")
 
 # These are wired in server.py
 db = None  # type: ignore  # populated by init()
@@ -53,11 +57,24 @@ def doc_out(doc: dict) -> dict:
     return d
 
 def public_profile_out(doc: dict) -> dict:
-    """Serialize a discoverable profile without exposing its owning account id."""
-    result = doc_out(doc)
-    if result:
-        result.pop("user_id", None)
-    return result
+    """Return an explicit, privacy-safe projection for profile discovery.
+
+    Profiles contain payment, contact, verification and uploaded-document data.
+    A deny-list is unsafe here because newly-added private fields would silently
+    become public, so discovery responses are built from a small allow-list.
+    """
+    if not doc:
+        return doc
+    common = {
+        "id", "company_name", "username", "industry", "category", "country",
+        "state", "city", "website", "instagram", "facebook", "youtube",
+        "linkedin", "description", "bio", "logo_url", "profile_photo_url",
+        "cover_url", "cover_photo_url", "product_categories", "product_images",
+        "portfolio", "followers", "avg_reel_views", "monthly_reach",
+        "collab_price", "verification_status", "status",
+    }
+    serialized = doc_out(doc)
+    return {key: value for key, value in serialized.items() if key in common}
 
 async def require_role(user: dict, *roles: str) -> None:
     if user.get("role") not in roles:
@@ -211,7 +228,7 @@ admin_router = APIRouter(prefix="/admin", tags=["admin"])
 
 # ============== BRAND PROFILE ==============
 class BrandProfileIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     company_name: str
     owner_name: Optional[str] = None
     phone: Optional[str] = None
@@ -240,7 +257,7 @@ class BrandProfileIn(BaseModel):
 
 # ============== INFLUENCER PROFILE ==============
 class InfluencerProfileIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     username: Optional[str] = None
     phone: Optional[str] = None
     country: Optional[str] = None
@@ -266,7 +283,7 @@ class InfluencerProfileIn(BaseModel):
     portfolio: List[dict] = []
 
 class CreatorInsightUpdateIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     documents: List[Any] = []
     followers: Optional[int] = Field(default=None, ge=0)
     avg_reel_views: Optional[int] = Field(default=None, ge=0)
@@ -275,7 +292,7 @@ class CreatorInsightUpdateIn(BaseModel):
 
 # ============== CAMPAIGN ==============
 class CampaignIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     title: str
     description: Optional[str] = None
     platform: Literal["instagram", "youtube", "facebook", "linkedin", "tiktok", "other"]
@@ -312,7 +329,7 @@ class DealCreateIn(BaseModel):
     note: Optional[str] = None
 
 class DealStatusIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     status: Literal[
         "offer_sent", "offer_accepted",
         "product_shipped", "product_received",
@@ -482,7 +499,7 @@ def register_handlers():
     async def _list_brands(user: dict = Depends(get_current_user), q: Optional[str] = None, limit: int = 50):
         query = {"status": "active"}
         if q:
-            query["company_name"] = {"$regex": q, "$options": "i"}
+            query["company_name"] = {"$regex": re.escape(q[:100]), "$options": "i"}
         cur = db.brands.find(query).limit(min(limit, 100))
         return {"brands": [public_profile_out(x) async for x in cur]}
 
@@ -589,7 +606,7 @@ def register_handlers():
     async def _list_inf(user: dict = Depends(get_current_user), q: Optional[str] = None, category: Optional[str] = None, limit: int = 50):
         query: dict = {"status": "active"}
         if q:
-            query["username"] = {"$regex": q, "$options": "i"}
+            query["username"] = {"$regex": re.escape(q[:100]), "$options": "i"}
         if category:
             query["category"] = category
         cur = db.influencers.find(query).limit(min(limit, 100))
@@ -636,6 +653,14 @@ def register_handlers():
         doc = await db.campaigns.find_one({"_id": oid(cid)})
         if not doc:
             raise HTTPException(404, "Campaign not found")
+        if user.get("role") == "brand":
+            brand = await find_brand_for_user(user)
+            if not brand or str(doc.get("brand_id")) != str(brand["_id"]):
+                raise HTTPException(403, "Forbidden")
+        elif user.get("role") == "influencer" and doc.get("status") != "active":
+            raise HTTPException(404, "Campaign not found")
+        elif user.get("role") not in {"brand", "influencer", "admin"}:
+            raise HTTPException(403, "Forbidden")
         return {"campaign": doc_out(doc)}
 
     @campaign_router.patch("/{cid}/status")
@@ -928,7 +953,8 @@ def register_handlers():
         except Exception as exc:
             configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").strip().strip("'\"").lower()
             if configured_provider in {"stripe", "razorpay"}:
-                raise HTTPException(503, f"{configured_provider.title()} payment setup error: {exc}") from exc
+                logger.exception("Payment provider setup failed")
+                raise HTTPException(503, "Payment service is temporarily unavailable") from exc
             txid = secrets.token_hex(8).upper()
             client_secret = None
             provider_name = "stub"
@@ -1282,23 +1308,10 @@ def register_handlers():
     for f in FOLDERS:
         os.makedirs(os.path.join(UPLOAD_ROOT, f), exist_ok=True)
 
-    def _public_backend_origin(request: Request) -> str:
-        configured = (
-            os.environ.get("PUBLIC_BACKEND_URL")
-            or os.environ.get("BACKEND_URL")
-            or os.environ.get("API_BASE_URL")
-        )
-        if configured:
-            origin = configured.strip().rstrip("/")
-            return origin[:-4] if origin.endswith("/api") else origin
-        proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
-        return f"{proto}://{host}".rstrip("/")
-
     def _upload_public_url(request: Request, upload_id: ObjectId, folder: str) -> str:
-        if folder == "verification":
-            return f"/api/uploads/{upload_id}"
-        return f"{_public_backend_origin(request)}/api/uploads/{upload_id}"
+        # Relative opaque URLs cannot be poisoned through Host/X-Forwarded-Host
+        # and do not reveal the storage provider or bucket layout.
+        return f"/api/uploads/{upload_id}"
 
     @upload_router.get("/{file_id}")
     async def _get_upload(file_id: str, request: Request):
@@ -1331,7 +1344,9 @@ def register_handlers():
         )
 
     @upload_router.post("/{folder}")
-    async def _upload(request: Request, folder: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    async def _upload(request: Request, folder: str, file: UploadFile = File(...),
+                      user: dict = Depends(get_current_user),
+                      _rl: None = Depends(security.limiter_dependency("uploads", limit=20, window=60))):
         if folder not in FOLDERS:
             raise HTTPException(400, "Unknown folder")
         if file.size is not None and file.size > MAX_DB_UPLOAD_BYTES:
@@ -1361,8 +1376,9 @@ def register_handlers():
                 "created_at": now,
                 "updated_at": now,
             })
-        except Exception as e:
-            raise HTTPException(500, f"Upload failed: {e}")
+        except Exception:
+            logger.exception("Upload persistence failed")
+            raise HTTPException(500, "Upload failed")
         return {
             "url": _upload_public_url(request, inserted.inserted_id, folder),
             "folder": folder,
@@ -1819,8 +1835,9 @@ def register_handlers():
                 contact=contact,
                 reference_id=rid,
             )
-        except Exception as e:
-            raise HTTPException(503, f"RazorpayX payout failed: {e}")
+        except Exception:
+            logger.exception("Payout provider request failed")
+            raise HTTPException(503, "Payout service is temporarily unavailable")
 
         provider_status = (payout.get("status") or "processing").lower()
         app_status = "failed" if provider_status in {"failed", "rejected", "reversed"} else "released"

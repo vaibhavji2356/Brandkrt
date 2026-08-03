@@ -51,6 +51,16 @@ def doc_out(doc: dict) -> dict:
     return d
 
 
+def public_profile_out(doc: dict) -> dict:
+    """Performance responses must never disclose private profile fields."""
+    return _domain.public_profile_out(doc)
+
+
+def _require_self_or_admin(user_id: str, user: dict) -> None:
+    if user.get("role") != "admin" and str(user.get("_id")) != str(user_id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
 async def setup_part4c_indexes(database):
     await database.reviews.create_index([("target_user_id", 1), ("created_at", -1)])
     await database.reviews.create_index([("reviewer_id", 1), ("created_at", -1)])
@@ -66,7 +76,7 @@ feedback_router = APIRouter(prefix="/feedback", tags=["reviews"])
 
 # =============== MODELS ===============
 class DealMetricsIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     instagram_reel_views: int = Field(0, ge=0)
     youtube_views: int = Field(0, ge=0)
     facebook_views: int = Field(0, ge=0)
@@ -81,7 +91,7 @@ class DealMetricsIn(BaseModel):
 
 
 class FeedbackIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     target_user_id: str
     deal_id: Optional[str] = None
     rating: int = Field(ge=1, le=5)
@@ -231,6 +241,7 @@ def register_handlers():
 
     @feedback_router.get("/for/{user_id}")
     async def _reviews_for(user_id: str, user: dict = Depends(get_current_user)):
+        _require_self_or_admin(user_id, user)
         cur = db.reviews.find({"target_user_id": user_id, "status": "active"}).sort("created_at", -1).limit(200)
         return {"reviews": [doc_out(x) async for x in cur]}
 
@@ -330,7 +341,7 @@ def register_handlers():
         summary = await _summary_for_user(user_id)
 
         return {
-            "influencer": doc_out(inf_doc) if inf_doc else None,
+            "influencer": public_profile_out(inf_doc) if inf_doc else None,
             "total_collaborations": total,
             "completion_rate": round((len(completed) / total) * 100) if total else 0,
             "success_rate": round((len(successful) / total) * 100) if total else 0,
@@ -353,6 +364,7 @@ def register_handlers():
 
     @perf_router.get("/influencer/{user_id}")
     async def _inf_perf(user_id: str, user: dict = Depends(get_current_user)):
+        _require_self_or_admin(user_id, user)
         return await _influencer_perf(user_id)
 
     # ---------- BRAND PERFORMANCE ----------
@@ -391,7 +403,7 @@ def register_handlers():
         avg_rating = round(sum(ratings) / len(ratings), 2) if ratings else 0.0
 
         return {
-            "brand": doc_out(brand_doc) if brand_doc else None,
+            "brand": public_profile_out(brand_doc) if brand_doc else None,
             "total_campaigns": total_campaigns,
             "active_campaigns": active_campaigns,
             "completed_campaigns": completed_campaigns,
@@ -411,6 +423,7 @@ def register_handlers():
 
     @perf_router.get("/brand/{user_id}")
     async def _brand_perf_ep(user_id: str, user: dict = Depends(get_current_user)):
+        _require_self_or_admin(user_id, user)
         return await _brand_perf(user_id)
 
     # ---------- CAMPAIGN COMPLETION REPORT (per-deal) ----------
@@ -434,8 +447,8 @@ def register_handlers():
         return {
             "deal": doc_out(deal),
             "campaign": doc_out(campaign) if campaign else None,
-            "brand": doc_out(brand) if brand else None,
-            "influencer": doc_out(inf) if inf else None,
+            "brand": public_profile_out(brand) if brand else None,
+            "influencer": public_profile_out(inf) if inf else None,
             "payment": doc_out(payment) if payment else None,
             "metrics": metrics,
             "completion_pct": _completion_pct(deal.get("status") or ""),
@@ -591,7 +604,10 @@ def register_handlers():
     @perf_router.get("/top-creators")
     async def _top_creators(user: dict = Depends(get_current_user), limit: int = 5):
         uid = str(user["_id"])
-        # if brand: top creators across THEIR deals; else global
+        if user.get("role") not in {"brand", "admin"}:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        # Brands only see rankings calculated from their own deals; admins may
+        # calculate platform-wide operational rankings.
         if user.get("role") == "brand":
             brand = await db.brands.find_one({"user_id": uid})
             deal_q = {"brand_id": str(brand["_id"]) if brand else "__none__"}
@@ -637,7 +653,6 @@ def register_handlers():
             score = stats["engagement"] + stats["views"] // 10 + int(stats["earnings"])
             out.append({
                 "influencer_id": iid,
-                "user_id": uid2,
                 "username": (inf or {}).get("username") or "Creator",
                 "category": (inf or {}).get("category"),
                 "profile_photo_url": (inf or {}).get("profile_photo_url"),

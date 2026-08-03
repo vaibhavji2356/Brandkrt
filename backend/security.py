@@ -86,6 +86,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         headers.setdefault("Permissions-Policy",
                            "camera=(), microphone=(), geolocation=(), interest-cohort=()")
+        headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        )
+        headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
+        if request.url.path.startswith("/api/"):
+            headers.setdefault("Cache-Control", "no-store")
         headers.setdefault("X-XSS-Protection", "0")
         if self.prod:
             headers.setdefault("Strict-Transport-Security",
@@ -132,7 +140,13 @@ class OriginCSRFMiddleware(BaseHTTPMiddleware):
                         origin = f"{s.scheme}://{s.netloc}".lower()
                     except Exception:
                         origin = ""
-                if origin and origin not in self.allowed:
+                # Browsers send Origin on fetch/XHR mutations. In production,
+                # rejecting a missing Origin prevents cross-site form requests
+                # from bypassing the allow-list when SameSite=None is required.
+                require_origin = os.environ.get("APP_ENV", "").strip().lower() in {
+                    "production", "prod", "staging"
+                }
+                if (not origin and require_origin) or (origin and origin not in self.allowed):
                     return Response("Forbidden origin", status_code=403)
         return await call_next(request)
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, List, Literal
 
@@ -17,7 +18,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, Field, ConfigDict
 
 import domain as _domain
+import security
 from upload_security import validate_upload
+
+logger = logging.getLogger("brandkrt.chat")
 
 # Wired by init()
 db = None  # type: ignore
@@ -99,7 +103,7 @@ COLLAB_STATUSES = ["pending", "accepted", "rejected", "cancelled", "completed"]
 
 
 class CollabIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     invited_user_id: Optional[str] = None  # target influencer's USER id (preferred)
     invited_influencer_id: Optional[str] = None  # OR target influencer document id
     title: str = Field(min_length=2, max_length=160)
@@ -120,7 +124,7 @@ class CollabStatusIn(BaseModel):
 # =============== CHAT ===============
 class ConversationIn(BaseModel):
     """Create or fetch a conversation by (context_type, context_id) OR direct (peer_user_id)."""
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     context_type: Literal["collab", "agreement", "deal", "direct"] = "direct"
     context_id: Optional[str] = None
     peer_user_id: Optional[str] = None
@@ -128,7 +132,7 @@ class ConversationIn(BaseModel):
 
 
 class ChatMessageIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     body: Optional[str] = ""
     attachments: List[dict] = []  # [{url, name, kind: image|file, size}]
 
@@ -138,7 +142,7 @@ AGREEMENT_STATUSES = ["draft", "pending_acceptance", "accepted", "rejected", "ca
 
 
 class AgreementIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
     influencer_id: Optional[str] = None
     influencer_user_id: Optional[str] = None
     brand_name: str
@@ -339,17 +343,17 @@ def register_handlers():
 
     async def _hydrate_conv(conv: dict, me_id: str) -> dict:
         out = doc_out(conv)
+        out.pop("participants", None)
+        out.pop("unread", None)
         # attach participant display info
         others = [p for p in conv.get("participants", []) if p != me_id]
         peers = []
         for pid in others:
             try:
-                u = await db.users.find_one({"_id": ObjectId(pid)}, {"name": 1, "email": 1, "avatar_url": 1, "role": 1})
+                u = await db.users.find_one({"_id": ObjectId(pid)}, {"name": 1, "avatar_url": 1, "role": 1})
                 if u:
                     peers.append({
-                        "id": str(u["_id"]),
-                        "name": u.get("name") or u.get("email", ""),
-                        "email": u.get("email"),
+                        "name": u.get("name") or "User",
                         "avatar_url": u.get("avatar_url"),
                         "role": u.get("role"),
                     })
@@ -361,6 +365,14 @@ def register_handlers():
         out["locked"] = bool(lock_reason)
         out["lock_reason"] = lock_reason
         out["next_step"] = "brand_fund_escrow" if lock_reason else None
+        return out
+
+    def _message_out(message: dict, me_id: str) -> dict:
+        out = doc_out(message)
+        out["is_mine"] = str(message.get("sender_id")) == me_id
+        out["read_by_peer"] = any(str(value) != me_id for value in message.get("read_by", []))
+        for key in ("sender_id", "read_by", "conversation_id"):
+            out.pop(key, None)
         return out
 
     @conv_router.get("")
@@ -445,7 +457,7 @@ def register_handlers():
         if q:
             query["body"] = {"$regex": q, "$options": "i"}
         cur = db.chat_messages.find(query).sort("created_at", 1).limit(min(limit, 500))
-        return {"messages": [doc_out(x) async for x in cur]}
+        return {"messages": [_message_out(x, uid) async for x in cur]}
 
     @conv_router.post("/{conv_id}/messages")
     async def _send_message(conv_id: str, payload: ChatMessageIn, user: dict = Depends(get_current_user)):
@@ -491,7 +503,7 @@ def register_handlers():
         # Clear typing for sender
         await db.chat_typing.delete_one({"conversation_id": conv_id, "user_id": uid})
 
-        return {"message": doc_out(await db.chat_messages.find_one({"_id": res.inserted_id}))}
+        return {"message": _message_out(await db.chat_messages.find_one({"_id": res.inserted_id}), uid)}
 
     @conv_router.post("/{conv_id}/read")
     async def _mark_read(conv_id: str, user: dict = Depends(get_current_user)):
@@ -541,10 +553,12 @@ def register_handlers():
         async for t in cur:
             if t.get("user_id") and t["user_id"] != uid:
                 others.append(t["user_id"])
-        return {"typing": others}
+        return {"typing": bool(others)}
 
     @chat_router.post("/upload")
-    async def _chat_upload(request: Request, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    async def _chat_upload(request: Request, file: UploadFile = File(...),
+                           user: dict = Depends(get_current_user),
+                           _rl: None = Depends(security.limiter_dependency("chat_uploads", limit=20, window=60))):
         filename = (file.filename or "").strip() or "file"
         max_bytes = int(os.environ.get("MONGO_UPLOAD_MAX_MB", "8")) * 1024 * 1024
         if file.size is not None and file.size > max_bytes:
@@ -568,18 +582,10 @@ def register_handlers():
                 "content_type": content_type, "kind": kind, "size": len(data),
                 "data": Binary(data), "created_at": now, "updated_at": now,
             })
-        except Exception as e:
-            raise HTTPException(500, f"Upload failed: {e}")
-        configured = os.environ.get("PUBLIC_BACKEND_URL") or os.environ.get("BACKEND_URL") or os.environ.get("API_BASE_URL")
-        if configured:
-            origin = configured.strip().rstrip("/")
-            if origin.endswith("/api"):
-                origin = origin[:-4]
-        else:
-            proto = request.headers.get("x-forwarded-proto") or request.url.scheme
-            host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
-            origin = f"{proto}://{host}".rstrip("/")
-        return {"url": f"{origin}/api/uploads/{inserted.inserted_id}", "name": filename,
+        except Exception:
+            logger.exception("Chat upload persistence failed")
+            raise HTTPException(500, "Upload failed")
+        return {"url": f"/api/uploads/{inserted.inserted_id}", "name": filename,
                 "kind": kind, "size": len(data), "provider": "mongodb"}
 
     # =========================================================
@@ -768,7 +774,8 @@ def register_handlers():
         except Exception as exc:
             configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").strip().strip("'\"").lower()
             if configured_provider in {"stripe", "razorpay"}:
-                raise HTTPException(503, f"{configured_provider.title()} payment setup error: {exc}") from exc
+                logger.exception("Agreement payment provider setup failed")
+                raise HTTPException(503, "Payment service is temporarily unavailable") from exc
             pr = {}
             txid = secrets.token_hex(8).upper()
             client_secret = None

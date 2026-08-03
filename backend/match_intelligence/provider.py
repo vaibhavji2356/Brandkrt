@@ -36,13 +36,14 @@ class OpenAIMatchReasoningProvider(MatchReasoningProvider):
             "model": self.settings.model,
             "input": prompt.as_messages(),
             "text": {
-                "verbosity": "low",
                 "format": {"type": "json_schema", "name": "creator_match_intelligence", "strict": True, "schema": schema},
             },
-            "reasoning": {"effort": "none"},
             "max_output_tokens": self.settings.max_output_tokens,
             "store": False,
         }
+        if self.settings.model.startswith("gpt-5."):
+            body["text"]["verbosity"] = "low"
+            body["reasoning"] = {"effort": "none"}
         headers = {"Authorization": f"Bearer {self.settings.api_key}", "Content-Type": "application/json"}
         attempts = self.settings.max_retries + 1
         for attempt in range(attempts):

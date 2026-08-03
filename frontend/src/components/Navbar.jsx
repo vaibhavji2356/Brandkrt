@@ -14,9 +14,9 @@ import {
 const links = [
   { to: "/", label: "Home" },
   { to: "/#features", label: "Features" },
-  { to: "/#pricing", label: "Pricing" },
+  { to: "/#how-it-works", label: "How it works" },
   { to: "/about", label: "About" },
-  { to: "/contact", label: "Contact" },
+  { to: "/#contact", label: "Contact" },
 ];
 
 export default function Navbar() {
