@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
+import InstagramConnect from "@/components/InstagramConnect";
 import { useAuth } from "@/context/AuthContext";
 import { StatusChip, EmptyState } from "@/components/State";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -185,6 +186,7 @@ export default function InfluencerOverview({ verificationOnly = false }) {
 
   return (
     <div className="space-y-8" data-testid="influencer-overview">
+      {!verificationOnly && <InstagramConnect onSync={() => load({ quiet: true })} />}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-display font-light text-primary dark:text-white">

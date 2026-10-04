@@ -1597,6 +1597,8 @@ def register_handlers():
         await db.users.delete_many({"$or": [{"_id": oid(uid)}, email_match]})
         await db.brands.delete_many({"user_id": uid})
         await db.influencers.delete_many({"user_id": uid})
+        await db.instagram_connections.delete_one({"_id": uid})
+        await db.instagram_oauth_states.delete_many({"user_id": uid})
         await db.verification_requests.delete_many({"user_id": uid})
         await db.withdrawal_requests.delete_many({"user_id": uid})
         await db.notifications.delete_many({"user_id": uid})

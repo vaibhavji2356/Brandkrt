@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { BarChart3, CalendarClock, CheckCircle2, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import api, { formatApiError } from "@/lib/api";
+import InstagramConnect from "@/components/InstagramConnect";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -100,6 +101,7 @@ export default function CreatorInsights() {
 
   return (
     <div className="space-y-6" data-testid="creator-monthly-insights">
+      <InstagramConnect onSync={load} />
       <div>
         <h2 className="text-3xl font-display font-light text-primary dark:text-white">Monthly Insights</h2>
         <p className="mt-1 text-sm text-muted-foreground">Keep your audience and performance data fresh for brands. This is only required for verified creators.</p>

@@ -817,6 +817,8 @@ async def delete_account(response: Response, user: dict = Depends(get_current_us
     if user.get("role") == "admin":
         raise HTTPException(status_code=400, detail="Admin account cannot be deleted via API")
     await db.users.delete_one({"_id": user["_id"]})
+    await db.instagram_connections.delete_one({"_id": str(user["_id"])})
+    await db.instagram_oauth_states.delete_many({"user_id": str(user["_id"])})
     clear_auth_cookies(response)
     return {"success": True}
 
@@ -893,6 +895,8 @@ async def health_ready(response: Response):
 # Register routers + CORS
 # -----------------------------------------------------------------------------
 api_router.include_router(auth_router)
+from instagram_connect import create_router as create_instagram_router
+api_router.include_router(create_instagram_router(get_current_user, db))
 
 # Brand Discovery AI Phase 1: isolated, vendor-neutral preview foundation.
 # The router receives only the existing auth dependency and has no DB handle.
