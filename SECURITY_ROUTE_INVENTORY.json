@@ -1,0 +1,1980 @@
+{
+  "routes": [
+    {
+      "path": "/api/profile",
+      "methods": [
+        "PATCH"
+      ],
+      "handler": "server.update_profile",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/profile/change-password",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.change_password",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/profile",
+      "methods": [
+        "DELETE"
+      ],
+      "handler": "server.delete_account",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/contact",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.contact",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/health",
+      "methods": [
+        "GET"
+      ],
+      "handler": "server.health",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/health/live",
+      "methods": [
+        "GET"
+      ],
+      "handler": "server.health_live",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/health/ready",
+      "methods": [
+        "GET"
+      ],
+      "handler": "server.health_ready",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/register/send-otp",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.send_register_otp",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/register",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.register",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/login",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.login",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/logout",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.logout",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/me",
+      "methods": [
+        "GET"
+      ],
+      "handler": "server.me",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/auth/refresh",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.refresh_token",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/forgot-password",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.forgot_password",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/reset-password",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.reset_password",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/verify-email",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.verify_email",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/google/config",
+      "methods": [
+        "GET"
+      ],
+      "handler": "server.google_config",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/google",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.google_signin",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/auth/resend-verification",
+      "methods": [
+        "POST"
+      ],
+      "handler": "server.resend_verification",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/instagram/status",
+      "methods": [
+        "GET"
+      ],
+      "handler": "instagram_connect.status",
+      "dependencies": [
+        "api_rate_limit",
+        "creator",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/instagram/connect",
+      "methods": [
+        "POST"
+      ],
+      "handler": "instagram_connect.connect",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "creator",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/instagram/callback",
+      "methods": [
+        "GET"
+      ],
+      "handler": "instagram_connect.callback",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/instagram/sync",
+      "methods": [
+        "POST"
+      ],
+      "handler": "instagram_connect.resync",
+      "dependencies": [
+        "api_rate_limit",
+        "creator",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/instagram/connection",
+      "methods": [
+        "DELETE"
+      ],
+      "handler": "instagram_connect.disconnect",
+      "dependencies": [
+        "api_rate_limit",
+        "creator",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/ai/brand-discovery/preview",
+      "methods": [
+        "POST"
+      ],
+      "handler": "brand_discovery_ai.router.preview_brand_discovery",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_brand_discovery_service",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/ai/discovery/preview",
+      "methods": [
+        "POST"
+      ],
+      "handler": "brand_discovery_ai.discovery_router.preview",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_multi_platform_discovery_service"
+      ]
+    },
+    {
+      "path": "/api/ai/match/recommendations",
+      "methods": [
+        "POST"
+      ],
+      "handler": "match_intelligence.router.recommendations",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_match_engine"
+      ]
+    },
+    {
+      "path": "/api/ai/creator-intelligence/recommendations",
+      "methods": [
+        "POST"
+      ],
+      "handler": "creator_intelligence.router.recommendations",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_creator_intelligence_engine",
+        "get_creator_narrative_service",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/research/jobs",
+      "methods": [
+        "POST"
+      ],
+      "handler": "admin_lead_intelligence.router.create_research_job",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/imports/apollo-csv",
+      "methods": [
+        "POST"
+      ],
+      "handler": "admin_lead_intelligence.router.import_apollo_csv",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/research/jobs/{job_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.get_research_job",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/research/history",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.research_history",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/research/history/{job_id}/rerun",
+      "methods": [
+        "POST"
+      ],
+      "handler": "admin_lead_intelligence.router.rerun_research",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/leads",
+      "methods": [
+        "POST"
+      ],
+      "handler": "admin_lead_intelligence.router.save_lead",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/leads",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.list_leads",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/leads/{lead_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.get_lead",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/leads/{lead_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "handler": "admin_lead_intelligence.router.update_lead",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/leads/{lead_id}/notes",
+      "methods": [
+        "POST"
+      ],
+      "handler": "admin_lead_intelligence.router.add_note",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/leads/{lead_id}/archive",
+      "methods": [
+        "POST"
+      ],
+      "handler": "admin_lead_intelligence.router.archive_lead",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/leads/{lead_id}/audit",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.lead_audit",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/dashboard",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.analytics",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/analytics",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.analytics",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/lead-intelligence/activity",
+      "methods": [
+        "GET"
+      ],
+      "handler": "admin_lead_intelligence.router.ai_activity",
+      "dependencies": [
+        "_dep",
+        "admin",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/analytics/summary",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.analytics_summary",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.router.create_profile",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.list_profiles",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles/{profile_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.get_profile",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles/{profile_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "handler": "commercial_intelligence.router.patch_profile",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles/{profile_id}/rates",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.router.append_rate",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles/{profile_id}/rates",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.list_rates",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles/{profile_id}/negotiations",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.router.append_negotiation",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/profiles/{profile_id}/negotiations",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.list_negotiations",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.router.create_performance",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.list_performance",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance/{record_id}/comparison",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.performance_comparison",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance/{record_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.router.get_performance",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance/{record_id}",
+      "methods": [
+        "PATCH"
+      ],
+      "handler": "commercial_intelligence.router.patch_performance",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance/{record_id}/evidence",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.upload_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance/{record_id}/evidence",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.list_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance/{record_id}/corrections",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.create_correction",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-performance/{record_id}/corrections",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.list_corrections",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-evidence/{evidence_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.get_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-evidence/{evidence_id}/download",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.download_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-evidence/{evidence_id}/verify",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.verify_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-evidence/{evidence_id}/reject",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.reject_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-evidence/{evidence_id}/supersede",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.supersede_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-evidence/{evidence_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "handler": "commercial_intelligence.hardening_router.delete_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/campaign-evidence/{evidence_id}/restore",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.restore_evidence",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/commercial-corrections/{correction_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.get_correction",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/commercial-corrections/{correction_id}/approve",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.approve_correction",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/commercial-corrections/{correction_id}/reject",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.reject_correction",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/commercial-corrections/{correction_id}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.cancel_correction",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/exports",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.create_export",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/exports/{export_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.get_export",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/exports/{export_id}/download",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.download_export",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/exports/{export_id}",
+      "methods": [
+        "DELETE"
+      ],
+      "handler": "commercial_intelligence.hardening_router.delete_export",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/audit-events",
+      "methods": [
+        "GET"
+      ],
+      "handler": "commercial_intelligence.hardening_router.audit_events",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/creator-commercial/retention/evaluate",
+      "methods": [
+        "POST"
+      ],
+      "handler": "commercial_intelligence.hardening_router.evaluate_retention",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user",
+        "get_evidence_storage",
+        "service"
+      ]
+    },
+    {
+      "path": "/api/admin/operations/diagnostics",
+      "methods": [
+        "GET"
+      ],
+      "handler": "operations.router.diagnostics",
+      "dependencies": [
+        "admin",
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/operations/metrics",
+      "methods": [
+        "GET"
+      ],
+      "handler": "operations.router.metrics",
+      "dependencies": [
+        "admin",
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/brands/me",
+      "methods": [
+        "PUT"
+      ],
+      "handler": "domain._upsert_my_brand",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/brands/me",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._get_my_brand",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/brands",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._list_brands",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/brands/{brand_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._get_brand",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/influencers/me",
+      "methods": [
+        "PUT"
+      ],
+      "handler": "domain._upsert_inf",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/influencers/me",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._get_my_inf",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/influencers/insights/status",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._get_creator_insight_status",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/influencers/insights",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._update_creator_insights",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/influencers",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._list_inf",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/influencers/{inf_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._get_inf",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/campaigns",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._create_campaign",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/campaigns",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._list_campaigns",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/campaigns/{cid}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._get_campaign",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/campaigns/{cid}/status",
+      "methods": [
+        "PATCH"
+      ],
+      "handler": "domain._campaign_status",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/deals",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._create_deal",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/deals",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._list_deals",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/deals/{did}/status",
+      "methods": [
+        "PATCH"
+      ],
+      "handler": "domain._deal_status",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/payments/escrow",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._escrow",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/payments/razorpay/verify",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._razorpay_verify",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/payments/{pid}/release",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._release",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/payments",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._list_payments",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/notifications",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._list_notifs",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/notifications/{nid}/read",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._read_notif",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/messages/{deal_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._list_msgs",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/messages",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._send_msg",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/verification",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._submit_verif",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/verification/mine",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._my_verif",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/withdrawals",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._wd",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/withdrawals/mine",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._my_wd",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/reviews",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._review",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/reports",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._report",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/uploads/{file_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._get_upload",
+      "dependencies": [
+        "api_rate_limit"
+      ]
+    },
+    {
+      "path": "/api/uploads/{folder}",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._upload",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/escrow",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_escrow",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/escrow/{pid}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_escrow_detail",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/overview",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_overview",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/users",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_users",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/users/{uid}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_user_detail",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/users/{uid}/suspend",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._admin_user_suspend",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/users/{uid}",
+      "methods": [
+        "DELETE"
+      ],
+      "handler": "domain._admin_user_delete",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/verification",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_verif",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/verification/{rid}/decision",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._admin_decide",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/withdrawals",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_wd",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/withdrawals/{rid}/decision",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._admin_wd_decide",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/withdrawals/{rid}/payout",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._admin_wd_payout",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/withdrawals/{rid}/manual-payout",
+      "methods": [
+        "POST"
+      ],
+      "handler": "domain._admin_wd_manual_payout",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/reports",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_reports",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/admin/logs",
+      "methods": [
+        "GET"
+      ],
+      "handler": "domain._admin_logs",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/collaborations",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._create_collab",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/collaborations",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._list_collabs",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/collaborations/{cid}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._get_collab",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/collaborations/{cid}/status",
+      "methods": [
+        "PATCH"
+      ],
+      "handler": "part4b._collab_status",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._list_conversations",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._create_conv",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations/{conv_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._get_conv",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations/{conv_id}/messages",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._list_messages",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations/{conv_id}/messages",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._send_message",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations/{conv_id}/read",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._mark_read",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations/{conv_id}/typing",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._set_typing",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/conversations/{conv_id}/typing",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._get_typing",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/chat/upload",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._chat_upload",
+      "dependencies": [
+        "_dep",
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/agreements",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._create_agreement",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/agreements",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._list_agreements",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/agreements/{aid}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4b._get_agreement",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/agreements/{aid}/accept",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._accept_agreement",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/agreements/{aid}/fund",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._fund_agreement",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/agreements/{aid}/reject",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._reject_agreement",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/agreements/{aid}/cancel",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4b._cancel_agreement",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/deals/{deal_id}/metrics",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4c._set_metrics",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/deals/{deal_id}/metrics",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._get_metrics",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/influencer/me",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._my_inf_perf",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/influencer/{user_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._inf_perf",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/brand/me",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._my_brand_perf",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/brand/{user_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._brand_perf_ep",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/deal/{deal_id}/report",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._deal_report",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/trends",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._trends",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/top-campaigns",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._top_campaigns",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/performance/top-creators",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._top_creators",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/feedback",
+      "methods": [
+        "POST"
+      ],
+      "handler": "part4c._create_feedback",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/feedback/for/{user_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._reviews_for",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/feedback/mine",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._reviews_mine",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/feedback/summary/{user_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._review_summary",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/api/feedback/for-deal/{deal_id}",
+      "methods": [
+        "GET"
+      ],
+      "handler": "part4c._reviews_for_deal",
+      "dependencies": [
+        "api_rate_limit",
+        "get_current_user"
+      ]
+    },
+    {
+      "path": "/{full_path:path}",
+      "methods": [
+        "OPTIONS"
+      ],
+      "handler": "server.cors_preflight",
+      "dependencies": []
+    }
+  ],
+  "heuristic_secret_matches": [
+    {
+      "kind": "credentialed_mongodb_uri",
+      "commit": "c4c74c2c2f7f77445eec5363052e41724fcab6bf",
+      "path": "DEPLOYMENT.md"
+    },
+    {
+      "kind": "credentialed_mongodb_uri",
+      "commit": "e15df97d1ac918882863b28454e602f736d6750d",
+      "path": "DEPLOYMENT.md"
+    },
+    {
+      "kind": "credentialed_mongodb_uri",
+      "commit": "e6ec1d45acf192fedb0fcd063246852793505f10",
+      "path": "DEPLOYMENT.md"
+    },
+    {
+      "kind": "credentialed_mongodb_uri",
+      "commit": "f41d204ca3a31d735154098385233b51bda7789f",
+      "path": "backend/.env.example"
+    },
+    {
+      "kind": "openai_key",
+      "commit": "e759186b34665f5d66d0ecb11e70f125619b4659",
+      "path": "backend/tests/test_brand_discovery_ai.py"
+    }
+  ],
+  "limitations": "Heuristic patterns include test/example credentials; not a comprehensive entropy scan. Ignored files, deployed secrets, provider logs and remote backups are not covered."
+}

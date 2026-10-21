@@ -122,8 +122,6 @@ class OriginCSRFMiddleware(BaseHTTPMiddleware):
         # already authorises itself via a verified ID token).
         self.exempt_prefixes = (
             "/api/health",
-            "/api/auth/google",  # secured by Google ID-token verification
-            "/uploads/",
         )
 
     async def dispatch(self, request: Request, call_next):
@@ -221,3 +219,20 @@ def _safe_ip(value: str) -> str:
         return str(ipaddress.ip_address(value))
     except ValueError:
         return "unknown"
+
+
+async def api_rate_limit(request: Request, response: Response) -> None:
+    """Bound public reads and marketplace mutations through the shared backend."""
+    path = request.url.path
+    if path.startswith("/api/health"):
+        return
+    action, limit = "api_read", 1200
+    if request.method in UNSAFE_METHODS:
+        action, limit = "api_write", 120
+        if path.startswith(("/api/payments", "/api/withdrawals")) or path.endswith("/fund"):
+            action, limit = "payment_operations", 30
+        elif path.startswith(("/api/chat", "/api/conversations", "/api/messages")):
+            action, limit = "chat_operations", 180
+        elif path.startswith("/api/campaigns"):
+            action, limit = "campaign_operations", 30
+    await limiter_dependency(action, limit=limit, window=60)(request, response)

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
 import { useAuth } from "@/context/AuthContext";
@@ -8,7 +8,12 @@ import { toast } from "sonner";
 export default function ResetPassword() {
   const { resetPassword, formatApiError } = useAuth();
   const [params] = useSearchParams();
-  const token = params.get("token") || "";
+  const [token] = useState(() => params.get("token") || "");
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("token");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");

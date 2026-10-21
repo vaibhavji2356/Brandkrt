@@ -98,20 +98,9 @@ class StripeProvider(PaymentProvider):
         self._stripe = stripe
 
     def create_escrow(self, *, amount: float, deal_id: str, currency: str = "INR") -> PaymentResult:
-        units = int(round(float(amount) * 100))
-        intent = self._stripe.PaymentIntent.create(
-            amount=units,
-            currency=currency.lower(),
-            capture_method="manual",
-            metadata={"deal_id": deal_id, "platform": "brandkrt"},
-        )
-        return PaymentResult(
-            transaction_id=intent.id,
-            client_secret=intent.client_secret,
-            provider=self.name,
-            status="escrowed",
-            currency=currency,
-        )
+        # Creating an intent is not proof of payment. Until a verified Stripe
+        # confirmation flow exists, do not create locally funded escrow records.
+        raise RuntimeError("Stripe escrow confirmation is not implemented; use Razorpay")
 
     def release(self, *, transaction_id: str) -> PaymentResult:
         captured = self._stripe.PaymentIntent.capture(transaction_id)
@@ -171,7 +160,26 @@ class RazorpayProvider(PaymentProvider):
     def verify(self, *, order_id: str, payment_id: str, signature: str) -> bool:
         payload = f"{order_id}|{payment_id}".encode("utf-8")
         digest = hmac.new(self.key_secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(digest, signature or "")
+        if not hmac.compare_digest(digest, signature or ""):
+            return False
+        response = requests.get(
+            f"https://api.razorpay.com/v1/payments/{payment_id}",
+            auth=(self.key_id, self.key_secret), timeout=20,
+        )
+        response.raise_for_status()
+        payment = response.json()
+        order_response = requests.get(
+            f"https://api.razorpay.com/v1/orders/{order_id}",
+            auth=(self.key_id, self.key_secret), timeout=20,
+        )
+        order_response.raise_for_status()
+        order = order_response.json()
+        return bool(
+            payment.get("order_id") == order_id and payment.get("status") == "captured"
+            and payment.get("amount") == order.get("amount")
+            and payment.get("currency") == order.get("currency")
+            and order.get("status") == "paid"
+        )
 
     def create_payout(
         self,
@@ -293,9 +301,13 @@ def _env(name: str) -> Optional[str]:
 
 def get_provider() -> PaymentProvider:
     global _PROVIDER
+    name = (_env("PAYMENT_PROVIDER") or "stub").lower()
+    if os.environ.get("APP_ENV", "development").strip().lower() != "development" and name != "razorpay":
+        raise RuntimeError("Production payments require the verified Razorpay provider")
+    if name not in {"stub", "stripe", "razorpay"}:
+        raise RuntimeError("Unknown payment provider")
     if _PROVIDER is not None:
         return _PROVIDER
-    name = (_env("PAYMENT_PROVIDER") or "stub").lower()
     try:
         if name == "stripe":
             _PROVIDER = StripeProvider()

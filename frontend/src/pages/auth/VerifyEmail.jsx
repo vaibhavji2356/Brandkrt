@@ -7,7 +7,12 @@ import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 export default function VerifyEmail() {
   const { verifyEmail, formatApiError } = useAuth();
   const [params] = useSearchParams();
-  const token = params.get("token") || "";
+  const [token] = useState(() => params.get("token") || "");
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("token");
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, []);
   const [state, setState] = useState({ status: "loading", message: "" });
 
   useEffect(() => {

@@ -39,7 +39,12 @@ export function assetUrl(value) {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   if (!trimmed) return trimmed;
-  if (/^(data:|blob:)/i.test(trimmed)) return trimmed;
+  const schemeProbe = trimmed.replace(/[\u0000-\u0020]/g, "");
+  if (/^(javascript|vbscript|file):/i.test(schemeProbe)) return "";
+  if (/^data:/i.test(schemeProbe)) {
+    return /^data:image\/(png|jpeg|gif|webp|avif);base64,/i.test(schemeProbe) ? trimmed : "";
+  }
+  if (/^blob:/i.test(trimmed)) return trimmed;
   if (/^https?:/i.test(trimmed)) {
     try {
       const url = new URL(trimmed);

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ConfigDict
 
 import domain as _domain
+from serialization import safe_document
 
 # Wired by init()
 db = None  # type: ignore
@@ -39,16 +40,7 @@ def oid(s: str) -> ObjectId:
 
 
 def doc_out(doc: dict) -> dict:
-    if not doc:
-        return doc
-    d = dict(doc)
-    d["id"] = str(d.pop("_id"))
-    for k, v in list(d.items()):
-        if isinstance(v, ObjectId):
-            d[k] = str(v)
-        if isinstance(v, datetime):
-            d[k] = v.isoformat()
-    return d
+    return safe_document(doc)
 
 
 def public_profile_out(doc: dict) -> dict:

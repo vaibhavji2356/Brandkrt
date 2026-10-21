@@ -7,6 +7,7 @@ All endpoints under /api (via the parent api_router prefix in server.py).
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import logging
 from datetime import datetime, timezone, timedelta
@@ -20,6 +21,7 @@ from pydantic import BaseModel, Field, ConfigDict
 import domain as _domain
 import security
 from upload_security import validate_upload
+from serialization import safe_document
 
 logger = logging.getLogger("brandkrt.chat")
 
@@ -47,16 +49,7 @@ def oid(s: str) -> ObjectId:
 
 
 def doc_out(doc: dict) -> dict:
-    if not doc:
-        return doc
-    d = dict(doc)
-    d["id"] = str(d.pop("_id"))
-    for k, v in list(d.items()):
-        if isinstance(v, ObjectId):
-            d[k] = str(v)
-        if isinstance(v, datetime):
-            d[k] = v.isoformat()
-    return d
+    return safe_document(doc)
 
 
 async def require_role(user: dict, *roles: str) -> None:
@@ -381,8 +374,8 @@ def register_handlers():
         query: dict = {"participants": uid}
         if q:
             query["$or"] = [
-                {"title": {"$regex": q, "$options": "i"}},
-                {"last_message": {"$regex": q, "$options": "i"}},
+                {"title": {"$regex": re.escape(q[:100]), "$options": "i"}},
+                {"last_message": {"$regex": re.escape(q[:100]), "$options": "i"}},
             ]
         cur = db.conversations.find(query).sort("last_message_at", -1).limit(200)
         out = []
@@ -455,7 +448,7 @@ def register_handlers():
         await _require_conversation_unlocked(conv)
         query: dict = {"conversation_id": conv_id}
         if q:
-            query["body"] = {"$regex": q, "$options": "i"}
+            query["body"] = {"$regex": re.escape(q[:100]), "$options": "i"}
         cur = db.chat_messages.find(query).sort("created_at", 1).limit(min(limit, 500))
         return {"messages": [_message_out(x, uid) async for x in cur]}
 
@@ -470,6 +463,17 @@ def register_handlers():
         await _require_conversation_unlocked(conv)
         body = (payload.body or "").strip()
         attachments = payload.attachments or []
+        # Never allow a sender to share someone else's upload or an executable URL.
+        for attachment in attachments:
+            url = attachment.get("url", "")
+            prefix = "/api/uploads/"
+            if not isinstance(url, str) or not url.startswith(prefix) or not ObjectId.is_valid(url[len(prefix):]):
+                raise HTTPException(400, "Invalid attachment")
+            upload = await db.uploads.find_one({
+                "_id": ObjectId(url[len(prefix):]), "owner_id": uid, "folder": "chat",
+            })
+            if not upload:
+                raise HTTPException(403, "Attachment does not belong to you")
         if not body and not attachments:
             raise HTTPException(400, "Message body or attachment required")
 
@@ -621,7 +625,7 @@ def register_handlers():
 
         now = now_utc()
         amount = float(payload.payment_amount)
-        fee_pct = float(payload.platform_fee_pct or 0)
+        fee_pct = float(payload.platform_fee_pct) if user.get("role") == "admin" else 10.0
         platform_fee = round(amount * fee_pct / 100.0, 2)
         net_to_influencer = round(amount - platform_fee, 2)
 
@@ -773,7 +777,7 @@ def register_handlers():
             provider_status = pr.get("status", "escrowed")
         except Exception as exc:
             configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").strip().strip("'\"").lower()
-            if configured_provider in {"stripe", "razorpay"}:
+            if configured_provider != "stub" or os.environ.get("APP_ENV", "development").lower() != "development":
                 logger.exception("Agreement payment provider setup failed")
                 raise HTTPException(503, "Payment service is temporarily unavailable") from exc
             pr = {}

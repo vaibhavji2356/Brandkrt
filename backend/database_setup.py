@@ -37,6 +37,7 @@ async def create_indexes(database) -> None:
 
     await database.users.create_index("email", unique=True)
     await database.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await database.consumed_refresh_tokens.create_index("expires_at", expireAfterSeconds=0)
     await database.verification_tokens.create_index("expires_at", expireAfterSeconds=0)
     await database.registration_otps.create_index("expires_at", expireAfterSeconds=0)
     await database.registration_otps.create_index([("email", 1), ("created_at", -1)])

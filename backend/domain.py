@@ -22,6 +22,9 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 from upload_security import validate_upload
 import security
+from authorization import require_permission
+from serialization import safe_document
+from private_fields import protect_fields, reveal_field
 
 logger = logging.getLogger("brandkrt.domain")
 
@@ -45,16 +48,7 @@ def oid(s: str) -> ObjectId:
         raise HTTPException(status_code=400, detail="Invalid id")
 
 def doc_out(doc: dict) -> dict:
-    if not doc:
-        return doc
-    d = dict(doc)
-    d["id"] = str(d.pop("_id"))
-    for k, v in list(d.items()):
-        if isinstance(v, ObjectId):
-            d[k] = str(v)
-        if isinstance(v, datetime):
-            d[k] = v.isoformat()
-    return d
+    return safe_document(doc)
 
 def public_profile_out(doc: dict) -> dict:
     """Return an explicit, privacy-safe projection for profile discovery.
@@ -73,7 +67,7 @@ def public_profile_out(doc: dict) -> dict:
         "portfolio", "followers", "avg_reel_views", "monthly_reach",
         "collab_price", "verification_status", "status",
     }
-    serialized = doc_out(doc)
+    serialized = doc_out({key: value for key, value in doc.items() if key in common or key == "_id"})
     return {key: value for key, value in serialized.items() if key in common}
 
 async def require_role(user: dict, *roles: str) -> None:
@@ -198,6 +192,16 @@ async def setup_indexes(database):
     await database.deals.create_index([("influencer_id", 1), ("status", 1)])
     await database.payments.create_index([("deal_id", 1)])
     await database.payments.create_index([("agreement_id", 1)])
+    # New attempts cannot create two live escrow records for one obligation.
+    # If legacy duplicates exist, deployment stops for manual reconciliation.
+    for reference in ("deal_id", "agreement_id"):
+        await database.payments.create_index(
+            [(reference, 1)], unique=True, name=f"one_live_payment_per_{reference}",
+            partialFilterExpression={
+                reference: {"$type": "string"},
+                "status": {"$in": ["pending", "escrowed", "released"]},
+            },
+        )
     await database.transactions.create_index([("user_id", 1), ("created_at", -1)])
     await database.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
     await database.messages.create_index([("deal_id", 1), ("created_at", 1)])
@@ -299,7 +303,7 @@ class CampaignIn(BaseModel):
     content_type: Optional[str] = None
     required_followers: Optional[int] = 0
     required_avg_views: Optional[int] = 0
-    budget: float = Field(ge=0)
+    budget: float = Field(ge=0, allow_inf_nan=False)
     payment_type: Optional[str] = None
     deadline: Optional[str] = None
     deliverables: List[str] = []
@@ -470,6 +474,7 @@ def register_handlers():
         await require_role(user, "brand", "admin")
         now = now_utc()
         data = payload.model_dump()
+        data = protect_fields(data)
         data.update({"user_id": str(user["_id"]), "status": "active", "updated_at": now})
         existing = await find_brand_for_user(user)
         if existing:
@@ -516,6 +521,7 @@ def register_handlers():
         await require_role(user, "influencer", "admin")
         now = now_utc()
         data = payload.model_dump()
+        data = protect_fields(data)
         data.update({"user_id": str(user["_id"]), "status": "active", "updated_at": now})
         existing = await db.influencers.find_one({"user_id": str(user["_id"])})
         if existing:
@@ -637,15 +643,16 @@ def register_handlers():
 
     @campaign_router.get("")
     async def _list_campaigns(user: dict = Depends(get_current_user), status: Optional[str] = None, limit: int = 50):
+        await require_role(user, "brand", "influencer", "admin")
         query = {}
         if user.get("role") == "brand":
             brand = await find_brand_for_user(user)
             query["brand_id"] = str(brand["_id"]) if brand else "__none__"
         elif user.get("role") == "influencer":
             query["status"] = "active"
-        if status:
+        if status and user.get("role") != "influencer":
             query["status"] = status
-        cur = db.campaigns.find(query).sort("created_at", -1).limit(min(limit, 100))
+        cur = db.campaigns.find(query).sort("created_at", -1).limit(max(1, min(limit, 100)))
         return {"campaigns": [doc_out(x) async for x in cur]}
 
     @campaign_router.get("/{cid}")
@@ -952,7 +959,7 @@ def register_handlers():
             provider_status = pr.get("status", "escrowed")
         except Exception as exc:
             configured_provider = (os.environ.get("PAYMENT_PROVIDER") or "stub").strip().strip("'\"").lower()
-            if configured_provider in {"stripe", "razorpay"}:
+            if configured_provider != "stub" or os.environ.get("APP_ENV", "development").lower() != "development":
                 logger.exception("Payment provider setup failed")
                 raise HTTPException(503, "Payment service is temporarily unavailable") from exc
             txid = secrets.token_hex(8).upper()
@@ -1017,6 +1024,10 @@ def register_handlers():
             raise HTTPException(400, "Payment is not a Razorpay payment")
         if pay.get("transaction_id") != payload.razorpay_order_id:
             raise HTTPException(400, "Razorpay order does not match this payment")
+        if pay.get("status") in {"escrowed", "released"}:
+            if pay.get("provider_payment_id") != payload.razorpay_payment_id:
+                raise HTTPException(409, "Payment has already been verified")
+            return {"success": True, "payment": doc_out(pay)}
         try:
             import payments as _payments  # noqa: WPS433
             ok = _payments.get_provider().verify(
@@ -1028,13 +1039,13 @@ def register_handlers():
             raise HTTPException(503, "Razorpay payment provider is not configured correctly") from exc
         if not ok:
             await db.payments.update_one(
-                {"_id": oid(payload.payment_id)},
+                {"_id": oid(payload.payment_id), "status": {"$in": ["pending", "verification_failed"]}},
                 {"$set": {"status": "verification_failed", "updated_at": now_utc()}},
             )
             raise HTTPException(400, "Razorpay signature verification failed")
         now = now_utc()
         await db.payments.update_one(
-            {"_id": oid(payload.payment_id)},
+            {"_id": oid(payload.payment_id), "status": {"$in": ["pending", "verification_failed"]}},
             {"$set": {
                 "status": "escrowed",
                 "release_status": "held",
@@ -1272,7 +1283,7 @@ def register_handlers():
             raise HTTPException(400, f"Withdrawal amount exceeds available balance of INR {available:.2f}")
         now = now_utc()
         doc = {"user_id": uid, "amount": payload.amount,
-               "method": payload.method, "details": details,
+               "method": payload.method, "details": protect_fields({"details": details})["details"],
                "status": "pending", "active_key": uid,
                "available_balance_before": available, "created_at": now, "updated_at": now}
         try:
@@ -1320,10 +1331,25 @@ def register_handlers():
         doc = await db.uploads.find_one({"_id": ObjectId(file_id)})
         if not doc:
             raise HTTPException(404, "File not found")
-        if doc.get("folder") == "verification":
+        private = doc.get("folder") not in {"profiles", "brand_logos", "products"}
+        if private:
             user = await get_current_user(request)
             if user.get("role") != "admin" and doc.get("owner_id") != str(user["_id"]):
-                raise HTTPException(403, "Verification documents are private")
+                allowed = False
+                if doc.get("folder") == "chat":
+                    async for message in db.chat_messages.find({
+                        "sender_id": doc.get("owner_id"),
+                        "attachments.url": f"/api/uploads/{file_id}",
+                    }):
+                        conversation = await db.conversations.find_one({
+                            "_id": oid(message["conversation_id"]),
+                            "participants": str(user["_id"]),
+                        })
+                        if conversation:
+                            allowed = True
+                            break
+                if not allowed:
+                    raise HTTPException(403, "File is private")
         data = bytes(doc.get("data") or b"")
         validated = validate_upload(
             data=data,
@@ -1332,12 +1358,12 @@ def register_handlers():
             folder=doc.get("folder") or "chat",
         )
         safe_download_name = re.sub(r"[^A-Za-z0-9._-]", "_", validated["filename"])[:180] or "file"
-        disposition = "attachment" if doc.get("folder") == "verification" or validated["kind"] != "image" else "inline"
+        disposition = "attachment" if private or validated["kind"] != "image" else "inline"
         return Response(
             content=data,
             media_type=validated["content_type"],
             headers={
-                "Cache-Control": "private, no-store" if doc.get("folder") == "verification" else "public, max-age=31536000, immutable",
+                "Cache-Control": "private, no-store" if private else "public, max-age=31536000, immutable",
                 "Content-Disposition": f'{disposition}; filename="{safe_download_name}"',
                 "X-Content-Type-Options": "nosniff",
             },
@@ -1389,8 +1415,11 @@ def register_handlers():
         }
 
     # ----- ADMIN -----
-    async def _ensure_admin(user: dict):
-        await require_role(user, "admin")
+    async def _ensure_admin(user: dict, permission: Optional[str] = None):
+        if permission:
+            require_permission(user, permission)
+        else:
+            await require_role(user, "admin")
 
     async def _sync_completed_escrow_releases() -> int:
         """Queue legacy/completed deals whose funded escrow still says held."""
@@ -1505,12 +1534,12 @@ def register_handlers():
 
     @admin_router.get("/users")
     async def _admin_users(user: dict = Depends(get_current_user), role: Optional[str] = None, q: Optional[str] = None, limit: int = 50):
-        await _ensure_admin(user)
+        await _ensure_admin(user, "users:read")
         query: dict = {}
         if role:
             query["role"] = role
         if q:
-            query["$or"] = [{"email": {"$regex": q, "$options": "i"}}, {"name": {"$regex": q, "$options": "i"}}]
+            query["$or"] = [{"email": {"$regex": re.escape(q[:100]), "$options": "i"}}, {"name": {"$regex": re.escape(q[:100]), "$options": "i"}}]
         cur = db.users.find(query, {"password_hash": 0}).sort("created_at", -1).limit(min(limit, 200))
         rows = []
         async for row in cur:
@@ -1785,12 +1814,12 @@ def register_handlers():
             if not profile:
                 profile = await db.brands.find_one({"user_id": uid})
 
-        details = dict(req.get("details") or {})
-        bank = dict((profile or {}).get("bank_details") or {})
+        details = dict(reveal_field("details", req.get("details")) or {})
+        bank = dict(reveal_field("bank_details", (profile or {}).get("bank_details")) or {})
         method = (req.get("method") or "").lower()
         if method == "upi":
             payout_details = {
-                "upi": details.get("upi") or details.get("vpa") or (profile or {}).get("upi") or (profile or {}).get("upi_id") or "",
+                "upi": details.get("upi") or details.get("vpa") or reveal_field("upi", (profile or {}).get("upi")) or (profile or {}).get("upi_id") or "",
             }
         else:
             payout_details = {

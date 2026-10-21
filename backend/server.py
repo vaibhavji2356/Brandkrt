@@ -8,6 +8,7 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import logging
 import secrets
+import hashlib
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
@@ -17,8 +18,10 @@ from urllib.parse import urlparse
 import bcrypt
 import jwt
 from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from starlette.middleware.cors import CORSMiddleware
 from operations.configuration import require_valid_configuration
@@ -137,7 +140,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="BrandKrt API", lifespan=lifespan)
 install_exception_handlers(app)
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/api", dependencies=[Depends(_security.api_rate_limit)])
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
 # -----------------------------------------------------------------------------
@@ -204,7 +207,7 @@ def _jwt_secret() -> str:
 
 def create_access_token(user_id: str, email: str, role: str, token_version: int = 0) -> str:
     payload = {
-        "sub": user_id, "email": email, "role": role, "type": "access",
+        "sub": user_id, "type": "access",
         "iat": datetime.now(timezone.utc), "jti": secrets.token_urlsafe(24), "ver": token_version,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_MINUTES),
     }
@@ -480,10 +483,16 @@ async def get_current_user(request: Request) -> dict:
         if int(payload.get("ver", 0)) != int(user.get("token_version", 0)):
             raise HTTPException(status_code=401, detail="Session is no longer valid")
         request.state.auth_role = user.get("role", "unknown")
+        if request.url.path.startswith("/api/admin/") and user.get("role") in {"admin", "staff"}:
+            await db.admin_logs.insert_one({
+                "admin_id": str(user["_id"]), "action": "admin.api_access",
+                "target": request.url.path, "meta": {"method": request.method},
+                "created_at": datetime.now(timezone.utc),
+            })
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
+    except (jwt.InvalidTokenError, InvalidId, ValueError, TypeError, KeyError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
@@ -571,9 +580,20 @@ async def register(payload: RegisterIn, response: Response,
     now = datetime.now(timezone.utc)
     otp = await db.registration_otps.find_one({"email": email, "code": payload.otp_code.strip(), "used": False})
     if not otp:
+        await db.registration_otps.update_one(
+            {"email": email, "used": False}, {"$inc": {"failed_attempts": 1}},
+        )
+        await db.registration_otps.update_many(
+            {"email": email, "failed_attempts": {"$gte": 5}}, {"$set": {"used": True}},
+        )
         raise HTTPException(status_code=400, detail="Invalid OTP code")
     if _aware(otp["expires_at"]) < now:
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new code.")
+    claimed = await db.registration_otps.update_one(
+        {"_id": otp["_id"], "used": False}, {"$set": {"used": True, "used_at": now}},
+    )
+    if not claimed.modified_count:
+        raise HTTPException(400, "OTP has already been used")
 
     doc = {
         "email": email,
@@ -611,7 +631,12 @@ async def login(payload: LoginIn, request: Request, response: Response,
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
         await _record_failed(identifier)
+        await db.activity_logs.insert_one({"action": "auth.login_failed", "entity": "auth", "created_at": datetime.now(timezone.utc)})
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if user.get("status") in {"suspended", "disabled", "deleted"}:
+        raise HTTPException(403, "Account is unavailable")
+    await db.activity_logs.insert_one({"user_id": str(user["_id"]), "action": "auth.login", "entity": "auth", "created_at": datetime.now(timezone.utc)})
 
     await _clear_failed(identifier)
     version = int(user.get("token_version", 0))
@@ -622,7 +647,15 @@ async def login(payload: LoginIn, request: Request, response: Response,
 
 
 @auth_router.post("/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
+    # Revoke server-side as well as clearing cookies. Logout ends all sessions.
+    token = request.cookies.get("refresh_token") or request.cookies.get("access_token")
+    if token:
+        try:
+            claims = jwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
+            await db.users.update_one({"_id": ObjectId(claims["sub"])}, {"$inc": {"token_version": 1}})
+        except (jwt.InvalidTokenError, InvalidId, ValueError, TypeError, KeyError):
+            pass
     clear_auth_cookies(response)
     return {"success": True}
 
@@ -649,13 +682,22 @@ async def refresh_token(request: Request, response: Response):
         version = int(user.get("token_version", 0))
         if int(payload.get("ver", 0)) != version:
             raise HTTPException(status_code=401, detail="Session is no longer valid")
+        # _id is MongoDB-unique: consuming a refresh token is atomic across workers.
+        # Store only its digest, never the bearer token itself.
+        try:
+            await db.consumed_refresh_tokens.insert_one({
+                "_id": hashlib.sha256(token.encode()).hexdigest(),
+                "expires_at": datetime.fromtimestamp(payload["exp"], timezone.utc),
+            })
+        except DuplicateKeyError:
+            raise HTTPException(401, "Refresh token has already been used") from None
         access = create_access_token(str(user["_id"]), user["email"], user.get("role", "influencer"), version)
         new_refresh = create_refresh_token(str(user["_id"]), version)
         set_auth_cookies(response, access, new_refresh)
         return {"user": serialize_user(user)}
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Refresh token expired")
-    except jwt.InvalidTokenError:
+    except (jwt.InvalidTokenError, InvalidId, ValueError, TypeError, KeyError):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 
@@ -669,20 +711,28 @@ async def forgot_password(payload: ForgotPasswordIn, request: Request,
         token = secrets.token_urlsafe(32)
         now = datetime.now(timezone.utc)
         await db.password_reset_tokens.insert_one({
-            "token": token, "user_id": str(user["_id"]), "email": email,
+            "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": str(user["_id"]), "email": email,
             "expires_at": now + timedelta(hours=1), "used": False, "created_at": now,
         })
         await email_service.send_password_reset(email, token)
     return {"success": True, "message": "If an account exists, a reset link has been sent."}
 
 
-@auth_router.post("/reset-password")
+@auth_router.post("/reset-password", dependencies=[Depends(_security.limiter_dependency("reset", limit=10, window=600))])
 async def reset_password(payload: ResetPasswordIn):
-    rec = await db.password_reset_tokens.find_one({"token": payload.token})
+    rec = await db.password_reset_tokens.find_one({"$or": [
+        {"token_hash": hashlib.sha256(payload.token.encode()).hexdigest()},
+        {"token": payload.token},  # Legacy links expire within one hour.
+    ]})
     if not rec or rec.get("used"):
         raise HTTPException(status_code=400, detail="Invalid or used token")
     if _aware(rec["expires_at"]) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Reset token has expired")
+    claimed = await db.password_reset_tokens.update_one(
+        {"_id": rec["_id"], "used": False}, {"$set": {"used": True}},
+    )
+    if not claimed.modified_count:
+        raise HTTPException(400, "Reset token has already been used")
     await db.users.update_one(
         {"_id": ObjectId(rec["user_id"])},
         {"$set": {"password_hash": hash_password(payload.new_password), "updated_at": datetime.now(timezone.utc)},
@@ -692,9 +742,12 @@ async def reset_password(payload: ResetPasswordIn):
     return {"success": True, "message": "Password updated. You can now log in."}
 
 
-@auth_router.post("/verify-email")
+@auth_router.post("/verify-email", dependencies=[Depends(_security.limiter_dependency("verify_email", limit=10, window=600))])
 async def verify_email(payload: VerifyEmailIn):
-    rec = await db.verification_tokens.find_one({"token": payload.token})
+    rec = await db.verification_tokens.find_one({"$or": [
+        {"token_hash": hashlib.sha256(payload.token.encode()).hexdigest()},
+        {"token": payload.token},  # Legacy links expire within 24 hours.
+    ]})
     if not rec or rec.get("used"):
         raise HTTPException(status_code=400, detail="Invalid or used verification token")
     if _aware(rec["expires_at"]) < datetime.now(timezone.utc):
@@ -761,14 +814,14 @@ async def google_signin(payload: GoogleSignInIn, request: Request, response: Res
     return {"user": serialize_user(user)}
 
 
-@auth_router.post("/resend-verification")
+@auth_router.post("/resend-verification", dependencies=[Depends(_security.limiter_dependency("resend_verification", limit=5, window=600))])
 async def resend_verification(user: dict = Depends(get_current_user)):
     if user.get("email_verified"):
         return {"success": True, "message": "Email already verified"}
     token = secrets.token_urlsafe(32)
     now = datetime.now(timezone.utc)
     await db.verification_tokens.insert_one({
-        "token": token, "user_id": str(user["_id"]), "email": user["email"],
+        "token_hash": hashlib.sha256(token.encode()).hexdigest(), "user_id": str(user["_id"]), "email": user["email"],
         "expires_at": now + timedelta(hours=24), "used": False, "created_at": now,
     })
     await email_service.send_verification(user["email"], token)
@@ -951,7 +1004,7 @@ _uploads_dir = _os.environ.get("UPLOAD_ROOT", "./uploads")
 _os.makedirs(_uploads_dir, exist_ok=True)
 # Verification documents are never exposed through the legacy static mount.
 # New verification files use the authenticated /api/uploads/{id} route.
-for _public_folder in ("profiles", "brand_logos", "products", "contracts", "invoices", "chat"):
+for _public_folder in ("profiles", "brand_logos", "products"):
     _folder_path = _os.path.join(_uploads_dir, _public_folder)
     _os.makedirs(_folder_path, exist_ok=True)
     app.mount(

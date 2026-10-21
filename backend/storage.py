@@ -59,6 +59,9 @@ async def save_upload(*, file_bytes: bytes, original_name: str, folder: str) -> 
     - folder examples: 'profiles', 'brand_logos', 'products', 'verification',
       'contracts', 'invoices', 'chat'
     """
+    if folder not in {"profiles", "brand_logos", "products"}:
+        from fastapi import HTTPException
+        raise HTTPException(400, "Private files must use authenticated database uploads")
     if len(file_bytes) > MAX_UPLOAD_BYTES:
         from fastapi import HTTPException
         raise HTTPException(status_code=413, detail=f"File exceeds {MAX_UPLOAD_BYTES // (1024*1024)}MB limit")
