@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Camera, BadgeCheck, Save, Loader2, Video } from "lucide-react";
 import api, { formatApiError } from "@/lib/api";
-import InstagramConnect from "@/components/InstagramConnect";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context/AuthContext";
@@ -166,10 +165,6 @@ export default function InfluencerProfile() {
         </div>
       )}
 
-      <InstagramConnect onSync={async () => {
-        const { data } = await api.get("/influencers/me");
-        if (data.influencer) setForm((current) => ({ ...current, ...data.influencer, bank_details: { ...EMPTY.bank_details, ...(data.influencer.bank_details || {}) } }));
-      }} />
       <Section title="Your username" description="Choose the handle brands will see.">
         <Input value={form.username} onChange={(e) => set("username", e.target.value)} placeholder="@yourhandle" />
       </Section>
